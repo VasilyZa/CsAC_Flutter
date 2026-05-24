@@ -127,6 +127,7 @@ jobs:
             aria2 \
             clang \
             cmake \
+            libfuse2 \
             libgtk-3-dev \
             liblzma-dev \
             ninja-build \
@@ -180,6 +181,9 @@ jobs:
             --out="appimagetool-x86_64.AppImage" \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           install -m 0755 "$RUNNER_TEMP/downloads/appimagetool-x86_64.AppImage" "$RUNNER_TEMP/tools/appimagetool"
+          cd "$RUNNER_TEMP/tools"
+          ./appimagetool --appimage-extract
+          ln -sf "$RUNNER_TEMP/tools/squashfs-root/AppRun" "$RUNNER_TEMP/tools/appimagetool-extracted"
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
       - name: Package Linux AppImage
@@ -219,7 +223,7 @@ jobs:
               > "$appdir/${APP_NAME}.svg"
             cp "$appdir/${APP_NAME}.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/${APP_NAME}.svg"
           fi
-          ARCH=x86_64 appimagetool "$appdir" "build/artifacts/${APP_NAME}-linux-x64.AppImage"
+          ARCH=x86_64 appimagetool-extracted "$appdir" "build/artifacts/${APP_NAME}-linux-x64.AppImage"
 
       - name: Upload Linux AppImage
         if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
