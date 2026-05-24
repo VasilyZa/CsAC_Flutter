@@ -6,7 +6,7 @@ enum CsacLanguage { en, zh }
 class CsacPreferences {
   const CsacPreferences({
     this.themeMode = ThemeMode.system,
-    this.language = CsacLanguage.en,
+    this.language = CsacLanguage.zh,
   });
 
   static const _themeKey = 'csac.theme_mode';
@@ -51,6 +51,6 @@ class CsacPreferences {
         return language;
       }
     }
-    return CsacLanguage.en;
+    return CsacLanguage.zh;
   }
 }

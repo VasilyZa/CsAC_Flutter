@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'src/app_state.dart';
+import 'src/l10n.dart';
 import 'src/models.dart';
 import 'src/preferences.dart';
 
@@ -39,8 +41,18 @@ class _CsacMobileAppState extends State<CsacMobileApp> {
       animation: state,
       builder: (context, _) {
         return MaterialApp(
-          title: 'CsAC Mobile',
+          title: CsacStrings(
+            localeForLanguage(state.preferences.language),
+          ).text('CsAC Mobile'),
           debugShowCheckedModeBanner: false,
+          locale: localeForLanguage(state.preferences.language),
+          supportedLocales: const [Locale('en'), Locale('zh', 'CN')],
+          localizationsDelegates: const [
+            CsacStringsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xff1f8a70),
@@ -82,8 +94,8 @@ class SplashScreen extends StatelessWidget {
           children: [
             const Icon(Icons.forum_rounded, size: 54, color: Color(0xff1f8a70)),
             const SizedBox(height: 18),
-            const Text(
-              'CsAC Mobile',
+            Text(
+              context.strings.text('CsAC Mobile'),
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
@@ -121,7 +133,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> submit() async {
     final name = username.text.trim();
     if (name.isEmpty || password.text.isEmpty) {
-      setState(() => error = 'Username and password are required.');
+      setState(
+        () =>
+            error = context.strings.text('Username and password are required.'),
+      );
       return;
     }
     try {
@@ -150,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'CsAC Mobile',
+                    context.strings.text('CsAC Mobile'),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
@@ -160,10 +175,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: username,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.strings.text('Username'),
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -171,10 +186,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: password,
                     obscureText: true,
                     onSubmitted: (_) => submit(),
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock_outline),
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.strings.text('Password'),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   if (error != null) ...[
@@ -196,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
-                    label: const Text('Login'),
+                    label: Text(context.strings.text('Login')),
                   ),
                 ],
               ),
@@ -252,7 +267,13 @@ class _MainShellState extends State<MainShell> {
     }
     if (after > before && after > lastUnreadChats) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('New messages: ${after - before}')),
+        SnackBar(
+          content: Text(
+            context.strings.format('New messages: {count}', {
+              'count': after - before,
+            }),
+          ),
+        ),
       );
     }
     lastUnreadChats = after;
@@ -297,12 +318,12 @@ class _MainShellState extends State<MainShell> {
               icon: Icons.chat_bubble,
               count: unreadChats,
             ),
-            label: 'Chats',
+            label: context.strings.text('Chats'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.manage_search_outlined),
-            selectedIcon: Icon(Icons.manage_search),
-            label: 'Search',
+          NavigationDestination(
+            icon: const Icon(Icons.manage_search_outlined),
+            selectedIcon: const Icon(Icons.manage_search),
+            label: context.strings.text('Search'),
           ),
           NavigationDestination(
             icon: _BadgeIcon(
@@ -313,12 +334,12 @@ class _MainShellState extends State<MainShell> {
               icon: Icons.notifications,
               count: noticeCount,
             ),
-            label: 'Notices',
+            label: context.strings.text('Notices'),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Me',
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline),
+            selectedIcon: const Icon(Icons.person),
+            label: context.strings.text('Me'),
           ),
         ],
       ),
@@ -380,6 +401,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   Widget build(BuildContext context) {
     final user = widget.state.user;
+    final strings = context.strings;
     final query = search.text.trim().toLowerCase();
     final conversations = query.isEmpty
         ? widget.state.conversations
@@ -401,7 +423,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 Expanded(
                   child: Text(
                     user == null
-                        ? 'Not logged in'
+                        ? strings.text('Not logged in')
                         : '${user.nickname} / UID ${user.uid}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
@@ -409,12 +431,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                 ),
                 if (widget.state.offlineMode)
-                  const Chip(
-                    avatar: Icon(Icons.cloud_off_outlined, size: 18),
-                    label: Text('Offline'),
+                  Chip(
+                    avatar: const Icon(Icons.cloud_off_outlined, size: 18),
+                    label: Text(strings.text('Offline')),
                   ),
                 IconButton.filledTonal(
-                  tooltip: 'Add friend',
+                  tooltip: strings.text('Add friend'),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -426,7 +448,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  tooltip: 'Join group',
+                  tooltip: strings.text('Join group'),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -445,12 +467,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
               controller: search,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Search conversations',
+                hintText: strings.text('Search conversations'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
-                        tooltip: 'Clear',
+                        tooltip: strings.text('Clear'),
                         onPressed: () {
                           search.clear();
                           setState(() {});
@@ -462,9 +484,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ),
           ),
           if (widget.state.conversations.isEmpty)
-            const _EmptyPanel(message: 'No conversations yet.')
+            _EmptyPanel(message: strings.text('No conversations yet.'))
           else if (conversations.isEmpty)
-            const _EmptyPanel(message: 'No matching conversations.')
+            _EmptyPanel(message: strings.text('No matching conversations.'))
           else
             for (final conversation in conversations)
               _ConversationTile(
@@ -493,12 +515,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
               title: const Text('CsAC'),
               actions: [
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: strings.text('Refresh'),
                   onPressed: refreshing ? null : refresh,
                   icon: const Icon(Icons.refresh),
                 ),
                 IconButton(
-                  tooltip: 'Search messages',
+                  tooltip: strings.text('Search messages'),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -510,7 +532,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   icon: const Icon(Icons.manage_search),
                 ),
                 IconButton(
-                  tooltip: 'Logout',
+                  tooltip: strings.text('Logout'),
                   onPressed: widget.state.logout,
                   icon: const Icon(Icons.logout),
                 ),
@@ -551,7 +573,7 @@ class _ConversationTile extends StatelessWidget {
         ),
         subtitle: Text(
           conversation.subtitle.isEmpty
-              ? (isGroup ? 'Group chat' : 'Private chat')
+              ? context.strings.text(isGroup ? 'Group chat' : 'Private chat')
               : conversation.subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -591,7 +613,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
   Future<void> lookup() async {
     final target = int.tryParse(uid.text.trim()) ?? 0;
     if (target <= 0) {
-      setState(() => error = 'Enter a valid UID.');
+      setState(() => error = context.strings.text('Enter a valid UID.'));
       return;
     }
     setState(() {
@@ -619,7 +641,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
   Future<void> submit() async {
     final target = int.tryParse(uid.text.trim()) ?? 0;
     if (target <= 0) {
-      setState(() => error = 'Enter a valid UID.');
+      setState(() => error = context.strings.text('Enter a valid UID.'));
       return;
     }
     setState(() {
@@ -631,9 +653,9 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Friend request sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.text('Friend request sent.'))),
+      );
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
@@ -649,7 +671,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add friend')),
+      appBar: AppBar(title: Text(context.strings.text('Add friend'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -659,10 +681,10 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
               onSubmitted: (_) => lookup(),
-              decoration: const InputDecoration(
-                labelText: 'User UID',
-                prefixIcon: Icon(Icons.tag),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.strings.text('User UID'),
+                prefixIcon: const Icon(Icons.tag),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
@@ -675,7 +697,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.search),
-              label: const Text('Lookup user'),
+              label: Text(context.strings.text('Lookup user')),
             ),
             if (preview != null) ...[
               const SizedBox(height: 12),
@@ -699,10 +721,10 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
             TextField(
               controller: message,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Request message',
-                prefixIcon: Icon(Icons.message_outlined),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.strings.text('Request message'),
+                prefixIcon: const Icon(Icons.message_outlined),
+                border: const OutlineInputBorder(),
               ),
             ),
             if (error != null) ...[
@@ -722,7 +744,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.send),
-              label: const Text('Send request'),
+              label: Text(context.strings.text('Send request')),
             ),
           ],
         ),
@@ -790,7 +812,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   Future<void> submit({int? groupId}) async {
     final target = groupId ?? int.tryParse(roomId.text.trim()) ?? 0;
     if (target <= 0) {
-      setState(() => error = 'Enter a valid room ID.');
+      setState(() => error = context.strings.text('Enter a valid room ID.'));
       return;
     }
     setState(() {
@@ -806,9 +828,9 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Join request sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.text('Join request sent.'))),
+      );
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
@@ -864,10 +886,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Join group'),
+        title: Text(context.strings.text('Join group')),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: context.strings.text('Refresh'),
             onPressed: loading ? null : loadPublicGroups,
             icon: const Icon(Icons.refresh),
           ),
@@ -882,29 +904,29 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
               TextField(
                 controller: roomId,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Room ID',
-                  prefixIcon: Icon(Icons.tag),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.strings.text('Room ID'),
+                  prefixIcon: const Icon(Icons.tag),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: code,
-                decoration: const InputDecoration(
-                  labelText: 'Invite code',
-                  prefixIcon: Icon(Icons.key_outlined),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.strings.text('Invite code'),
+                  prefixIcon: const Icon(Icons.key_outlined),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: answer,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Answer',
-                  prefixIcon: Icon(Icons.question_answer_outlined),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.strings.text('Answer'),
+                  prefixIcon: const Icon(Icons.question_answer_outlined),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               if (error != null) ...[
@@ -924,11 +946,11 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.group_add),
-                label: const Text('Apply to join'),
+                label: Text(context.strings.text('Apply to join')),
               ),
               const SizedBox(height: 20),
               Text(
-                'Public groups',
+                context.strings.text('Public groups'),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -937,17 +959,17 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
               TextField(
                 controller: search,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: 'Search public groups',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: context.strings.text('Search public groups'),
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
               if (loading)
                 const LinearProgressIndicator(minHeight: 2)
               else if (filteredPublicGroups().isEmpty)
-                const _EmptyPanel(message: 'No public groups.')
+                _EmptyPanel(message: context.strings.text('No public groups.'))
               else
                 for (final group in filteredPublicGroups())
                   Card(
@@ -961,7 +983,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       title: Text(group.name),
                       subtitle: Text(
                         [
-                          'Room ${group.id}',
+                          context.strings.format('Room {id}', {'id': group.id}),
                           group.subtitle,
                           group.description,
                         ].where((part) => part.isNotEmpty).join(' | '),
@@ -975,7 +997,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                                 useGroup(group);
                                 submit(groupId: group.id);
                               },
-                        child: const Text('Join'),
+                        child: Text(context.strings.text('Join')),
                       ),
                       onTap: () => useGroup(group),
                       onLongPress: () => openGroupDetail(group),
@@ -1083,6 +1105,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     final body = Column(
       children: [
         Padding(
@@ -1092,12 +1115,12 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
             onChanged: (_) => scheduleSearch(),
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Search cached messages',
+              hintText: strings.text('Search cached messages'),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: search.text.trim().isEmpty
                   ? null
                   : IconButton(
-                      tooltip: 'Clear',
+                      tooltip: strings.text('Clear'),
                       onPressed: () {
                         search.clear();
                         runSearch();
@@ -1115,27 +1138,27 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               _ScopeChip(
-                label: 'All',
+                label: strings.text('All'),
                 selected: scope == SearchScope.all,
                 onSelected: () => setScope(SearchScope.all),
               ),
               _ScopeChip(
-                label: 'Friends',
+                label: strings.text('Friends'),
                 selected: scope == SearchScope.private,
                 onSelected: () => setScope(SearchScope.private),
               ),
               _ScopeChip(
-                label: 'Groups',
+                label: strings.text('Groups'),
                 selected: scope == SearchScope.group,
                 onSelected: () => setScope(SearchScope.group),
               ),
               _ScopeChip(
-                label: 'Images',
+                label: strings.text('Images'),
                 selected: scope == SearchScope.image,
                 onSelected: () => setScope(SearchScope.image),
               ),
               _ScopeChip(
-                label: 'Essence',
+                label: strings.text('Essence'),
                 selected: scope == SearchScope.essence,
                 onSelected: () => setScope(SearchScope.essence),
               ),
@@ -1149,7 +1172,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
             actions: [
               TextButton(
                 onPressed: () => setState(() => error = null),
-                child: const Text('Dismiss'),
+                child: Text(strings.text('Dismiss')),
               ),
             ],
           ),
@@ -1160,8 +1183,8 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
                       search.text.trim().isEmpty &&
                           scope != SearchScope.image &&
                           scope != SearchScope.essence
-                      ? 'Type to search cached messages.'
-                      : 'No matching messages.',
+                      ? strings.text('Type to search cached messages.')
+                      : strings.text('No matching messages.'),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 18),
@@ -1180,7 +1203,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
     return Scaffold(
       appBar: widget.embedded
           ? null
-          : AppBar(title: const Text('Search messages')),
+          : AppBar(title: Text(strings.text('Search messages'))),
       body: SafeArea(top: widget.embedded, child: body),
     );
   }
@@ -1269,14 +1292,15 @@ class NoticeCenterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final counts = state.notificationCounts;
+    final strings = context.strings;
     return DefaultTabController(
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Notices'),
+          title: Text(strings.text('Notices')),
           actions: [
             IconButton(
-              tooltip: 'Refresh',
+              tooltip: strings.text('Refresh'),
               onPressed: state.refreshNotificationCounts,
               icon: const Icon(Icons.refresh),
             ),
@@ -1288,21 +1312,21 @@ class NoticeCenterScreen extends StatelessWidget {
                   icon: Icons.notifications_none,
                   count: counts.notices,
                 ),
-                text: 'Notices',
+                text: strings.text('Notices'),
               ),
               Tab(
                 icon: _TabBadgeIcon(
                   icon: Icons.person_add_alt,
                   count: counts.friendRequests,
                 ),
-                text: 'Friends',
+                text: strings.text('Friends'),
               ),
               Tab(
                 icon: _TabBadgeIcon(
                   icon: Icons.group_add_outlined,
                   count: counts.groupApplications,
                 ),
-                text: 'Groups',
+                text: strings.text('Groups'),
               ),
             ],
           ),
@@ -1410,6 +1434,7 @@ class _NoticesPageState extends State<NoticesPage> {
   }
 
   void openNotice(CsacNotice notice) {
+    final strings = context.strings;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1426,7 +1451,9 @@ class _NoticesPageState extends State<NoticesPage> {
                 ),
               if (notice.time.isNotEmpty) const SizedBox(height: 12),
               SelectableText(
-                notice.content.isEmpty ? '(empty)' : notice.content,
+                notice.content.isEmpty
+                    ? strings.text('(empty)')
+                    : notice.content,
               ),
               if (notice.link.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -1443,7 +1470,7 @@ class _NoticesPageState extends State<NoticesPage> {
                 mode: LaunchMode.externalApplication,
               ),
               icon: const Icon(Icons.open_in_new),
-              label: const Text('Open'),
+              label: Text(strings.text('Open')),
             ),
           TextButton.icon(
             onPressed: () {
@@ -1453,16 +1480,16 @@ class _NoticesPageState extends State<NoticesPage> {
                       '${notice.title}\n${notice.time}\n\n${notice.content}\n${notice.link}',
                 ),
               );
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Notice copied')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(strings.text('Notice copied'))),
+              );
             },
             icon: const Icon(Icons.copy),
-            label: const Text('Copy'),
+            label: Text(strings.text('Copy')),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(strings.text('Close')),
           ),
         ],
       ),
@@ -1471,6 +1498,7 @@ class _NoticesPageState extends State<NoticesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
@@ -1480,21 +1508,23 @@ class _NoticesPageState extends State<NoticesPage> {
             children: [
               Expanded(
                 child: Text(
-                  '${notices.where((notice) => !notice.isRead).length} unread',
+                  strings.format('{count} unread', {
+                    'count': notices.where((notice) => !notice.isRead).length,
+                  }),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
               TextButton.icon(
                 onPressed: acting || notices.isEmpty ? null : markAllRead,
                 icon: const Icon(Icons.done_all),
-                label: const Text('Mark all read'),
+                label: Text(strings.text('Mark all read')),
               ),
             ],
           ),
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
           if (!loading && notices.isEmpty)
-            const _EmptyPanel(message: 'No notices.')
+            _EmptyPanel(message: strings.text('No notices.'))
           else
             for (final notice in notices)
               Card(
@@ -1528,7 +1558,7 @@ class _NoticesPageState extends State<NoticesPage> {
                   trailing: notice.isRead
                       ? const Icon(Icons.chevron_right)
                       : IconButton(
-                          tooltip: 'Mark read',
+                          tooltip: strings.text('Mark read'),
                           onPressed: acting ? null : () => markOneRead(notice),
                           icon: const Icon(Icons.done),
                         ),
@@ -1604,6 +1634,7 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
@@ -1612,7 +1643,7 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
           if (!loading && requests.isEmpty)
-            const _EmptyPanel(message: 'No friend requests.')
+            _EmptyPanel(message: strings.text('No friend requests.'))
           else
             for (final request in requests)
               _FriendRequestTile(
@@ -1646,6 +1677,7 @@ class _FriendRequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -1681,7 +1713,7 @@ class _FriendRequestTile extends StatelessWidget {
                 children: [
                   TextButton(
                     onPressed: acting ? null : onRefuse,
-                    child: const Text('Refuse'),
+                    child: Text(strings.text('Refuse')),
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
@@ -1693,7 +1725,7 @@ class _FriendRequestTile extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.check),
-                    label: const Text('Agree'),
+                    label: Text(strings.text('Agree')),
                   ),
                 ],
               ),
@@ -1771,6 +1803,7 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
@@ -1779,7 +1812,7 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
           if (!loading && applications.isEmpty)
-            const _EmptyPanel(message: 'No group applications.')
+            _EmptyPanel(message: strings.text('No group applications.'))
           else
             for (final application in applications)
               _GroupApplicationTile(
@@ -1816,6 +1849,7 @@ class _GroupApplicationTile extends StatelessWidget {
     final message = application.content.isEmpty
         ? application.answer
         : application.content;
+    final strings = context.strings;
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -1837,7 +1871,9 @@ class _GroupApplicationTile extends StatelessWidget {
                     '@${application.username}',
                   'UID ${application.uid}',
                   if (application.roomName.isNotEmpty)
-                    'Group: ${application.roomName}',
+                    strings.format('Group: {name}', {
+                      'name': application.roomName,
+                    }),
                   if (application.createTime.isNotEmpty) application.createTime,
                 ].join(' | '),
               ),
@@ -1854,7 +1890,7 @@ class _GroupApplicationTile extends StatelessWidget {
                 children: [
                   TextButton(
                     onPressed: acting ? null : onRefuse,
-                    child: const Text('Refuse'),
+                    child: Text(strings.text('Refuse')),
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
@@ -1866,7 +1902,7 @@ class _GroupApplicationTile extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.check),
-                    label: const Text('Pass'),
+                    label: Text(strings.text('Pass')),
                   ),
                 ],
               ),
@@ -1887,8 +1923,9 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = state.user;
     final counts = state.notificationCounts;
+    final strings = context.strings;
     return Scaffold(
-      appBar: AppBar(title: const Text('Me')),
+      appBar: AppBar(title: Text(strings.text('Me'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -1897,13 +1934,15 @@ class ProfileScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: MaterialBanner(
-                  content: const Text(
-                    'Session expired. Log in again to sync latest data.',
+                  content: Text(
+                    strings.text(
+                      'Session expired. Log in again to sync latest data.',
+                    ),
                   ),
                   actions: [
                     TextButton(
                       onPressed: state.logout,
-                      child: const Text('Login'),
+                      child: Text(strings.text('Login')),
                     ),
                   ],
                 ),
@@ -1914,7 +1953,7 @@ class ProfileScreen extends StatelessWidget {
                 backgroundColor: Color(0xff1f8a70),
                 child: Icon(Icons.person, color: Colors.white),
               ),
-              title: Text(user?.nickname ?? 'Not logged in'),
+              title: Text(user?.nickname ?? strings.text('Not logged in')),
               subtitle: Text(
                 [
                   if (user?.username.isNotEmpty == true) '@${user!.username}',
@@ -1930,19 +1969,19 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.notifications_none),
-                    title: const Text('Unread notices'),
+                    title: Text(strings.text('Unread notices')),
                     trailing: Badge(label: Text('${counts.notices}')),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.person_add_alt),
-                    title: const Text('Friend requests'),
+                    title: Text(strings.text('Friend requests')),
                     trailing: Badge(label: Text('${counts.friendRequests}')),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.group_add_outlined),
-                    title: const Text('Group reviews'),
+                    title: Text(strings.text('Group reviews')),
                     trailing: Badge(label: Text('${counts.groupApplications}')),
                   ),
                 ],
@@ -1952,7 +1991,7 @@ class ProfileScreen extends StatelessWidget {
             FilledButton.icon(
               onPressed: state.refreshHome,
               icon: const Icon(Icons.sync),
-              label: const Text('Refresh all'),
+              label: Text(strings.text('Refresh all')),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -1964,13 +2003,13 @@ class ProfileScreen extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.settings_outlined),
-              label: const Text('Settings'),
+              label: Text(strings.text('Settings')),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: state.logout,
               icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
+              label: Text(strings.text('Logout')),
             ),
           ],
         ),
@@ -1993,13 +2032,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool refreshing = false;
 
   String get themeLabel {
+    final strings = context.strings;
     switch (widget.state.preferences.themeMode) {
       case ThemeMode.system:
-        return 'System';
+        return strings.text('System');
       case ThemeMode.light:
-        return 'Light';
+        return strings.text('Light');
       case ThemeMode.dark:
-        return 'Dark';
+        return strings.text('Dark');
     }
   }
 
@@ -2019,16 +2059,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Refreshed.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.text('Refreshed.'))),
+      );
     } catch (err) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Refresh failed: $err')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.format('Refresh failed: {error}', {'error': err}),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => refreshing = false);
@@ -2040,18 +2084,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear local cache?'),
-        content: const Text(
-          'Cached conversations and message history on this device will be removed. Your login session will be kept.',
+        title: Text(context.strings.text('Clear local cache?')),
+        content: Text(
+          context.strings.text(
+            'Cached conversations and message history on this device will be removed. Your login session will be kept.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear'),
+            child: Text(context.strings.text('Clear')),
           ),
         ],
       ),
@@ -2065,16 +2111,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Local cache cleared.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.text('Local cache cleared.'))),
+      );
     } catch (err) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Clear cache failed: $err')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.format('Clear cache failed: {error}', {
+              'error': err,
+            }),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => clearing = false);
@@ -2094,21 +2146,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: widget.state.preferences.themeMode == ThemeMode.system
                   ? const Icon(Icons.check)
                   : const SizedBox(width: 24),
-              title: const Text('System'),
+              title: Text(context.strings.text('System')),
               onTap: () => Navigator.of(context).pop(ThemeMode.system),
             ),
             ListTile(
               leading: widget.state.preferences.themeMode == ThemeMode.light
                   ? const Icon(Icons.check)
                   : const SizedBox(width: 24),
-              title: const Text('Light'),
+              title: Text(context.strings.text('Light')),
               onTap: () => Navigator.of(context).pop(ThemeMode.light),
             ),
             ListTile(
               leading: widget.state.preferences.themeMode == ThemeMode.dark
                   ? const Icon(Icons.check)
                   : const SizedBox(width: 24),
-              title: const Text('Dark'),
+              title: Text(context.strings.text('Dark')),
               onTap: () => Navigator.of(context).pop(ThemeMode.dark),
             ),
           ],
@@ -2160,8 +2212,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = widget.state.user;
+    final strings = context.strings;
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(strings.text('Settings'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -2170,7 +2223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               elevation: 0,
               child: ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
-                title: Text(user?.nickname ?? 'Not logged in'),
+                title: Text(user?.nickname ?? strings.text('Not logged in')),
                 subtitle: Text(
                   [
                     if (user?.username.isNotEmpty == true) '@${user!.username}',
@@ -2186,7 +2239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.dark_mode_outlined),
-                    title: const Text('Theme'),
+                    title: Text(strings.text('Theme')),
                     subtitle: Text(themeLabel),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: chooseTheme,
@@ -2194,7 +2247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.translate),
-                    title: const Text('Language'),
+                    title: Text(strings.text('Language')),
                     subtitle: Text(languageLabel),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: chooseLanguage,
@@ -2209,8 +2262,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.sync),
-                    title: const Text('Refresh app data'),
-                    subtitle: const Text('Reload conversations and counters'),
+                    title: Text(strings.text('Refresh app data')),
+                    subtitle: Text(
+                      strings.text('Reload conversations and counters'),
+                    ),
                     trailing: refreshing
                         ? const SizedBox(
                             width: 20,
@@ -2223,9 +2278,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.cleaning_services_outlined),
-                    title: const Text('Clear local cache'),
-                    subtitle: const Text(
-                      'Remove cached conversations and message history',
+                    title: Text(strings.text('Clear local cache')),
+                    subtitle: Text(
+                      strings.text(
+                        'Remove cached conversations and message history',
+                      ),
                     ),
                     trailing: clearing
                         ? const SizedBox(
@@ -2244,8 +2301,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               elevation: 0,
               child: ListTile(
                 leading: const Icon(Icons.logout),
-                title: const Text('Logout'),
-                subtitle: const Text('Clear session and return to login'),
+                title: Text(strings.text('Logout')),
+                subtitle: Text(
+                  strings.text('Clear session and return to login'),
+                ),
                 onTap: widget.state.logout,
               ),
             ),
@@ -2279,7 +2338,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      label: Text(pending ? 'Pending' : 'Handled'),
+      label: Text(context.strings.text(pending ? 'Pending' : 'Handled')),
       visualDensity: VisualDensity.compact,
     );
   }
@@ -2295,7 +2354,12 @@ class _InlineError extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialBanner(
       content: Text(message),
-      actions: [TextButton(onPressed: onRetry, child: const Text('Retry'))],
+      actions: [
+        TextButton(
+          onPressed: onRetry,
+          child: Text(context.strings.text('Retry')),
+        ),
+      ],
     );
   }
 }
@@ -2381,26 +2445,29 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> addFriend(UserProfile profile) async {
     final controller = TextEditingController(text: '请求添加你为好友');
+    final strings = context.strings;
     final message = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add ${profile.displayName}'),
+        title: Text(
+          strings.format('Add {name}', {'name': profile.displayName}),
+        ),
         content: TextField(
           controller: controller,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Request message',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: strings.text('Request message'),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Send'),
+            child: Text(strings.text('Send')),
           ),
         ],
       ),
@@ -2414,14 +2481,18 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Friend request sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.text('Friend request sent.'))),
+      );
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Request failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Request failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
@@ -2429,10 +2500,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> joinGroup(GroupProfile profile) async {
     final code = TextEditingController(text: profile.code);
     final answer = TextEditingController();
+    final strings = context.strings;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Join ${profile.name}'),
+        title: Text(strings.format('Join {name}', {'name': profile.name})),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2445,18 +2517,18 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             ],
             TextField(
               controller: code,
-              decoration: const InputDecoration(
-                labelText: 'Invite code',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: strings.text('Invite code'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: answer,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Answer',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: strings.text('Answer'),
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -2464,11 +2536,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Apply'),
+            child: Text(strings.text('Apply')),
           ),
         ],
       ),
@@ -2489,40 +2561,45 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Join request sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.text('Join request sent.'))),
+      );
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Join failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Join failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
 
   Future<void> editRemark(UserProfile profile) async {
     final controller = TextEditingController(text: profile.remark);
+    final strings = context.strings;
     final remark = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit remark'),
+        title: Text(strings.text('Edit remark')),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Remark',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: strings.text('Remark'),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Save'),
+            child: Text(strings.text('Save')),
           ),
         ],
       ),
@@ -2538,31 +2615,40 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Remark updated.')));
+      ).showSnackBar(SnackBar(content: Text(strings.text('Remark updated.'))));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Update failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
 
   Future<void> deleteFriend(UserProfile profile) async {
+    final strings = context.strings;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete ${profile.displayName}?'),
-        content: const Text('This friend will be removed from your list.'),
+        title: Text(
+          strings.format('Delete {name}?', {'name': profile.displayName}),
+        ),
+        content: Text(
+          strings.text('This friend will be removed from your list.'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(strings.text('Delete')),
           ),
         ],
       ),
@@ -2577,31 +2663,38 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Friend deleted.')));
+      ).showSnackBar(SnackBar(content: Text(strings.text('Friend deleted.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Delete failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Delete failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
 
   Future<void> blockFriend(UserProfile profile) async {
+    final strings = context.strings;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Block ${profile.displayName}?'),
-        content: const Text('This friend will be blocked.'),
+        title: Text(
+          strings.format('Block {name}?', {'name': profile.displayName}),
+        ),
+        content: Text(strings.text('This friend will be blocked.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Block'),
+            child: Text(strings.text('Block')),
           ),
         ],
       ),
@@ -2616,31 +2709,38 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Friend blocked.')));
+      ).showSnackBar(SnackBar(content: Text(strings.text('Friend blocked.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Block failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Block failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
 
   Future<void> leaveGroup(GroupProfile profile) async {
+    final strings = context.strings;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Leave ${profile.name}?'),
-        content: const Text('This group will be removed from your chats.'),
+        title: Text(strings.format('Leave {name}?', {'name': profile.name})),
+        content: Text(
+          strings.text('This group will be removed from your chats.'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(strings.text('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Leave'),
+            child: Text(strings.text('Leave')),
           ),
         ],
       ),
@@ -2655,13 +2755,17 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Left group.')));
+      ).showSnackBar(SnackBar(content: Text(strings.text('Left group.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Leave failed: $err')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Leave failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
@@ -2692,15 +2796,21 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Member action completed.')));
+      final strings = context.strings;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.text('Member action completed.'))),
+      );
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Action failed: $err')));
+        final strings = context.strings;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Action failed: {error}', {'error': err}),
+            ),
+          ),
+        );
       }
     }
   }
@@ -2715,22 +2825,22 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.volume_off_outlined),
-              title: const Text('Mute 10 minutes'),
+              title: Text(context.strings.text('Mute 10 minutes')),
               onTap: () => Navigator.of(context).pop('mute10'),
             ),
             ListTile(
               leading: const Icon(Icons.volume_up_outlined),
-              title: const Text('Unmute'),
+              title: Text(context.strings.text('Unmute')),
               onTap: () => Navigator.of(context).pop('unmute'),
             ),
             ListTile(
               leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: const Text('Set admin'),
+              title: Text(context.strings.text('Set admin')),
               onTap: () => Navigator.of(context).pop('admin'),
             ),
             ListTile(
               leading: const Icon(Icons.remove_moderator_outlined),
-              title: const Text('Remove admin'),
+              title: Text(context.strings.text('Remove admin')),
               onTap: () => Navigator.of(context).pop('removeAdmin'),
             ),
             ListTile(
@@ -2739,7 +2849,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 color: Theme.of(context).colorScheme.error,
               ),
               title: Text(
-                'Kick member',
+                context.strings.text('Kick member'),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onTap: () => Navigator.of(context).pop('kick'),
@@ -2755,9 +2865,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   void copyText(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label copied.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.strings.format('{label} copied.', {'label': label}),
+        ),
+      ),
+    );
   }
 
   Widget infoRow(IconData icon, String title, String value) {
@@ -2772,6 +2886,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Widget buildUserProfile(UserProfile profile) {
+    final strings = context.strings;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
@@ -2788,10 +2903,18 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           elevation: 0,
           child: Column(
             children: [
-              infoRow(Icons.tag, 'UID', '${profile.uid}'),
-              infoRow(Icons.badge_outlined, 'Username', profile.username),
-              infoRow(Icons.edit_note, 'Remark', profile.remark),
-              infoRow(Icons.circle_outlined, 'Online', profile.onlineStatus),
+              infoRow(Icons.tag, strings.text('UID'), '${profile.uid}'),
+              infoRow(
+                Icons.badge_outlined,
+                strings.text('Username'),
+                profile.username,
+              ),
+              infoRow(Icons.edit_note, strings.text('Remark'), profile.remark),
+              infoRow(
+                Icons.circle_outlined,
+                strings.text('Online'),
+                profile.onlineStatus,
+              ),
             ],
           ),
         ),
@@ -2803,7 +2926,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.edit_note),
-                  title: const Text('Edit remark'),
+                  title: Text(strings.text('Edit remark')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => editRemark(profile),
                 ),
@@ -2814,7 +2937,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     color: Theme.of(context).colorScheme.error,
                   ),
                   title: Text(
-                    'Delete friend',
+                    strings.text('Delete friend'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -2828,7 +2951,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     color: Theme.of(context).colorScheme.error,
                   ),
                   title: Text(
-                    'Block friend',
+                    strings.text('Block friend'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -2842,7 +2965,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         if (commonGroups.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
-            'Common groups',
+            strings.text('Common groups'),
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -2864,7 +2987,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           FilledButton.icon(
             onPressed: () => addFriend(profile),
             icon: const Icon(Icons.person_add_alt),
-            label: const Text('Add friend'),
+            label: Text(strings.text('Add friend')),
           ),
         ],
       ],
@@ -2872,6 +2995,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Widget buildGroupProfile(GroupProfile profile) {
+    final strings = context.strings;
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
@@ -2886,7 +3010,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             title: Text(profile.name),
             subtitle: Text(
               profile.subtitle.isEmpty
-                  ? 'Room ${profile.id}'
+                  ? strings.format('Room {id}', {'id': profile.id})
                   : profile.subtitle,
             ),
           ),
@@ -2897,32 +3021,47 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.tag),
-                  title: const Text('Room ID'),
+                  title: Text(strings.text('Room ID')),
                   subtitle: SelectableText('${profile.id}'),
                   trailing: IconButton(
-                    tooltip: 'Copy room ID',
-                    onPressed: () => copyText('Room ID', '${profile.id}'),
+                    tooltip: strings.text('Copy room ID'),
+                    onPressed: () =>
+                        copyText(strings.text('Room ID'), '${profile.id}'),
                     icon: const Icon(Icons.copy),
                   ),
                 ),
-                infoRow(Icons.info_outline, 'Description', profile.description),
-                infoRow(Icons.campaign_outlined, 'Notice', profile.notice),
+                infoRow(
+                  Icons.info_outline,
+                  strings.text('Description'),
+                  profile.description,
+                ),
+                infoRow(
+                  Icons.campaign_outlined,
+                  strings.text('Notice'),
+                  profile.notice,
+                ),
                 if (profile.inviteCode.isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.key_outlined),
-                    title: const Text('Invite code'),
+                    title: Text(strings.text('Invite code')),
                     subtitle: SelectableText(profile.inviteCode),
                     trailing: IconButton(
-                      tooltip: 'Copy invite code',
-                      onPressed: () =>
-                          copyText('Invite code', profile.inviteCode),
+                      tooltip: strings.text('Copy invite code'),
+                      onPressed: () => copyText(
+                        strings.text('Invite code'),
+                        profile.inviteCode,
+                      ),
                       icon: const Icon(Icons.copy),
                     ),
                   ),
-                infoRow(Icons.lock_outline, 'Fixed code', profile.code),
+                infoRow(
+                  Icons.lock_outline,
+                  strings.text('Fixed code'),
+                  profile.code,
+                ),
                 infoRow(
                   Icons.question_answer_outlined,
-                  'Question',
+                  strings.text('Question'),
                   profile.question,
                 ),
               ],
@@ -2933,14 +3072,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             FilledButton.icon(
               onPressed: () => joinGroup(profile),
               icon: const Icon(Icons.group_add),
-              label: const Text('Apply to join'),
+              label: Text(strings.text('Apply to join')),
             ),
           ] else ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => leaveGroup(profile),
               icon: const Icon(Icons.logout),
-              label: const Text('Leave group'),
+              label: Text(strings.text('Leave group')),
             ),
           ],
           const SizedBox(height: 20),
@@ -2948,7 +3087,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Members',
+                  strings.text('Members'),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -2959,7 +3098,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           ),
           const SizedBox(height: 8),
           if (members.isEmpty)
-            const _EmptyPanel(message: 'No members.')
+            _EmptyPanel(message: strings.text('No members.'))
           else
             for (final member in members)
               Card(
@@ -2976,7 +3115,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                       : Text(member.subtitle),
                   trailing: (profile.isAdmin || profile.isOwner)
                       ? IconButton(
-                          tooltip: 'Manage',
+                          tooltip: strings.text('Manage'),
                           onPressed: () => showMemberActions(member),
                           icon: const Icon(Icons.more_vert),
                         )
@@ -2991,14 +3130,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final title = widget.conversation.type == ConversationType.group
-        ? 'Group details'
-        : 'User details';
+        ? context.strings.text('Group details')
+        : context.strings.text('User details');
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: context.strings.text('Refresh'),
             onPressed: loading ? null : load,
             icon: const Icon(Icons.refresh),
           ),
@@ -3115,7 +3254,9 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       setState(() {
         offline = messages.isNotEmpty;
-        error = messages.isEmpty ? err.toString() : 'Offline cache: $err';
+        error = messages.isEmpty
+            ? err.toString()
+            : context.strings.format('Offline cache: {error}', {'error': err});
       });
     } finally {
       if (mounted) {
@@ -3352,10 +3493,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> recallMessage(ChatMessage message) async {
+    final recalledBody = context.strings.text('[recalled]');
     try {
       await widget.state.recallMessage(widget.conversation, message.id);
       final recalled = message.copyWith(
-        body: '[recalled]',
+        body: recalledBody,
         imageUrl: '',
         canRecall: false,
         isRecalled: true,
@@ -3419,15 +3561,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 '#${message.id} ${message.sender}\n${message.time}\n\n${message.body}',
           ),
         );
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Message copied')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.strings.text('Message copied'))),
+        );
         break;
       case _MessageAction.copyImage:
         Clipboard.setData(ClipboardData(text: message.imageUrl));
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Image link copied')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.strings.text('Image link copied'))),
+        );
         break;
       case _MessageAction.openImage:
         showImagePreview(context, message.imageUrl);
@@ -3485,7 +3627,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final keyContext = itemKeys[messageId]?.currentContext;
     if (keyContext == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Referenced message is not loaded.')),
+        SnackBar(
+          content: Text(
+            context.strings.text('Referenced message is not loaded.'),
+          ),
+        ),
       );
       return;
     }
@@ -3513,18 +3659,18 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Icon(Icons.cloud_off_outlined),
             ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: context.strings.text('Refresh'),
             onPressed: () => reloadConversationFromNetwork(showLoading: true),
             icon: const Icon(Icons.refresh),
           ),
           if (widget.conversation.type == ConversationType.group)
             IconButton(
-              tooltip: 'Essence',
+              tooltip: context.strings.text('Essence'),
               onPressed: openEssenceList,
               icon: const Icon(Icons.star_outline),
             ),
           IconButton(
-            tooltip: 'Details',
+            tooltip: context.strings.text('Details'),
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -3547,7 +3693,7 @@ class _ChatScreenState extends State<ChatScreen> {
               actions: [
                 TextButton(
                   onPressed: () => setState(() => error = null),
-                  child: const Text('Dismiss'),
+                  child: Text(context.strings.text('Dismiss')),
                 ),
               ],
             ),
@@ -3555,7 +3701,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: loading
                 ? const Center(child: CircularProgressIndicator())
                 : messages.isEmpty
-                ? const _EmptyPanel(message: 'No messages.')
+                ? _EmptyPanel(message: context.strings.text('No messages.'))
                 : ListView.builder(
                     controller: scroll,
                     padding: const EdgeInsets.all(12),
@@ -3611,23 +3757,23 @@ class _ChatScreenState extends State<ChatScreen> {
                           maxLines: 4,
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => send(),
-                          decoration: const InputDecoration(
-                            hintText: 'Message',
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            hintText: context.strings.text('Message'),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       if (widget.conversation.type == ConversationType.group)
                         IconButton.filledTonal(
-                          tooltip: 'Mention',
+                          tooltip: context.strings.text('Mention'),
                           onPressed: sending ? null : chooseMentionTargets,
                           icon: const Icon(Icons.alternate_email),
                         ),
                       if (widget.conversation.type == ConversationType.group)
                         const SizedBox(width: 8),
                       IconButton.filledTonal(
-                        tooltip: 'Image',
+                        tooltip: context.strings.text('Image'),
                         onPressed: sending ? null : pickAndSendImage,
                         icon: const Icon(Icons.image_outlined),
                       ),
@@ -3682,6 +3828,7 @@ class _MessageBubble extends StatelessWidget {
         ? Theme.of(context).colorScheme.primaryContainer
         : Colors.white;
     final align = mine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final strings = context.strings;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
@@ -3733,8 +3880,13 @@ class _MessageBubble extends StatelessWidget {
                         ),
                         child: Text(
                           replyMessage == null
-                              ? 'Reply #${message.replyTo}'
-                              : 'Reply ${replyMessage!.sender}: ${compactMessage(replyMessage!.body)}',
+                              ? strings.format('Reply #{id}', {
+                                  'id': message.replyTo,
+                                })
+                              : strings.format('Reply {sender}: {message}', {
+                                  'sender': replyMessage!.sender,
+                                  'message': compactMessage(replyMessage!.body),
+                                }),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelMedium
@@ -3753,15 +3905,15 @@ class _MessageBubble extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         if (message.isMentioned)
-                          const Chip(
-                            avatar: Icon(Icons.alternate_email, size: 16),
-                            label: Text('Mentioned'),
+                          Chip(
+                            avatar: const Icon(Icons.alternate_email, size: 16),
+                            label: Text(strings.text('Mentioned')),
                             visualDensity: VisualDensity.compact,
                           ),
                         if (message.isEssence)
-                          const Chip(
-                            avatar: Icon(Icons.star, size: 16),
-                            label: Text('Essence'),
+                          Chip(
+                            avatar: const Icon(Icons.star, size: 16),
+                            label: Text(strings.text('Essence')),
                             visualDensity: VisualDensity.compact,
                           ),
                       ],
@@ -3810,44 +3962,45 @@ class _MessageActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return SafeArea(
       child: ListView(
         shrinkWrap: true,
         children: [
           ListTile(
             leading: const Icon(Icons.reply),
-            title: const Text('Reply'),
+            title: Text(strings.text('Reply')),
             subtitle: Text('#${message.id} ${message.sender}'),
             onTap: () => Navigator.of(context).pop(_MessageAction.reply),
           ),
           ListTile(
             leading: const Icon(Icons.copy),
-            title: const Text('Copy text'),
+            title: Text(strings.text('Copy text')),
             onTap: () => Navigator.of(context).pop(_MessageAction.copyText),
           ),
           if (message.imageUrl.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.link),
-              title: const Text('Copy image link'),
+              title: Text(strings.text('Copy image link')),
               onTap: () => Navigator.of(context).pop(_MessageAction.copyImage),
             ),
           if (message.imageUrl.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.open_in_new),
-              title: const Text('Open image'),
+              title: Text(strings.text('Open image')),
               onTap: () => Navigator.of(context).pop(_MessageAction.openImage),
             ),
           if (message.imageUrl.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.download_outlined),
-              title: const Text('Download image'),
+              title: Text(strings.text('Download image')),
               onTap: () =>
                   Navigator.of(context).pop(_MessageAction.downloadImage),
             ),
           if (canRecall)
             ListTile(
               leading: const Icon(Icons.undo),
-              title: const Text('Recall'),
+              title: Text(strings.text('Recall')),
               onTap: () => Navigator.of(context).pop(_MessageAction.recall),
             ),
           if (canEssence)
@@ -3855,7 +4008,11 @@ class _MessageActionSheet extends StatelessWidget {
               leading: Icon(
                 message.isEssence ? Icons.star : Icons.star_outline,
               ),
-              title: Text(message.isEssence ? 'Remove essence' : 'Set essence'),
+              title: Text(
+                strings.text(
+                  message.isEssence ? 'Remove essence' : 'Set essence',
+                ),
+              ),
               onTap: () => Navigator.of(context).pop(_MessageAction.essence),
             ),
         ],
@@ -3879,6 +4036,7 @@ class _ComposeTargetsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Wrap(
@@ -3889,7 +4047,10 @@ class _ComposeTargetsBar extends StatelessWidget {
             InputChip(
               avatar: const Icon(Icons.reply, size: 18),
               label: Text(
-                'Reply #${replyTarget!.id}: ${replyTarget!.sender}',
+                strings.format('Reply #{id}: {sender}', {
+                  'id': replyTarget!.id,
+                  'sender': replyTarget!.sender,
+                }),
                 overflow: TextOverflow.ellipsis,
               ),
               onDeleted: onClearReply,
@@ -3900,7 +4061,9 @@ class _ComposeTargetsBar extends StatelessWidget {
               label: Text(
                 mentions.length == 1
                     ? '@${mentions.first.name}'
-                    : '@ ${mentions.length} members',
+                    : strings.format('@ {count} members', {
+                        'count': mentions.length,
+                      }),
               ),
               onDeleted: onClearMentions,
             ),
@@ -3928,6 +4091,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return SafeArea(
       child: SizedBox(
         height: 520,
@@ -3939,7 +4103,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Mention members',
+                      strings.text('Mention members'),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -3957,14 +4121,14 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                         }
                       });
                     },
-                    child: const Text('Toggle all'),
+                    child: Text(strings.text('Toggle all')),
                   ),
                 ],
               ),
             ),
             Expanded(
               child: widget.members.isEmpty
-                  ? const _EmptyPanel(message: 'No members.')
+                  ? _EmptyPanel(message: strings.text('No members.'))
                   : ListView.builder(
                       itemCount: widget.members.length,
                       itemBuilder: (context, index) {
@@ -3997,11 +4161,15 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
-                  Text('${selected.length} selected'),
+                  Text(
+                    strings.format('{count} selected', {
+                      'count': selected.length,
+                    }),
+                  ),
                   const Spacer(),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(null),
-                    child: const Text('Cancel'),
+                    child: Text(strings.text('Cancel')),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -4012,7 +4180,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                             .toList(),
                       );
                     },
-                    child: const Text('Done'),
+                    child: Text(strings.text('Done')),
                   ),
                 ],
               ),
@@ -4089,10 +4257,10 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Essence messages'),
+        title: Text(context.strings.text('Essence messages')),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: context.strings.text('Refresh'),
             onPressed: load,
             icon: const Icon(Icons.refresh),
           ),
@@ -4106,7 +4274,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
             if (loading) const LinearProgressIndicator(minHeight: 2),
             if (error != null) _InlineError(message: error!, onRetry: load),
             if (!loading && messages.isEmpty)
-              const _EmptyPanel(message: 'No essence messages.')
+              _EmptyPanel(message: context.strings.text('No essence messages.'))
             else
               for (final message in messages)
                 Card(
@@ -4203,8 +4371,11 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     return AlertDialog(
-      title: Text('Send image: ${widget.fileName}'),
+      title: Text(
+        strings.format('Send image: {fileName}', {'fileName': widget.fileName}),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -4227,9 +4398,9 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
           TextField(
             controller: caption,
             maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Caption',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: strings.text('Caption'),
+              border: const OutlineInputBorder(),
             ),
           ),
         ],
@@ -4237,12 +4408,12 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
-          child: const Text('Cancel'),
+          child: Text(strings.text('Cancel')),
         ),
         FilledButton.icon(
           onPressed: () => Navigator.of(context).pop(caption.text),
           icon: const Icon(Icons.send),
-          label: const Text('Send'),
+          label: Text(strings.text('Send')),
         ),
       ],
     );
@@ -4250,6 +4421,7 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
 }
 
 void showImagePreview(BuildContext context, String url) {
+  final strings = context.strings;
   showDialog<void>(
     context: context,
     builder: (context) {
@@ -4287,18 +4459,20 @@ void showImagePreview(BuildContext context, String url) {
                 child: Row(
                   children: [
                     IconButton.filledTonal(
-                      tooltip: 'Copy link',
+                      tooltip: strings.text('Copy link'),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: url));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image link copied')),
+                          SnackBar(
+                            content: Text(strings.text('Image link copied')),
+                          ),
                         );
                       },
                       icon: const Icon(Icons.copy),
                     ),
                     const SizedBox(width: 8),
                     IconButton.filledTonal(
-                      tooltip: 'Open',
+                      tooltip: strings.text('Open'),
                       onPressed: () => launchUrl(
                         Uri.parse(url),
                         mode: LaunchMode.externalApplication,
@@ -4307,7 +4481,7 @@ void showImagePreview(BuildContext context, String url) {
                     ),
                     const SizedBox(width: 8),
                     IconButton.filledTonal(
-                      tooltip: 'Download',
+                      tooltip: strings.text('Download'),
                       onPressed: () => downloadImage(context, url),
                       icon: const Icon(Icons.download_outlined),
                     ),
@@ -4323,6 +4497,7 @@ void showImagePreview(BuildContext context, String url) {
 }
 
 Future<void> downloadImage(BuildContext context, String url) async {
+  final strings = context.strings;
   try {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -4345,16 +4520,22 @@ Future<void> downloadImage(BuildContext context, String url) async {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(strings.format('Saved to {path}', {'path': file.path})),
+      ),
+    );
   } catch (err) {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Download failed: $err')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          strings.format('Download failed: {error}', {'error': err}),
+        ),
+      ),
+    );
   }
 }
 
