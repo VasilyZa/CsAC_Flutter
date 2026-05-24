@@ -1,0 +1,357 @@
+import 'package:flutter/material.dart';
+
+import 'api_client.dart';
+import 'local_cache.dart';
+import 'models.dart';
+import 'preferences.dart';
+
+class CsacAppState extends ChangeNotifier {
+  CsacAppState({CsacApiClient? client, CsacLocalCache? cache})
+    : client = client ?? CsacApiClient(),
+      cache = cache ?? CsacLocalCache();
+
+  final CsacApiClient client;
+  final CsacLocalCache cache;
+
+  CsacUser? user;
+  List<Conversation> conversations = const <Conversation>[];
+  NotificationCounts notificationCounts = const NotificationCounts();
+  CsacPreferences preferences = const CsacPreferences();
+  bool bootstrapping = true;
+  bool loading = false;
+  bool offlineMode = false;
+  bool sessionExpired = false;
+  String restoreStatus = 'Restoring session...';
+  String? error;
+
+  Future<void> initialize() async {
+    bootstrapping = true;
+    restoreStatus = 'Restoring session...';
+    error = null;
+    notifyListeners();
+    try {
+      await cache.open();
+      preferences = await CsacPreferences.load();
+      await client.loadSession();
+      restoreStatus = 'Checking saved session...';
+      notifyListeners();
+      user = await client.currentUser();
+      await cache.saveUser(user!);
+      offlineMode = false;
+      sessionExpired = false;
+      await loadCachedConversations();
+      await syncConversations();
+      await refreshNotificationCounts();
+    } on CsacAuthException catch (err) {
+      await client.clearSession();
+      user = await cache.loadUser();
+      conversations = await cache.loadConversations();
+      sessionExpired = true;
+      offlineMode = user != null;
+      error = user == null
+          ? err.toString()
+          : 'Session expired. Cached history is available offline.';
+    } catch (_) {
+      user = await cache.loadUser();
+      conversations = await cache.loadConversations();
+      offlineMode = user != null;
+      sessionExpired = false;
+      error = user == null ? 'Unable to restore session.' : null;
+    } finally {
+      bootstrapping = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> login(String username, String password) async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      user = await client.login(username, password);
+      await cache.saveUser(user!);
+      offlineMode = false;
+      sessionExpired = false;
+      error = null;
+      await syncConversations();
+      await refreshNotificationCounts();
+    } catch (err) {
+      error = err.toString();
+      rethrow;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateThemeMode(ThemeMode mode) async {
+    preferences = preferences.copyWith(themeMode: mode);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> updateLanguage(CsacLanguage language) async {
+    preferences = preferences.copyWith(language: language);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> loadConversations() async {
+    try {
+      await syncConversations();
+    } catch (_) {
+      conversations = await cache.loadConversations();
+      offlineMode = user != null;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> loadCachedConversations() async {
+    conversations = await cache.loadConversations();
+    notifyListeners();
+  }
+
+  Future<void> syncConversations() async {
+    final loaded = await client.conversations();
+    conversations = loaded;
+    await cache.saveConversations(loaded);
+    offlineMode = false;
+    notifyListeners();
+  }
+
+  Future<void> refreshHome() async {
+    await Future.wait<void>([syncConversations(), refreshNotificationCounts()]);
+  }
+
+  Future<void> refreshNotificationCounts() async {
+    try {
+      notificationCounts = await client.notificationCounts();
+    } catch (_) {
+      notificationCounts = NotificationCounts(
+        notices: notificationCounts.notices,
+        friendRequests: notificationCounts.friendRequests,
+        groupApplications: notificationCounts.groupApplications,
+      );
+    }
+    notifyListeners();
+  }
+
+  void updateNotificationCounts({
+    int? notices,
+    int? friendRequests,
+    int? groupApplications,
+  }) {
+    notificationCounts = NotificationCounts(
+      notices: notices ?? notificationCounts.notices,
+      friendRequests: friendRequests ?? notificationCounts.friendRequests,
+      groupApplications:
+          groupApplications ?? notificationCounts.groupApplications,
+    );
+    notifyListeners();
+  }
+
+  Future<List<CsacNotice>> loadNotices() {
+    return client.notices();
+  }
+
+  Future<void> markNoticeRead({int? noticeId, bool readAll = false}) async {
+    await client.markNoticeRead(noticeId: noticeId, readAll: readAll);
+    await refreshNotificationCounts();
+  }
+
+  Future<List<FriendRequest>> loadFriendRequests() {
+    return client.friendRequests();
+  }
+
+  Future<void> handleFriendRequest(int requestId, String action) async {
+    await client.handleFriendRequest(requestId, action);
+    await refreshNotificationCounts();
+    await syncConversations();
+  }
+
+  Future<List<GroupApplication>> loadGroupApplications() async {
+    final groups = conversations
+        .where((conversation) => conversation.type == ConversationType.group)
+        .toList();
+    if (groups.isEmpty) {
+      return client.groupApplications();
+    }
+    final batches = await Future.wait<List<GroupApplication>>(
+      groups.map((group) async {
+        try {
+          return await client.groupApplications(
+            roomId: group.id,
+            roomName: group.name,
+          );
+        } catch (_) {
+          return const <GroupApplication>[];
+        }
+      }),
+    );
+    final byId = <String, GroupApplication>{};
+    for (final batch in batches) {
+      for (final application in batch) {
+        byId['${application.roomId}:${application.id}'] = application;
+      }
+    }
+    return byId.values.toList()
+      ..sort((a, b) => b.createTime.compareTo(a.createTime));
+  }
+
+  Future<void> handleGroupApplication(int applyId, String action) async {
+    await client.handleGroupApplication(applyId, action);
+    await refreshNotificationCounts();
+  }
+
+  Future<List<ChatMessage>> loadCachedMessages(Conversation conversation) {
+    return cache.loadMessages(conversation);
+  }
+
+  Future<List<ChatMessage>> loadCachedMessagesAround(
+    Conversation conversation,
+    int messageId,
+  ) {
+    return cache.loadMessagesAround(conversation, messageId);
+  }
+
+  Future<List<MessageSearchResult>> searchMessages(
+    String query,
+    SearchScope scope,
+  ) {
+    return cache.searchMessages(query, scope);
+  }
+
+  Future<List<GroupMember>> loadGroupMembers(int roomId) {
+    return client.groupMembers(roomId);
+  }
+
+  Future<UserProfile> loadUserProfile(int uid) {
+    return client.userProfile(uid);
+  }
+
+  Future<GroupProfile> loadGroupProfile(int roomId) {
+    return client.groupProfile(roomId);
+  }
+
+  Future<List<GroupProfile>> loadPublicGroups() {
+    return client.publicGroups();
+  }
+
+  Future<void> sendFriendRequest(int uid, String message) {
+    return client.sendFriendRequest(uid, message);
+  }
+
+  Future<void> updateFriendRemark(int friendId, String remark) async {
+    await client.updateFriendRemark(friendId, remark);
+    await syncConversations();
+  }
+
+  Future<void> deleteFriend(int friendId) async {
+    await client.deleteFriend(friendId);
+    await syncConversations();
+  }
+
+  Future<void> blockFriend(int friendId) async {
+    await client.blockFriend(friendId);
+    await syncConversations();
+  }
+
+  Future<void> recoverFriend(int friendId) async {
+    await client.recoverFriend(friendId);
+    await syncConversations();
+  }
+
+  Future<List<CommonGroup>> loadCommonGroups(int friendId) {
+    return client.commonGroups(friendId);
+  }
+
+  Future<void> applyJoinGroup(
+    int roomId, {
+    String code = '',
+    String answer = '',
+  }) async {
+    await client.applyJoinGroup(roomId, code: code, answer: answer);
+    await syncConversations();
+  }
+
+  Future<void> leaveGroup(int roomId) async {
+    await client.leaveGroup(roomId);
+    await syncConversations();
+  }
+
+  Future<void> muteGroupMember(int roomId, int targetUid, int minutes) {
+    return client.muteGroupMember(roomId, targetUid, minutes);
+  }
+
+  Future<void> kickGroupMember(int roomId, int targetUid) async {
+    await client.kickGroupMember(roomId, targetUid);
+  }
+
+  Future<void> setGroupAdmin(int roomId, int targetUid, bool set) {
+    return client.setGroupAdmin(roomId, targetUid, set);
+  }
+
+  Future<void> recallMessage(Conversation conversation, int msgId) {
+    return client.recallMessage(conversation, msgId);
+  }
+
+  Future<void> toggleEssence(int roomId, int msgId) {
+    return client.toggleEssence(roomId, msgId);
+  }
+
+  Future<List<ChatMessage>> loadEssenceMessages(int roomId) {
+    return client.essenceMessages(roomId);
+  }
+
+  Future<List<ChatMessage>> syncMessages(
+    Conversation conversation, {
+    int afterId = 0,
+  }) async {
+    final baseline = afterId > 0
+        ? afterId
+        : await cache.latestMessageId(conversation);
+    final loaded = await client.messages(conversation, afterId: baseline);
+    await cache.saveMessages(conversation, loaded);
+    return loaded;
+  }
+
+  Future<List<ChatMessage>> loadMessagesFromNetwork(
+    Conversation conversation,
+  ) async {
+    final loaded = await client.messages(conversation);
+    await cache.replaceMessages(conversation, loaded);
+    return loaded;
+  }
+
+  Future<List<ChatMessage>> reloadMessagesFromNetwork(
+    Conversation conversation,
+  ) {
+    return loadMessagesFromNetwork(conversation);
+  }
+
+  Future<void> clearLocalCache() async {
+    await cache.clearCachedData();
+    conversations = const <Conversation>[];
+    offlineMode = false;
+    notifyListeners();
+    try {
+      await refreshHome();
+    } catch (_) {
+      // Keep the cache cleared even if the network refresh fails.
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await client.logout();
+    } finally {
+      await cache.clear();
+      user = null;
+      conversations = const <Conversation>[];
+      notificationCounts = const NotificationCounts();
+      offlineMode = false;
+      notifyListeners();
+    }
+  }
+}
