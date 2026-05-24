@@ -21,6 +21,8 @@ permissions:
 env:
   APP_NAME: csac
   FLUTTER_VERSION: "3.44.0"
+  FLUTTER_LINUX_URL: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.0-stable.tar.xz
+  FLUTTER_WINDOWS_URL: https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.0-stable.zip
 
 jobs:
   windows:
@@ -32,12 +34,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Install aria2
+        run: choco install aria2 --no-progress -y
+
+      - name: Download Flutter SDK
+        shell: pwsh
+        run: |
+          $downloadDir = Join-Path $env:RUNNER_TEMP "downloads"
+          $sdkDir = Join-Path $env:RUNNER_TEMP "flutter-sdk"
+          New-Item -ItemType Directory -Force -Path $downloadDir, $sdkDir | Out-Null
+          aria2c -s16 -x16 -k1M `
+            --dir="$downloadDir" `
+            --out="flutter-windows.zip" `
+            "${env:FLUTTER_WINDOWS_URL}"
+          Expand-Archive `
+            -Path (Join-Path $downloadDir "flutter-windows.zip") `
+            -DestinationPath $sdkDir `
+            -Force
+          $flutterBin = Join-Path $sdkDir "flutter\bin"
+          $flutterRoot = Join-Path $sdkDir "flutter"
+          $flutterBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "FLUTTER_ROOT=$flutterRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Check Flutter
+        run: flutter --version
 
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
@@ -103,6 +123,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            aria2 \
             clang \
             cmake \
             libgtk-3-dev \
@@ -110,12 +131,19 @@ jobs:
             ninja-build \
             pkg-config
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-linux.tar.xz" \
+            "$FLUTTER_LINUX_URL"
+          tar -xf "$RUNNER_TEMP/downloads/flutter-linux.tar.xz" -C "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
+
+      - name: Check Flutter
+        run: flutter --version
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
@@ -153,12 +181,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Install aria2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2
+
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-linux.tar.xz" \
+            "$FLUTTER_LINUX_URL"
+          tar -xf "$RUNNER_TEMP/downloads/flutter-linux.tar.xz" -C "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
+
+      - name: Check Flutter
+        run: flutter --version
 
       - name: Get dependencies
         run: flutter pub get
