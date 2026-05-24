@@ -12,7 +12,8 @@ on:
           - all
           - windows-exe
           - windows-installer
-          - linux
+          - linux-executable
+          - linux-appimage
           - android-apk
 
 permissions:
@@ -112,7 +113,7 @@ jobs:
 
   linux:
     name: Linux
-    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux' }}
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' || github.event.inputs.artifact == 'linux-appimage' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -154,16 +155,78 @@ jobs:
       - name: Build Linux release
         run: flutter build linux --release
 
-      - name: Package Linux bundle
+      - name: Package Linux self-contained executable
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' }}
         run: |
-          mkdir -p build/artifacts
-          tar -C build/linux/x64/release -czf build/artifacts/${APP_NAME}-linux-x64.tar.gz bundle
+          chmod +x .github/scripts/make-linux-executable.sh
+          .github/scripts/make-linux-executable.sh \
+            build/linux/x64/release/bundle \
+            build/artifacts/${APP_NAME}-linux-x64
 
-      - name: Upload Linux bundle
+      - name: Upload Linux self-contained executable
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-linux-x64
-          path: build/artifacts/${{ env.APP_NAME }}-linux-x64.tar.gz
+          name: ${{ env.APP_NAME }}-linux-x64-executable
+          path: build/artifacts/${{ env.APP_NAME }}-linux-x64
+          if-no-files-found: error
+
+      - name: Download appimagetool
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/tools"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="appimagetool-x86_64.AppImage" \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          install -m 0755 "$RUNNER_TEMP/downloads/appimagetool-x86_64.AppImage" "$RUNNER_TEMP/tools/appimagetool"
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Package Linux AppImage
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        run: |
+          mkdir -p build/artifacts
+          appdir="build/appimage/${APP_NAME}.AppDir"
+          rm -rf "$appdir"
+          mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/256x256/apps" "$appdir/usr/share/icons/hicolor/scalable/apps"
+          cp -a build/linux/x64/release/bundle/. "$appdir/usr/bin/"
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            'set -e' \
+            'this_dir="$(dirname "$(readlink -f "$0")")"' \
+            'export LD_LIBRARY_PATH="$this_dir/usr/bin/lib:${LD_LIBRARY_PATH:-}"' \
+            "exec \"\$this_dir/usr/bin/${APP_NAME}\" \"\$@\"" \
+            > "$appdir/AppRun"
+          chmod +x "$appdir/AppRun"
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Type=Application' \
+            'Name=CsAC' \
+            "Exec=${APP_NAME}" \
+            "Icon=${APP_NAME}" \
+            'Categories=Network;Chat;' \
+            > "$appdir/${APP_NAME}.desktop"
+          cp "$appdir/${APP_NAME}.desktop" "$appdir/usr/share/applications/${APP_NAME}.desktop"
+          if [[ -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]]; then
+            cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$appdir/${APP_NAME}.png"
+            cp "$appdir/${APP_NAME}.png" "$appdir/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+          else
+            printf '%s\n' \
+              '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">' \
+              '<rect width="256" height="256" rx="48" fill="#1f8a70"/>' \
+              '<text x="128" y="148" text-anchor="middle" font-size="74" font-family="sans-serif" fill="#ffffff">Cs</text>' \
+              '</svg>' \
+              > "$appdir/${APP_NAME}.svg"
+            cp "$appdir/${APP_NAME}.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/${APP_NAME}.svg"
+          fi
+          ARCH=x86_64 appimagetool "$appdir" "build/artifacts/${APP_NAME}-linux-x64.AppImage"
+
+      - name: Upload Linux AppImage
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-linux-x64-appimage
+          path: build/artifacts/${{ env.APP_NAME }}-linux-x64.AppImage
           if-no-files-found: error
 
   android:
