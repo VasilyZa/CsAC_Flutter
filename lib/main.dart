@@ -2252,12 +2252,9 @@ class ProfileScreen extends StatelessWidget {
               ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.person,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
+              leading: _Avatar(
+                url: user?.avatar ?? '',
+                fallback: Icons.person_rounded,
               ),
               title: Text(user?.nickname ?? strings.text('Not logged in')),
               subtitle: Text(
@@ -2267,6 +2264,16 @@ class ProfileScreen extends StatelessWidget {
                   if (user?.onlineStatus.isNotEmpty == true) user!.onlineStatus,
                 ].join(' | '),
               ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: user == null
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => AccountScreen(state: state),
+                        ),
+                      );
+                    },
             ),
             const SizedBox(height: 12),
             Card(
@@ -2301,6 +2308,20 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              onPressed: user == null
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => AccountScreen(state: state),
+                        ),
+                      );
+                    },
+              icon: const Icon(Icons.manage_accounts_outlined),
+              label: Text(strings.text('Account')),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -2316,6 +2337,370 @@ class ProfileScreen extends StatelessWidget {
               onPressed: state.logout,
               icon: const Icon(Icons.logout),
               label: Text(strings.text('Logout')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  final imagePicker = ImagePicker();
+  bool savingName = false;
+  bool savingPassword = false;
+  bool savingAvatar = false;
+  bool deletingAccount = false;
+
+  Future<void> editNickname() async {
+    final strings = context.strings;
+    final controller = TextEditingController(
+      text: widget.state.user?.nickname ?? '',
+    );
+    final nickname = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Change nickname')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 16,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: strings.text('Nickname')),
+          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: Text(strings.text('Save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (nickname == null) {
+      return;
+    }
+    if (nickname.isEmpty) {
+      showSnack(strings.text('Nickname is required.'));
+      return;
+    }
+    setState(() => savingName = true);
+    try {
+      await widget.state.updateNickname(nickname);
+      if (mounted) {
+        showSnack(strings.text('Nickname updated.'));
+      }
+    } catch (err) {
+      if (mounted) {
+        showSnack(strings.format('Update failed: {error}', {'error': err}));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => savingName = false);
+      }
+    }
+  }
+
+  Future<void> changePassword() async {
+    final strings = context.strings;
+    final oldPassword = TextEditingController();
+    final newPassword = TextEditingController();
+    final confirmPassword = TextEditingController();
+    final values = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Change password')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: oldPassword,
+              autofocus: true,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: strings.text('Current password'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newPassword,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: strings.text('New password'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmPassword,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: strings.text('Confirm password'),
+              ),
+              onSubmitted: (_) => Navigator.of(
+                context,
+              ).pop([oldPassword.text, newPassword.text, confirmPassword.text]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(
+              context,
+            ).pop([oldPassword.text, newPassword.text, confirmPassword.text]),
+            child: Text(strings.text('Save')),
+          ),
+        ],
+      ),
+    );
+    oldPassword.dispose();
+    newPassword.dispose();
+    confirmPassword.dispose();
+    if (values == null) {
+      return;
+    }
+    if (values.any((value) => value.isEmpty)) {
+      showSnack(strings.text('Please fill all password fields.'));
+      return;
+    }
+    if (values[1] != values[2]) {
+      showSnack(strings.text('Passwords do not match.'));
+      return;
+    }
+    setState(() => savingPassword = true);
+    try {
+      await widget.state.updatePassword(
+        oldPassword: values[0],
+        newPassword: values[1],
+        confirmPassword: values[2],
+      );
+      if (mounted) {
+        showSnack(strings.text('Password updated.'));
+      }
+    } catch (err) {
+      if (mounted) {
+        showSnack(strings.format('Update failed: {error}', {'error': err}));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => savingPassword = false);
+      }
+    }
+  }
+
+  Future<void> changeAvatar() async {
+    final strings = context.strings;
+    final picked = await imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() => savingAvatar = true);
+    try {
+      await widget.state.updateAvatar(await picked.readAsBytes(), picked.name);
+      if (mounted) {
+        showSnack(strings.text('Avatar updated.'));
+      }
+    } catch (err) {
+      if (mounted) {
+        showSnack(strings.format('Update failed: {error}', {'error': err}));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => savingAvatar = false);
+      }
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final strings = context.strings;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Delete account?')),
+        content: Text(
+          strings.text(
+            'This permanently deletes your account, groups, messages, notifications and friend relationships.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(strings.text('Delete account')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => deletingAccount = true);
+    try {
+      await widget.state.deleteAccount();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (err) {
+      if (mounted) {
+        showSnack(strings.format('Delete failed: {error}', {'error': err}));
+        setState(() => deletingAccount = false);
+      }
+    }
+  }
+
+  void showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.state.user;
+    final strings = context.strings;
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.text('Account'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    _Avatar(
+                      url: user?.avatar ?? '',
+                      fallback: Icons.person_rounded,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.nickname ?? strings.text('Not logged in'),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            [
+                              if (user?.username.isNotEmpty == true)
+                                '@${user!.username}',
+                              if (user != null) 'UID ${user.uid}',
+                            ].join(' | '),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.badge_outlined),
+                    title: Text(strings.text('Change nickname')),
+                    subtitle: Text(user?.nickname ?? ''),
+                    trailing: savingName
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: savingName ? null : editNickname,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.image_outlined),
+                    title: Text(strings.text('Change avatar')),
+                    trailing: savingAvatar
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: savingAvatar ? null : changeAvatar,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: Text(strings.text('Change password')),
+                    trailing: savingPassword
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: savingPassword ? null : changePassword,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: ListTile(
+                leading: Icon(
+                  Icons.delete_forever_outlined,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  strings.text('Delete account'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                subtitle: Text(strings.text('Permanently remove this account')),
+                trailing: deletingAccount
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: deletingAccount ? null : deleteAccount,
+              ),
             ),
           ],
         ),

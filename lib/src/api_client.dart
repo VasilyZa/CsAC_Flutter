@@ -134,6 +134,44 @@ class CsacApiClient {
     return CsacUser.fromJson(user);
   }
 
+  Future<void> updateNickname(String nickname) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'nickname',
+      'nickname': nickname,
+    });
+  }
+
+  Future<void> updatePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'password',
+      'old_password': oldPassword,
+      'new_password': newPassword,
+      'confirm_password': confirmPassword,
+    });
+  }
+
+  Future<void> updateAvatar(Uint8List bytes, String fileName) {
+    return postMultipart(
+      'user/update_profile',
+      const <String, String>{'action': 'avatar'},
+      fileField: 'avatar',
+      fileBytes: bytes,
+      fileName: fileName,
+    );
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await postForm('user/delete_account');
+    } finally {
+      await clearSession();
+    }
+  }
+
   Future<UserProfile> userProfile(int uid) async {
     final data = await get('user/get_info', <String, String>{'uid': '$uid'});
     final user = data['user'];
