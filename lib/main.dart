@@ -18,6 +18,9 @@ void main() {
   runApp(const CsacMobileApp());
 }
 
+const String appDisplayVersion = '1.0.0-13';
+const String appRepositoryUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
+
 class CsacMobileApp extends StatefulWidget {
   const CsacMobileApp({super.key});
 
@@ -2334,6 +2337,18 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AboutSoftwareScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.info_outline),
+              label: Text(strings.text('About software')),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               onPressed: state.logout,
               icon: const Icon(Icons.logout),
               label: Text(strings.text('Logout')),
@@ -3070,6 +3085,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             Card(
               elevation: 0,
+              child: ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(strings.text('About software')),
+                subtitle: Text(
+                  strings.format('Version: {version}', {
+                    'version': appDisplayVersion,
+                  }),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AboutSoftwareScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
               child: ExpansionTile(
                 initiallyExpanded: developerOptionsExpanded,
                 onExpansionChanged: (value) {
@@ -3147,6 +3183,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class AboutSoftwareScreen extends StatelessWidget {
+  const AboutSoftwareScreen({super.key});
+
+  Future<void> _openRepository() {
+    return launchUrl(
+      Uri.parse(appRepositoryUrl),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.text('About software'))),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: Icon(
+                          Icons.forum_rounded,
+                          size: 64,
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              strings.text('CsAC Mobile'),
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: _openRepository,
+                              child: Text(
+                                appRepositoryUrl,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: scheme.primary,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: scheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 48),
+                  _AboutSection(
+                    title: strings.text('About CsAC Mobile'),
+                    rows: [
+                      _AboutInfoRow(
+                        label: strings.text('Version'),
+                        value: appDisplayVersion,
+                      ),
+                      _AboutInfoRow(
+                        label: strings.text('Repository'),
+                        value: appRepositoryUrl,
+                        onTap: _openRepository,
+                      ),
+                      _AboutInfoRow(
+                        label: strings.text('Client branch'),
+                        value: 'LeonMMcoset',
+                      ),
+                      _AboutInfoRow(
+                        label: strings.text('Maintainer'),
+                        value: strings.text('Xiaobai'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 40),
+                  Text(
+                    strings.text(
+                      'This software is a branch of the client based on LeonMMcoset and is maintained by Xiaobai.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: scheme.onSurface,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutSection extends StatelessWidget {
+  const _AboutSection({required this.title, required this.rows});
+
+  final String title;
+  final List<_AboutInfoRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 16),
+        ...rows,
+      ],
+    );
+  }
+}
+
+class _AboutInfoRow extends StatelessWidget {
+  const _AboutInfoRow({required this.label, required this.value, this.onTap});
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final valueStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: onTap == null ? scheme.onSurface : scheme.primary,
+      decoration: onTap == null ? null : TextDecoration.underline,
+      decorationColor: onTap == null ? null : scheme.primary,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 128,
+            child: Text(
+              '$label:',
+              textAlign: TextAlign.end,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 24),
+          Flexible(
+            child: InkWell(
+              onTap: onTap,
+              child: Text(value, style: valueStyle),
+            ),
+          ),
+        ],
       ),
     );
   }

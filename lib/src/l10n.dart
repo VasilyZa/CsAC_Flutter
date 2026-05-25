@@ -158,6 +158,15 @@ const _zh = <String, String>{
   'This permanently deletes your account, groups, messages, notifications and friend relationships.':
       '这会永久删除你的账号、创建的群组、相关消息、通知和好友关系。',
   'Settings': '设置',
+  'About software': '关于软件',
+  'About CsAC Mobile': '关于 CsAC Mobile',
+  'Version': '版本',
+  'Repository': 'GitHub 仓库',
+  'Maintainer': '维护者',
+  'Xiaobai': '小白',
+  'Client branch': '客户端分支',
+  'This software is a branch of the client based on LeonMMcoset and is maintained by Xiaobai.':
+      '本软件是基于 LeonMMcoset 编写的客户端的分支，由小白维护。',
   'System': '跟随系统',
   'Light': '浅色',
   'Dark': '深色',

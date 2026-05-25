@@ -15,9 +15,15 @@ on:
           - linux-executable
           - linux-appimage
           - android-apk
+      upload_release:
+        description: Upload built artifacts to GitHub Release
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
 
 env:
   APP_NAME: csac
@@ -314,3 +320,52 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/app-release.apk.sha1
           if-no-files-found: error
+
+  release:
+    name: Release
+    if: ${{ always() && inputs.upload_release && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    needs:
+      - windows
+      - linux
+      - android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          release_version="${version/+/-}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-upload
+          while IFS= read -r -d '' artifact_dir; do
+            artifact_name="$(basename "$artifact_dir")"
+            file_count="$(find "$artifact_dir" -type f | wc -l)"
+            if [[ "$file_count" -eq 1 ]]; then
+              file_path="$(find "$artifact_dir" -type f -print -quit)"
+              cp "$file_path" "release-upload/$(basename "$file_path")"
+            else
+              (cd release-assets && zip -r "../release-upload/${artifact_name}.zip" "$artifact_name")
+            fi
+          done < <(find release-assets -mindepth 1 -maxdepth 1 -type d -print0)
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: CsAC ${{ steps.version.outputs.release_version }}
+          files: release-upload/*
+          fail_on_unmatched_files: true
