@@ -213,7 +213,10 @@ jobs:
             'Categories=Network;Chat;' \
             > "$appdir/${APP_NAME}.desktop"
           cp "$appdir/${APP_NAME}.desktop" "$appdir/usr/share/applications/${APP_NAME}.desktop"
-          if [[ -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]]; then
+          if [[ -f linux/runner/resources/app_icon.png ]]; then
+            cp linux/runner/resources/app_icon.png "$appdir/${APP_NAME}.png"
+            cp "$appdir/${APP_NAME}.png" "$appdir/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+          elif [[ -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]]; then
             cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$appdir/${APP_NAME}.png"
             cp "$appdir/${APP_NAME}.png" "$appdir/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
           else
@@ -271,6 +274,32 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name secret is required for reproducible Android APK signing."
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+          mkdir -p android/app/signing
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/signing/release.jks
+          cat > android/key.properties <<EOF
+          storeFile=app/signing/release.jks
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
 
       - name: Build Android APK
         env:

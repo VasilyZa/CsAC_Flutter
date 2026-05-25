@@ -1,6 +1,8 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <limits.h>
+#include <unistd.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -18,6 +20,18 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 static void first_frame_cb(MyApplication* self, FlView *view)
 {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+}
+
+static gchar* get_app_icon_path() {
+  char executable_path[PATH_MAX] = {0};
+  ssize_t path_length =
+      readlink("/proc/self/exe", executable_path, sizeof(executable_path) - 1);
+  if (path_length <= 0) {
+    return g_strdup("data/app_icon.png");
+  }
+  executable_path[path_length] = '\0';
+  g_autofree gchar* executable_dir = g_path_get_dirname(executable_path);
+  return g_build_filename(executable_dir, "data", "app_icon.png", nullptr);
 }
 
 // Implements GApplication::activate.
@@ -54,6 +68,9 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  gtk_window_set_default_icon_name(APPLICATION_ID);
+  g_autofree gchar* icon_path = get_app_icon_path();
+  gtk_window_set_icon_from_file(window, icon_path, nullptr);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
