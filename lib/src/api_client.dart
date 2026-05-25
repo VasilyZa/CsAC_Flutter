@@ -403,6 +403,16 @@ class CsacApiClient {
     return messages;
   }
 
+  Future<void> markRead(Conversation conversation, {int lastMsgId = 0}) {
+    return postForm('message/mark_read', <String, String>{
+      if (conversation.type == ConversationType.group)
+        'room_id': '${conversation.id}',
+      if (conversation.type == ConversationType.private)
+        'friend_id': '${conversation.id}',
+      if (lastMsgId > 0) 'last_msg_id': '$lastMsgId',
+    });
+  }
+
   Future<void> sendMessage(
     Conversation conversation,
     String content, {

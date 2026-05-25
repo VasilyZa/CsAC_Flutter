@@ -18,6 +18,7 @@ class CsacAppState extends ChangeNotifier {
   List<Conversation> conversations = const <Conversation>[];
   NotificationCounts notificationCounts = const NotificationCounts();
   CsacPreferences preferences = const CsacPreferences();
+  Conversation? activeConversation;
   bool bootstrapping = true;
   bool loading = false;
   bool offlineMode = false;
@@ -129,6 +130,7 @@ class CsacAppState extends ChangeNotifier {
     user = null;
     conversations = const <Conversation>[];
     notificationCounts = const NotificationCounts();
+    activeConversation = null;
     offlineMode = false;
     sessionExpired = false;
     error = null;
@@ -138,6 +140,15 @@ class CsacAppState extends ChangeNotifier {
 
   void _applyPreferredServer() {
     client.setBaseUrl(preferences.serverUrl);
+  }
+
+  bool isActiveConversation(Conversation conversation) {
+    return activeConversation?.type == conversation.type &&
+        activeConversation?.id == conversation.id;
+  }
+
+  void setActiveConversation(Conversation? conversation) {
+    activeConversation = conversation;
   }
 
   Future<void> loadConversations() async {
@@ -158,14 +169,44 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> syncConversations() async {
     final loaded = await client.conversations();
-    conversations = loaded;
-    await cache.saveConversations(loaded);
+    final normalized = <Conversation>[
+      for (final conversation in loaded)
+        isActiveConversation(conversation)
+            ? conversation.copyWith(unreadCount: 0)
+            : conversation,
+    ];
+    conversations = normalized;
+    await cache.saveConversations(normalized);
     offlineMode = false;
     notifyListeners();
   }
 
   Future<void> refreshHome() async {
     await Future.wait<void>([syncConversations(), refreshNotificationCounts()]);
+  }
+
+  Future<void> markConversationRead(
+    Conversation conversation, {
+    int lastMsgId = 0,
+    bool syncServer = true,
+  }) async {
+    final updated = <Conversation>[
+      for (final item in conversations)
+        item.type == conversation.type && item.id == conversation.id
+            ? item.copyWith(unreadCount: 0)
+            : item,
+    ];
+    conversations = updated;
+    await cache.saveConversations(updated);
+    notifyListeners();
+    if (!syncServer) {
+      return;
+    }
+    try {
+      await client.markRead(conversation, lastMsgId: lastMsgId);
+    } catch (_) {
+      // Keep the local read state responsive even if the API call fails.
+    }
   }
 
   Future<void> refreshNotificationCounts() async {
@@ -250,26 +291,6 @@ class CsacAppState extends ChangeNotifier {
 
   Future<List<ChatMessage>> loadCachedMessages(Conversation conversation) {
     return cache.loadMessages(conversation);
-  }
-
-  Future<void> markConversationRead(Conversation conversation) async {
-    var changed = false;
-    final updated = <Conversation>[];
-    for (final item in conversations) {
-      if (item.type == conversation.type &&
-          item.id == conversation.id &&
-          item.unreadCount > 0) {
-        updated.add(item.copyWith(unreadCount: 0));
-        changed = true;
-      } else {
-        updated.add(item);
-      }
-    }
-    conversations = updated;
-    await cache.markConversationRead(conversation);
-    if (changed) {
-      notifyListeners();
-    }
   }
 
   Future<List<ChatMessage>> loadCachedMessagesAround(
@@ -414,6 +435,7 @@ class CsacAppState extends ChangeNotifier {
       user = null;
       conversations = const <Conversation>[];
       notificationCounts = const NotificationCounts();
+      activeConversation = null;
       offlineMode = false;
       notifyListeners();
     }

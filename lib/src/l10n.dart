@@ -74,6 +74,7 @@ const _zh = <String, String>{
   'Default server': '默认服务器',
   'Current server: {server}': '当前服务器：{server}',
   'New messages: {count}': '新消息：{count} 条',
+  'Select a conversation': '选择一个会话',
   'Chats': '聊天',
   'Search': '搜索',
   'Notices': '通知',

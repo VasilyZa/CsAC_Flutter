@@ -177,18 +177,6 @@ class CsacLocalCache {
     }
   }
 
-  Future<void> markConversationRead(Conversation conversation) async {
-    final db = await _database();
-    db.execute(
-      '''
-      UPDATE conversations
-      SET unread_count = 0
-      WHERE type = ? AND remote_id = ?
-      ''',
-      [_conversationTypeName(conversation.type), conversation.id],
-    );
-  }
-
   Future<List<ChatMessage>> loadMessages(
     Conversation conversation, {
     int limit = 160,
