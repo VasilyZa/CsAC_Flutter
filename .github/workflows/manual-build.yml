@@ -98,9 +98,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path build/installer | Out-Null
           $buildDir = Join-Path $PWD "build\windows\x64\runner\Release"
           $outputDir = Join-Path $PWD "build\installer"
+          $installerIcon = Join-Path $PWD "icon\installer.ico"
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
             "/DBuildDir=$buildDir" `
             "/DOutputDir=$outputDir" `
+            "/DInstallerIcon=$installerIcon" `
             ".github\installer\windows\csac.iss"
 
       - name: Upload Windows installer

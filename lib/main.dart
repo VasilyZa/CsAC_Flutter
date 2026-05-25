@@ -146,8 +146,26 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> openServerSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          state: widget.state,
+          initialDeveloperOptionsExpanded: true,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
+    final serverUrl = widget.state.preferences.serverUrl.trim().isEmpty
+        ? strings.text('Default server')
+        : widget.state.preferences.serverUrl.trim();
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -165,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    context.strings.text('CsAC Mobile'),
+                    strings.text('CsAC Mobile'),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
@@ -176,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: username,
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
-                      labelText: context.strings.text('Username'),
+                      labelText: strings.text('Username'),
                       prefixIcon: const Icon(Icons.person_outline),
                       border: const OutlineInputBorder(),
                     ),
@@ -187,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: true,
                     onSubmitted: (_) => submit(),
                     decoration: InputDecoration(
-                      labelText: context.strings.text('Password'),
+                      labelText: strings.text('Password'),
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: const OutlineInputBorder(),
                     ),
@@ -211,7 +229,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
-                    label: Text(context.strings.text('Login')),
+                    label: Text(strings.text('Login')),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: openServerSettings,
+                    icon: const Icon(Icons.developer_mode_outlined),
+                    label: Text(strings.text('Developer options')),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    strings.format('Current server: {server}', {
+                      'server': serverUrl,
+                    }),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -2019,17 +2051,38 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.state});
+  const SettingsScreen({
+    super.key,
+    required this.state,
+    this.initialDeveloperOptionsExpanded = false,
+  });
 
   final CsacAppState state;
+  final bool initialDeveloperOptionsExpanded;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late final TextEditingController serverUrl;
   bool clearing = false;
   bool refreshing = false;
+  bool savingServer = false;
+  late bool developerOptionsExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    serverUrl = TextEditingController(text: widget.state.preferences.serverUrl);
+    developerOptionsExpanded = widget.initialDeveloperOptionsExpanded;
+  }
+
+  @override
+  void dispose() {
+    serverUrl.dispose();
+    super.dispose();
+  }
 
   String get themeLabel {
     final strings = context.strings;
@@ -2132,6 +2185,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() => clearing = false);
       }
     }
+  }
+
+  Future<void> saveServerUrl() async {
+    setState(() => savingServer = true);
+    try {
+      final changed = await widget.state.updateServerUrl(serverUrl.text);
+      if (!mounted) {
+        return;
+      }
+      serverUrl.text = widget.state.preferences.serverUrl;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.text(
+              changed
+                  ? 'Server address saved. Please log in again.'
+                  : 'Server address is unchanged.',
+            ),
+          ),
+        ),
+      );
+      setState(() {});
+    } on FormatException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.strings.text('Invalid server address.')),
+        ),
+      );
+    } catch (err) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.format('Save failed: {error}', {'error': err}),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => savingServer = false);
+      }
+    }
+  }
+
+  void resetServerUrl() {
+    serverUrl.clear();
   }
 
   Future<void> chooseTheme() async {
@@ -2292,6 +2396,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           )
                         : const Icon(Icons.chevron_right),
                     onTap: clearing ? null : clearCache,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: ExpansionTile(
+                initiallyExpanded: developerOptionsExpanded,
+                onExpansionChanged: (value) {
+                  setState(() => developerOptionsExpanded = value);
+                },
+                leading: const Icon(Icons.developer_mode_outlined),
+                title: Text(strings.text('Developer options')),
+                subtitle: Text(
+                  strings.format('Current server: {server}', {
+                    'server': widget.state.preferences.serverUrl.trim().isEmpty
+                        ? strings.text('Default server')
+                        : widget.state.preferences.serverUrl.trim(),
+                  }),
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  TextField(
+                    controller: serverUrl,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) {
+                      if (!savingServer) {
+                        saveServerUrl();
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: strings.text('CsAC server address'),
+                      hintText: '192.168.1.10:8080',
+                      helperText: strings.text(
+                        'Leave empty to use the default server.',
+                      ),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    spacing: 12,
+                    overflowSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: savingServer ? null : resetServerUrl,
+                        icon: const Icon(Icons.restart_alt),
+                        label: Text(strings.text('Reset to default')),
+                      ),
+                      FilledButton.icon(
+                        onPressed: savingServer ? null : saveServerUrl,
+                        icon: savingServer
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(strings.text('Apply server')),
+                      ),
+                    ],
                   ),
                 ],
               ),

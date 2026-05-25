@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:csac/src/api_client.dart';
 import 'package:csac/src/models.dart';
 
 void main() {
@@ -29,5 +30,27 @@ void main() {
 
     expect(friend.name, 'Work');
     expect(friend.unreadCount, 3);
+  });
+
+  test('server URL accepts bare host and host with port', () {
+    expect(
+      CsacApiClient.normalizeServerUrl('192.168.1.10'),
+      'http://192.168.1.10/rpc/UniCsAC.php',
+    );
+    expect(
+      CsacApiClient.normalizeServerUrl('192.168.1.10:8080'),
+      'http://192.168.1.10:8080/rpc/UniCsAC.php',
+    );
+  });
+
+  test('relative media URLs follow configured API origin', () {
+    configureApiAssetBaseUrl('http://192.168.1.10:8080/rpc/UniCsAC.php');
+
+    expect(
+      normalizeApiUrl('/uploads/avatar.png'),
+      'http://192.168.1.10:8080/uploads/avatar.png',
+    );
+
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
   });
 }

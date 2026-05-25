@@ -37,6 +37,7 @@ class CsacAppState extends ChangeNotifier {
     try {
       await cache.open();
       preferences = await CsacPreferences.load();
+      _applyPreferredServer();
       await client.loadSession();
       restoreStatus = CsacStrings(
         localeForLanguage(preferences.language),
@@ -107,6 +108,36 @@ class CsacAppState extends ChangeNotifier {
     preferences = preferences.copyWith(language: language);
     await preferences.save();
     notifyListeners();
+  }
+
+  Future<bool> updateServerUrl(String value) async {
+    final normalizedUrl = value.trim().isEmpty
+        ? ''
+        : CsacApiClient.normalizeServerUrl(value);
+    final normalized = normalizedUrl == CsacApiClient.defaultBaseUrl
+        ? ''
+        : normalizedUrl;
+    if (normalized == preferences.serverUrl.trim()) {
+      _applyPreferredServer();
+      return false;
+    }
+    preferences = preferences.copyWith(serverUrl: normalized);
+    await preferences.save();
+    _applyPreferredServer();
+    await client.clearSession();
+    await cache.clear();
+    user = null;
+    conversations = const <Conversation>[];
+    notificationCounts = const NotificationCounts();
+    offlineMode = false;
+    sessionExpired = false;
+    error = null;
+    notifyListeners();
+    return true;
+  }
+
+  void _applyPreferredServer() {
+    client.setBaseUrl(preferences.serverUrl);
   }
 
   Future<void> loadConversations() async {

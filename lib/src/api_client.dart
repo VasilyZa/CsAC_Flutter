@@ -22,15 +22,62 @@ class CsacAuthException extends CsacApiException {
 }
 
 class CsacApiClient {
-  CsacApiClient({http.Client? httpClient, this.baseUrl = defaultBaseUrl})
-    : _http = httpClient ?? http.Client();
+  CsacApiClient({http.Client? httpClient, String baseUrl = defaultBaseUrl})
+    : _http = httpClient ?? http.Client(),
+      _baseUrl = normalizeServerUrl(baseUrl) {
+    configureApiAssetBaseUrl(_baseUrl);
+  }
 
   static const defaultBaseUrl = 'https://cschat.ccccocccc.cc/rpc/UniCsAC.php';
+  static const _defaultApiPath = '/rpc/UniCsAC.php';
   static const _sessionKey = 'csac.cookies';
 
   final http.Client _http;
-  final String baseUrl;
+  String _baseUrl;
   final Map<String, String> _cookies = <String, String>{};
+
+  String get baseUrl => _baseUrl;
+
+  String get originUrl => apiOriginFromBaseUrl(_baseUrl);
+
+  void setBaseUrl(String value) {
+    _baseUrl = normalizeServerUrl(value);
+    configureApiAssetBaseUrl(_baseUrl);
+  }
+
+  static String normalizeServerUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return defaultBaseUrl;
+    }
+    final withScheme = value.contains('://') ? value : 'http://$value';
+    final uri = Uri.tryParse(withScheme);
+    if (uri == null ||
+        !uri.hasScheme ||
+        uri.host.trim().isEmpty ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      throw const FormatException('Invalid CsAC server address.');
+    }
+
+    var path = uri.path;
+    if (path.isEmpty || path == '/') {
+      path = _defaultApiPath;
+    } else if (path.endsWith('/rpc/')) {
+      path = '${path}UniCsAC.php';
+    } else if (path.endsWith('/rpc')) {
+      path = '$path/UniCsAC.php';
+    } else if (path.endsWith('/')) {
+      path = '${path}rpc/UniCsAC.php';
+    }
+
+    return uri
+        .replace(
+          path: path,
+          query: uri.query.isEmpty ? null : uri.query,
+          fragment: null,
+        )
+        .toString();
+  }
 
   Future<void> loadSession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -574,15 +621,9 @@ class CsacApiClient {
       'Accept-Language',
       () => 'zh-CN,zh;q=0.9,en;q=0.8',
     );
-    request.headers.putIfAbsent(
-      'Referer',
-      () => 'https://cschat.ccccocccc.cc/',
-    );
+    request.headers.putIfAbsent('Referer', () => '$originUrl/');
     if (request.method == 'POST') {
-      request.headers.putIfAbsent(
-        'Origin',
-        () => 'https://cschat.ccccocccc.cc',
-      );
+      request.headers.putIfAbsent('Origin', () => originUrl);
     }
     if (_cookies.isNotEmpty) {
       request.headers['Cookie'] = _cookies.entries
@@ -607,7 +648,7 @@ class CsacApiClient {
   }
 
   Uri _routeUri(String route, [Map<String, String>? values]) {
-    final base = Uri.parse(baseUrl);
+    final base = Uri.parse(_baseUrl);
     return base.replace(
       queryParameters: <String, String>{
         ...base.queryParameters,

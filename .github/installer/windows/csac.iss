@@ -12,6 +12,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=csac-windows-x64-setup
+SetupIconFile={#InstallerIcon}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

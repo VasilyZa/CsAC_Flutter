@@ -699,6 +699,24 @@ String firstString(Map<String, dynamic> json, List<String> keys) {
   return '';
 }
 
+String _apiAssetBaseUrl = 'https://cschat.ccccocccc.cc';
+
+void configureApiAssetBaseUrl(String apiBaseUrl) {
+  _apiAssetBaseUrl = apiOriginFromBaseUrl(apiBaseUrl);
+}
+
+String apiOriginFromBaseUrl(String apiBaseUrl) {
+  final uri = Uri.tryParse(apiBaseUrl.trim());
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    return 'https://cschat.ccccocccc.cc';
+  }
+  return Uri(
+    scheme: uri.scheme,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+  ).toString();
+}
+
 String normalizeApiUrl(String raw) {
   final value = raw.trim();
   if (value.isEmpty ||
@@ -706,7 +724,7 @@ String normalizeApiUrl(String raw) {
       value.startsWith('https://')) {
     return value;
   }
-  return 'https://cschat.ccccocccc.cc/${value.replaceFirst(RegExp(r'^/+'), '')}';
+  return '$_apiAssetBaseUrl/${value.replaceFirst(RegExp(r'^/+'), '')}';
 }
 
 List<ChatMessage> mergeChatMessages(
