@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'src/app_state.dart';
@@ -268,15 +268,24 @@ class _MainShellState extends State<MainShell> {
   int index = 0;
   int lastUnreadChats = 0;
   Timer? timer;
+  bool suppressNextUnreadHint = false;
 
   @override
   void initState() {
     super.initState();
     lastUnreadChats = totalUnreadChats();
+    widget.state.addListener(syncUnreadBaseline);
     timer = Timer.periodic(
       const Duration(seconds: 12),
       (_) => refreshHomeWithHint(),
     );
+  }
+
+  void syncUnreadBaseline() {
+    final current = totalUnreadChats();
+    if (current < lastUnreadChats) {
+      lastUnreadChats = current;
+    }
   }
 
   int totalUnreadChats() {
@@ -297,7 +306,8 @@ class _MainShellState extends State<MainShell> {
     if (!mounted) {
       return;
     }
-    if (after > before && after > lastUnreadChats) {
+    final shouldSuppressHint = index == 0 || suppressNextUnreadHint;
+    if (after > before && after > lastUnreadChats && !shouldSuppressHint) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -308,11 +318,13 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     }
+    suppressNextUnreadHint = false;
     lastUnreadChats = after;
   }
 
   @override
   void dispose() {
+    widget.state.removeListener(syncUnreadBaseline);
     timer?.cancel();
     super.dispose();
   }
@@ -322,7 +334,11 @@ class _MainShellState extends State<MainShell> {
     final unreadChats = totalUnreadChats();
     final noticeCount = widget.state.notificationCounts.total;
     final pages = <Widget>[
-      ConversationScreen(state: widget.state, embedded: true),
+      ConversationScreen(
+        state: widget.state,
+        embedded: true,
+        onSentMessage: () => suppressNextUnreadHint = true,
+      ),
       MessageSearchScreen(state: widget.state, embedded: true),
       NoticeCenterScreen(state: widget.state),
       ProfileScreen(state: widget.state),
@@ -400,10 +416,12 @@ class ConversationScreen extends StatefulWidget {
     super.key,
     required this.state,
     this.embedded = false,
+    this.onSentMessage,
   });
 
   final CsacAppState state;
   final bool embedded;
+  final VoidCallback? onSentMessage;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -529,6 +547,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       builder: (_) => ChatScreen(
                         state: widget.state,
                         conversation: conversation,
+                        onSentMessage: widget.onSentMessage,
                       ),
                     ),
                   );
@@ -2475,7 +2494,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: Text(
                   strings.text('Clear session and return to login'),
                 ),
-                onTap: widget.state.logout,
+                onTap: () async {
+                  await widget.state.logout();
+                  if (!context.mounted) {
+                    return;
+                  }
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
               ),
             ),
           ],
@@ -3332,11 +3357,13 @@ class ChatScreen extends StatefulWidget {
     required this.state,
     required this.conversation,
     this.focusMessageId,
+    this.onSentMessage,
   });
 
   final CsacAppState state;
   final Conversation conversation;
   final int? focusMessageId;
+  final VoidCallback? onSentMessage;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -3361,6 +3388,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    widget.state.markConversationRead(widget.conversation);
     loadInitial();
     timer = Timer.periodic(
       const Duration(seconds: 4),
@@ -3546,6 +3574,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       input.clear();
       clearComposeTargets();
+      widget.onSentMessage?.call();
       await refresh(silent: true);
     } catch (err) {
       if (mounted) {
@@ -3592,6 +3621,7 @@ class _ChatScreenState extends State<ChatScreen> {
         mentionUids: mentionTargets.map((member) => member.uid).toList(),
       );
       clearComposeTargets();
+      widget.onSentMessage?.call();
       await refresh(silent: true);
     } catch (err) {
       if (mounted) {
@@ -4669,23 +4699,32 @@ void showImagePreview(BuildContext context, String url) {
 Future<void> downloadImage(BuildContext context, String url) async {
   final strings = context.strings;
   try {
-    final response = await http.get(Uri.parse(url));
+    final uri = Uri.parse(url);
+    final ext = p.extension(uri.path).isEmpty ? '.jpg' : p.extension(uri.path);
+    final location = await getSaveLocation(
+      acceptedTypeGroups: [
+        XTypeGroup(
+          label: strings.text('Images'),
+          extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'],
+          mimeTypes: const ['image/*'],
+        ),
+      ],
+      suggestedName: 'csac_${DateTime.now().millisecondsSinceEpoch}$ext',
+      confirmButtonText: strings.text('Save'),
+      canCreateDirectories: true,
+    );
+    if (location == null) {
+      return;
+    }
+    final response = await http.get(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('HTTP ${response.statusCode}');
     }
-    final directory = await getApplicationDocumentsDirectory();
-    final downloads = Directory(p.join(directory.path, 'csac_images'));
-    if (!downloads.existsSync()) {
-      downloads.createSync(recursive: true);
+    final file = File(location.path);
+    final parent = file.parent;
+    if (!parent.existsSync()) {
+      parent.createSync(recursive: true);
     }
-    final uri = Uri.parse(url);
-    final ext = p.extension(uri.path).isEmpty ? '.jpg' : p.extension(uri.path);
-    final file = File(
-      p.join(
-        downloads.path,
-        'csac_${DateTime.now().millisecondsSinceEpoch}$ext',
-      ),
-    );
     await file.writeAsBytes(response.bodyBytes);
     if (!context.mounted) {
       return;

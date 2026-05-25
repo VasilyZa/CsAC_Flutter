@@ -252,6 +252,26 @@ class CsacAppState extends ChangeNotifier {
     return cache.loadMessages(conversation);
   }
 
+  Future<void> markConversationRead(Conversation conversation) async {
+    var changed = false;
+    final updated = <Conversation>[];
+    for (final item in conversations) {
+      if (item.type == conversation.type &&
+          item.id == conversation.id &&
+          item.unreadCount > 0) {
+        updated.add(item.copyWith(unreadCount: 0));
+        changed = true;
+      } else {
+        updated.add(item);
+      }
+    }
+    conversations = updated;
+    await cache.markConversationRead(conversation);
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
   Future<List<ChatMessage>> loadCachedMessagesAround(
     Conversation conversation,
     int messageId,
