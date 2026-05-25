@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 
 import 'api_client.dart';
 import 'l10n.dart';
@@ -137,51 +136,6 @@ class CsacAppState extends ChangeNotifier {
     error = null;
     notifyListeners();
     return true;
-  }
-
-  Future<void> refreshCurrentUser() async {
-    user = await client.currentUser();
-    await cache.saveUser(user!);
-    sessionExpired = false;
-    offlineMode = false;
-    notifyListeners();
-  }
-
-  Future<void> updateNickname(String nickname) async {
-    await client.updateNickname(nickname);
-    await refreshCurrentUser();
-  }
-
-  Future<void> updatePassword({
-    required String oldPassword,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    await client.updatePassword(
-      oldPassword: oldPassword,
-      newPassword: newPassword,
-      confirmPassword: confirmPassword,
-    );
-  }
-
-  Future<void> updateAvatar(Uint8List bytes, String fileName) async {
-    await client.updateAvatar(bytes, fileName);
-    await refreshCurrentUser();
-  }
-
-  Future<void> deleteAccount() async {
-    try {
-      await client.deleteAccount();
-    } finally {
-      await cache.clear();
-      user = null;
-      conversations = const <Conversation>[];
-      notificationCounts = const NotificationCounts();
-      activeConversation = null;
-      offlineMode = false;
-      sessionExpired = false;
-      notifyListeners();
-    }
   }
 
   void _applyPreferredServer() {
