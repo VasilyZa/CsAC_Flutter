@@ -265,6 +265,15 @@ class CsacApiClient {
     return NotificationCounts.fromJson(data);
   }
 
+  Future<NotificationCounts> mentionCounts() async {
+    final data = await get('message/get_mentions');
+    final nested = data['data'];
+    if (nested is Map) {
+      return NotificationCounts.fromJson(Map<String, dynamic>.from(nested));
+    }
+    return NotificationCounts.fromJson(data);
+  }
+
   Future<List<CsacNotice>> notices() async {
     final data = await get('user/get_notice_list');
     return _firstList(data, const [

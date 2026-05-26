@@ -588,13 +588,18 @@ class NotificationCounts {
     this.notices = 0,
     this.friendRequests = 0,
     this.groupApplications = 0,
+    this.mentions = 0,
+    this.replies = 0,
   });
 
   final int notices;
   final int friendRequests;
   final int groupApplications;
+  final int mentions;
+  final int replies;
 
-  int get total => notices + friendRequests + groupApplications;
+  int get total =>
+      notices + friendRequests + groupApplications + mentions + replies;
 
   factory NotificationCounts.fromJson(Map<String, dynamic> json) {
     return NotificationCounts(
@@ -618,6 +623,8 @@ class NotificationCounts {
         'apply_count',
         'group_apply_count',
       ]),
+      mentions: firstInt(json, const ['unread_mentions', 'mentions']),
+      replies: firstInt(json, const ['unread_replies', 'replies']),
     );
   }
 }

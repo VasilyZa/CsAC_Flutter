@@ -10,7 +10,7 @@ class NoticeCenterScreen extends StatelessWidget {
     final counts = state.notificationCounts;
     final strings = context.strings;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(strings.text('Notices')),
@@ -32,6 +32,13 @@ class NoticeCenterScreen extends StatelessWidget {
               ),
               Tab(
                 icon: _TabBadgeIcon(
+                  icon: Icons.alternate_email,
+                  count: counts.mentions + counts.replies,
+                ),
+                text: strings.text('Mentions'),
+              ),
+              Tab(
+                icon: _TabBadgeIcon(
                   icon: Icons.person_add_alt,
                   count: counts.friendRequests,
                 ),
@@ -50,10 +57,104 @@ class NoticeCenterScreen extends StatelessWidget {
         body: TabBarView(
           children: [
             NoticesPage(state: state),
+            MentionsPage(state: state),
             FriendRequestsPage(state: state),
             GroupApplicationsPage(state: state),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class MentionsPage extends StatefulWidget {
+  const MentionsPage({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<MentionsPage> createState() => _MentionsPageState();
+}
+
+class _MentionsPageState extends State<MentionsPage> {
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      await widget.state.refreshMentionCounts();
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final counts = widget.state.notificationCounts;
+    return RefreshIndicator(
+      onRefresh: load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        children: [
+          if (loading) const LinearProgressIndicator(minHeight: 2),
+          if (error != null) _InlineError(message: error!, onRetry: load),
+          Card(
+            elevation: 0,
+            child: _RoundedInkClip(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.alternate_email),
+                    title: Text(strings.text('Mentioned me')),
+                    subtitle: Text(
+                      strings.format('{count} unread', {
+                        'count': counts.mentions,
+                      }),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.reply_outlined),
+                    title: Text(strings.text('Replied to me')),
+                    subtitle: Text(
+                      strings.format('{count} unread', {
+                        'count': counts.replies,
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: Text(strings.text('Mention list unavailable')),
+              subtitle: Text(
+                strings.text('Open related chats from the chat list.'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

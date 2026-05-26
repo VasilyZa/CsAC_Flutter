@@ -280,29 +280,79 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> refreshNotificationCounts() async {
     try {
-      notificationCounts = await client.notificationCounts();
+      final results = await Future.wait<NotificationCounts>([
+        client.notificationCounts(),
+        client.mentionCounts(),
+      ]);
+      final base = results[0];
+      final mentions = results[1];
+      notificationCounts = NotificationCounts(
+        notices: base.notices,
+        friendRequests: base.friendRequests,
+        groupApplications: base.groupApplications,
+        mentions: mentions.mentions,
+        replies: mentions.replies,
+      );
     } catch (_) {
       notificationCounts = NotificationCounts(
         notices: notificationCounts.notices,
         friendRequests: notificationCounts.friendRequests,
         groupApplications: notificationCounts.groupApplications,
+        mentions: notificationCounts.mentions,
+        replies: notificationCounts.replies,
       );
     }
     notifyListeners();
+  }
+
+  Future<NotificationCounts> refreshMentionCounts() async {
+    final mentions = await client.mentionCounts();
+    notificationCounts = NotificationCounts(
+      notices: notificationCounts.notices,
+      friendRequests: notificationCounts.friendRequests,
+      groupApplications: notificationCounts.groupApplications,
+      mentions: mentions.mentions,
+      replies: mentions.replies,
+    );
+    notifyListeners();
+    return notificationCounts;
   }
 
   void updateNotificationCounts({
     int? notices,
     int? friendRequests,
     int? groupApplications,
+    int? mentions,
+    int? replies,
   }) {
     notificationCounts = NotificationCounts(
       notices: notices ?? notificationCounts.notices,
       friendRequests: friendRequests ?? notificationCounts.friendRequests,
       groupApplications:
           groupApplications ?? notificationCounts.groupApplications,
+      mentions: mentions ?? notificationCounts.mentions,
+      replies: replies ?? notificationCounts.replies,
     );
     notifyListeners();
+  }
+
+  Future<void> markConversationUnread(Conversation conversation) async {
+    final updated = <Conversation>[
+      for (final item in conversations)
+        item.type == conversation.type && item.id == conversation.id
+            ? item.copyWith(
+                unreadCount: item.unreadCount > 0 ? item.unreadCount : 1,
+              )
+            : item,
+    ];
+    conversations = updated;
+    await cache.saveConversations(updated);
+    notifyListeners();
+  }
+
+  Future<void> clearConversationLocalCache(Conversation conversation) async {
+    await cache.clearConversationMessages(conversation);
+    await ConversationDraftStore.clear(conversation);
   }
 
   Future<List<CsacNotice>> loadNotices() {

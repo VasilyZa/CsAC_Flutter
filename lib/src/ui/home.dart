@@ -448,6 +448,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 selected:
                     widget.selectedConversation?.type == conversation.type &&
                     widget.selectedConversation?.id == conversation.id,
+                onLongPress: () => showConversationActions(conversation),
                 onTap: () async {
                   if (widget.onConversationSelected != null) {
                     widget.onConversationSelected!(conversation);
@@ -502,17 +503,70 @@ class _ConversationScreenState extends State<ConversationScreen> {
       body: SafeArea(top: widget.embedded, child: content),
     );
   }
+
+  Future<void> showConversationActions(Conversation conversation) async {
+    final action = await showModalBottomSheet<_ConversationAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) =>
+          _ConversationActionSheet(conversation: conversation),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      switch (action) {
+        case _ConversationAction.markRead:
+          await widget.state.markConversationRead(conversation);
+          messenger.showSnackBar(
+            SnackBar(content: Text(strings.text('Conversation marked read.'))),
+          );
+          break;
+        case _ConversationAction.markUnread:
+          await widget.state.markConversationUnread(conversation);
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(strings.text('Conversation marked unread.')),
+            ),
+          );
+          break;
+        case _ConversationAction.clearCache:
+          await widget.state.clearConversationLocalCache(conversation);
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(strings.text('Conversation cache cleared.')),
+            ),
+          );
+          break;
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() {});
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              strings.format('Action failed: {error}', {'error': err}),
+            ),
+          ),
+        );
+      }
+    }
+  }
 }
 
 class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
     required this.conversation,
     required this.onTap,
+    required this.onLongPress,
     this.selected = false,
   });
 
   final Conversation conversation;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final bool selected;
 
   @override
@@ -530,6 +584,7 @@ class _ConversationTile extends StatelessWidget {
         selectedColor: colors.onSecondaryContainer,
         selectedTileColor: colors.secondaryContainer,
         onTap: onTap,
+        onLongPress: onLongPress,
         leading: CircleAvatar(
           backgroundColor: isGroup
               ? colors.secondaryContainer
@@ -556,6 +611,45 @@ class _ConversationTile extends StatelessWidget {
         trailing: conversation.unreadCount > 0
             ? Badge(label: Text('${conversation.unreadCount}'))
             : const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+enum _ConversationAction { markRead, markUnread, clearCache }
+
+class _ConversationActionSheet extends StatelessWidget {
+  const _ConversationActionSheet({required this.conversation});
+
+  final Conversation conversation;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.done_all),
+            title: Text(strings.text('Mark read')),
+            onTap: () =>
+                Navigator.of(context).pop(_ConversationAction.markRead),
+          ),
+          ListTile(
+            leading: const Icon(Icons.mark_chat_unread_outlined),
+            title: Text(strings.text('Mark unread')),
+            onTap: () =>
+                Navigator.of(context).pop(_ConversationAction.markUnread),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cleaning_services_outlined),
+            title: Text(strings.text('Clear local cache')),
+            subtitle: Text(conversation.name),
+            onTap: () =>
+                Navigator.of(context).pop(_ConversationAction.clearCache),
+          ),
+        ],
       ),
     );
   }
