@@ -134,6 +134,36 @@ class CsacApiClient {
     return CsacUser.fromJson(user);
   }
 
+  Future<void> updateNickname(String nickname) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'nickname',
+      'nickname': nickname.trim(),
+    });
+  }
+
+  Future<void> updatePassword(
+    String oldPassword,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'password',
+      'old_password': oldPassword,
+      'new_password': newPassword,
+      'confirm_password': confirmPassword,
+    });
+  }
+
+  Future<void> updateAvatar(Uint8List avatarBytes, String fileName) {
+    return postMultipart(
+      'user/update_profile',
+      <String, String>{'action': 'avatar'},
+      fileField: 'avatar',
+      fileBytes: avatarBytes,
+      fileName: fileName,
+    );
+  }
+
   Future<UserProfile> userProfile(int uid) async {
     final data = await get('user/get_info', <String, String>{'uid': '$uid'});
     final user = data['user'];
@@ -324,6 +354,55 @@ class CsacApiClient {
 
   Future<void> leaveGroup(int roomId) {
     return postForm('group/leave', <String, String>{'room_id': '$roomId'});
+  }
+
+  Future<void> editGroupInfo(
+    int roomId, {
+    required String roomName,
+    required String description,
+    required String notice,
+  }) {
+    return postForm('group/edit_info', <String, String>{
+      'room_id': '$roomId',
+      'room_name': roomName.trim(),
+      'description': description,
+      'notice': notice,
+    });
+  }
+
+  Future<void> updateGroupSettings(
+    int roomId, {
+    required String joinType,
+    required String code,
+    required String question,
+    required String answer,
+    required bool showPublic,
+  }) {
+    return postForm('group/update_settings', <String, String>{
+      'room_id': '$roomId',
+      'join_type': joinType.trim(),
+      'code': code.trim(),
+      'question': question.trim(),
+      'answer': answer.trim(),
+      'show_public': showPublic ? '1' : '0',
+    });
+  }
+
+  Future<void> resetInviteCode(int roomId) {
+    return postForm('group/reset_invite_code', <String, String>{
+      'room_id': '$roomId',
+    });
+  }
+
+  Future<void> transferGroup(int roomId, int targetUid) {
+    return postForm('group/transfer', <String, String>{
+      'room_id': '$roomId',
+      'target_uid': '$targetUid',
+    });
+  }
+
+  Future<void> disbandGroup(int roomId) {
+    return postForm('group/disband', <String, String>{'room_id': '$roomId'});
   }
 
   Future<void> muteGroupMember(int roomId, int targetUid, int minutes) {

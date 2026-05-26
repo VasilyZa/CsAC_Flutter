@@ -24,7 +24,7 @@ class CsacUser {
           ? 'UID ${asInt(json['uid'])}'
           : asString(json['nickname']),
       username: asString(json['username']),
-      avatar: asString(json['avatar']),
+      avatar: normalizeApiUrl(asString(json['avatar'])),
       onlineStatus: asString(json['online_status']),
     );
   }
@@ -225,11 +225,15 @@ class GroupProfile {
     this.inviteCode = '',
     this.code = '',
     this.question = '',
+    this.answer = '',
     this.joinType = '',
+    this.showPublic = false,
     this.memberCount = 0,
     this.isInGroup = false,
     this.isAdmin = false,
     this.isOwner = false,
+    this.ownerUid = 0,
+    this.currentRole = '',
   });
 
   final int id;
@@ -239,17 +243,26 @@ class GroupProfile {
   final String inviteCode;
   final String code;
   final String question;
+  final String answer;
   final String joinType;
+  final bool showPublic;
   final int memberCount;
   final bool isInGroup;
   final bool isAdmin;
   final bool isOwner;
+  final int ownerUid;
+  final String currentRole;
+
+  bool get hasOwnerRole => isOwner || roleTextIndicatesOwner(currentRole);
+
+  bool get hasAdminRole =>
+      hasOwnerRole || isAdmin || roleTextIndicatesAdmin(currentRole);
 
   String get subtitle {
     return [
       if (memberCount > 0) '$memberCount members',
       if (joinType.isNotEmpty) 'join: $joinType',
-      if (isOwner) 'owner' else if (isAdmin) 'admin',
+      if (hasOwnerRole) 'owner' else if (hasAdminRole) 'admin',
     ].join(' | ');
   }
 
@@ -272,15 +285,44 @@ class GroupProfile {
         'apply_question',
         'audit_question',
       ]),
+      answer: firstString(json, const ['answer', 'apply_answer']),
       joinType: firstString(json, const [
         'join_type',
         'join_mode',
         'join_method',
       ]),
+      showPublic: firstBool(json, const ['show_public', 'is_public']),
       memberCount: asInt(json['member_count']),
       isInGroup: asBool(json['is_in_group']),
-      isAdmin: asBool(json['is_admin']),
-      isOwner: asBool(json['is_owner']),
+      isAdmin: firstBool(json, const [
+        'is_admin',
+        'is_manager',
+        'is_manage',
+        'is_group_admin',
+        'can_manage',
+      ]),
+      isOwner: firstBool(json, const [
+        'is_owner',
+        'is_creator',
+        'is_room_owner',
+        'is_group_owner',
+        'owner',
+      ]),
+      ownerUid: firstInt(json, const [
+        'owner_uid',
+        'owner_id',
+        'creator_uid',
+        'creator_id',
+        'create_uid',
+      ]),
+      currentRole: firstString(json, const [
+        'my_role',
+        'current_role',
+        'member_role',
+        'role',
+        'role_name',
+        'role_label',
+      ]),
     );
   }
 }
@@ -448,6 +490,12 @@ class GroupMember {
     return role;
   }
 
+  bool get hasOwnerRole => isOwner || roleTextIndicatesOwner(roleLabel);
+
+  bool get hasAdminRole {
+    return hasOwnerRole || isAdmin || roleTextIndicatesAdmin(roleLabel);
+  }
+
   factory GroupMember.fromJson(Map<String, dynamic> json) {
     final uid = firstInt(json, const ['uid', 'user_id', 'id']);
     final remark = asString(json['remark']);
@@ -461,10 +509,28 @@ class GroupMember {
       ),
       username: username,
       avatar: normalizeApiUrl(asString(json['avatar'])),
-      role: asString(json['role']),
+      role: firstString(json, const [
+        'role',
+        'role_name',
+        'role_label',
+        'member_role',
+        'identity',
+      ]),
       onlineStatus: asString(json['online_status']),
-      isOwner: asBool(json['is_owner']),
-      isAdmin: asBool(json['is_admin']),
+      isOwner: firstBool(json, const [
+        'is_owner',
+        'is_creator',
+        'is_room_owner',
+        'is_group_owner',
+        'owner',
+      ]),
+      isAdmin: firstBool(json, const [
+        'is_admin',
+        'is_manager',
+        'is_manage',
+        'is_group_admin',
+        'admin',
+      ]),
     );
   }
 }
@@ -695,6 +761,53 @@ bool asBool(Object? value) {
   }
   final text = asString(value).trim().toLowerCase();
   return text == '1' || text == 'true' || text == 'yes';
+}
+
+bool roleTextIndicatesOwner(String value) {
+  final text = value.trim().toLowerCase();
+  return text == 'owner' ||
+      text == 'creator' ||
+      text == 'host' ||
+      text == 'room_owner' ||
+      text == 'group_owner' ||
+      text == '群主' ||
+      text == '创建者' ||
+      text.contains('owner') ||
+      text.contains('群主');
+}
+
+bool roleTextIndicatesAdmin(String value) {
+  final text = value.trim().toLowerCase();
+  return roleTextIndicatesOwner(value) ||
+      text == 'admin' ||
+      text == 'administrator' ||
+      text == 'manager' ||
+      text == 'moderator' ||
+      text == 'group_admin' ||
+      text == '管理员' ||
+      text == '管理' ||
+      text.contains('admin') ||
+      text.contains('管理员');
+}
+
+bool firstBool(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    final text = asString(value).trim().toLowerCase();
+    if (text == '1' || text == 'true' || text == 'yes' || text == 'on') {
+      return true;
+    }
+    if (text == '0' || text == 'false' || text == 'no' || text == 'off') {
+      return false;
+    }
+  }
+  return false;
 }
 
 int firstInt(Map<String, dynamic> json, List<String> keys) {

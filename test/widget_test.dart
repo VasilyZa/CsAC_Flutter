@@ -7,6 +7,6 @@ void main() {
     await tester.pumpWidget(const CsacMobileApp());
     await tester.pump();
 
-    expect(find.text('CsAC 移动端'), findsOneWidget);
+    expect(find.text('CsAC 桌面客户端'), findsOneWidget);
   });
 }

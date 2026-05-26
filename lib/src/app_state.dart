@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
@@ -105,6 +107,12 @@ class CsacAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateThemeColor(int colorValue) async {
+    preferences = preferences.copyWith(themeColorValue: colorValue);
+    await preferences.save();
+    notifyListeners();
+  }
+
   Future<void> updateLanguage(CsacLanguage language) async {
     preferences = preferences.copyWith(language: language);
     await preferences.save();
@@ -136,6 +144,32 @@ class CsacAppState extends ChangeNotifier {
     error = null;
     notifyListeners();
     return true;
+  }
+
+  Future<void> refreshCurrentUser() async {
+    user = await client.currentUser();
+    await cache.saveUser(user!);
+    offlineMode = false;
+    sessionExpired = false;
+    notifyListeners();
+  }
+
+  Future<void> updateNickname(String nickname) async {
+    await client.updateNickname(nickname);
+    await refreshCurrentUser();
+  }
+
+  Future<void> updateAvatar(Uint8List avatarBytes, String fileName) async {
+    await client.updateAvatar(avatarBytes, fileName);
+    await refreshCurrentUser();
+  }
+
+  Future<void> updatePassword(
+    String oldPassword,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return client.updatePassword(oldPassword, newPassword, confirmPassword);
   }
 
   void _applyPreferredServer() {
@@ -362,6 +396,54 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> leaveGroup(int roomId) async {
     await client.leaveGroup(roomId);
+    await syncConversations();
+  }
+
+  Future<void> editGroupInfo(
+    int roomId, {
+    required String roomName,
+    required String description,
+    required String notice,
+  }) async {
+    await client.editGroupInfo(
+      roomId,
+      roomName: roomName,
+      description: description,
+      notice: notice,
+    );
+    await syncConversations();
+  }
+
+  Future<void> updateGroupSettings(
+    int roomId, {
+    required String joinType,
+    required String code,
+    required String question,
+    required String answer,
+    required bool showPublic,
+  }) async {
+    await client.updateGroupSettings(
+      roomId,
+      joinType: joinType,
+      code: code,
+      question: question,
+      answer: answer,
+      showPublic: showPublic,
+    );
+    await syncConversations();
+  }
+
+  Future<void> resetInviteCode(int roomId) async {
+    await client.resetInviteCode(roomId);
+  }
+
+  Future<void> transferGroup(int roomId, int targetUid) async {
+    await client.transferGroup(roomId, targetUid);
+    await syncConversations();
+  }
+
+  Future<void> disbandGroup(int roomId) async {
+    await client.disbandGroup(roomId);
     await syncConversations();
   }
 
