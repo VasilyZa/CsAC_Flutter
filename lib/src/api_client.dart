@@ -117,6 +117,44 @@ class CsacApiClient {
     return CsacUser.fromJson(user);
   }
 
+  Future<CsacUser> register({
+    required String username,
+    required String nickname,
+    required String password,
+    required String confirmPassword,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
+  }) async {
+    final fields = <String, String>{
+      'username': username.trim(),
+      'nickname': nickname.trim(),
+      'pwd': password,
+      'confirm_pwd': confirmPassword,
+    };
+    final Map<String, dynamic> data;
+    if (avatarBytes == null || avatarBytes.isEmpty) {
+      data = await postForm('auth/register', fields);
+    } else {
+      data = await postMultipart(
+        'auth/register',
+        fields,
+        fileField: 'avatar',
+        fileBytes: avatarBytes,
+        fileName: avatarFileName?.trim().isNotEmpty == true
+            ? avatarFileName!.trim()
+            : 'avatar.jpg',
+      );
+    }
+    final user = data['user'];
+    if (user is! Map<String, dynamic>) {
+      throw const CsacApiException(
+        'Registration succeeded but no user was returned.',
+      );
+    }
+    await saveSession();
+    return CsacUser.fromJson(user);
+  }
+
   Future<void> logout() async {
     try {
       await postForm('auth/logout');

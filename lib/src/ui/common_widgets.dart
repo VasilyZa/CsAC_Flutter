@@ -36,7 +36,12 @@ class _RoundedInkClip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(borderRadius: BorderRadius.circular(12), child: child);
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.circular(12),
+      child: child,
+    );
   }
 }
 

@@ -101,6 +101,41 @@ class CsacAppState extends ChangeNotifier {
     }
   }
 
+  Future<void> register({
+    required String username,
+    required String nickname,
+    required String password,
+    required String confirmPassword,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
+  }) async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      user = await client.register(
+        username: username,
+        nickname: nickname,
+        password: password,
+        confirmPassword: confirmPassword,
+        avatarBytes: avatarBytes,
+        avatarFileName: avatarFileName,
+      );
+      await cache.saveUser(user!);
+      offlineMode = false;
+      sessionExpired = false;
+      error = null;
+      await syncConversations();
+      await refreshNotificationCounts();
+    } catch (err) {
+      error = err.toString();
+      rethrow;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> updateThemeMode(ThemeMode mode) async {
     preferences = preferences.copyWith(themeMode: mode);
     await preferences.save();

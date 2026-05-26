@@ -1265,18 +1265,26 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     ),
                   ),
                   for (final member in candidates)
-                    ListTile(
-                      leading: _Avatar(
-                        url: member.avatar,
-                        fallback: Icons.person_rounded,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
                       ),
-                      title: Text(member.name),
-                      subtitle: Text(
-                        member.subtitle.isEmpty
-                            ? 'UID ${member.uid}'
-                            : member.subtitle,
+                      child: _RoundedInkClip(
+                        child: ListTile(
+                          leading: _Avatar(
+                            url: member.avatar,
+                            fallback: Icons.person_rounded,
+                          ),
+                          title: Text(member.name),
+                          subtitle: Text(
+                            member.subtitle.isEmpty
+                                ? 'UID ${member.uid}'
+                                : member.subtitle,
+                          ),
+                          onTap: () => Navigator.of(context).pop(member),
+                        ),
                       ),
-                      onTap: () => Navigator.of(context).pop(member),
                     ),
                 ],
               ),
