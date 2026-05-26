@@ -32,12 +32,14 @@ class CsacLocalCache {
     final db = await _database();
     db.execute('DELETE FROM session_user');
     db.execute('DELETE FROM messages');
+    db.execute('DELETE FROM local_deleted_messages');
     db.execute('DELETE FROM conversations');
   }
 
   Future<void> clearCachedData() async {
     final db = await _database();
     db.execute('DELETE FROM messages');
+    db.execute('DELETE FROM local_deleted_messages');
     db.execute('DELETE FROM conversations');
   }
 
@@ -325,7 +327,7 @@ class CsacLocalCache {
         MessageSearchResult(
           conversation: _conversationFromRow(row),
           message: _messageFromRow(row),
-          snippet: _snippet(row['body'] as String, text),
+          snippet: _snippet(_messageFromRow(row).body, text),
         ),
     ];
   }
@@ -359,7 +361,11 @@ class CsacLocalCache {
     try {
       db.execute('BEGIN IMMEDIATE');
       final type = _conversationTypeName(conversation.type);
+      final deletedIds = _deletedMessageIds(db, conversation);
       for (final message in messages) {
+        if (deletedIds.contains(message.id)) {
+          continue;
+        }
         statement.execute([
           type,
           conversation.id,
@@ -405,6 +411,60 @@ class CsacLocalCache {
       rethrow;
     }
     await saveMessages(conversation, messages);
+  }
+
+  Future<List<ChatMessage>> filterLocallyDeletedMessages(
+    Conversation conversation,
+    List<ChatMessage> messages,
+  ) async {
+    if (messages.isEmpty) {
+      return messages;
+    }
+    final db = await _database();
+    final deletedIds = _deletedMessageIds(db, conversation);
+    if (deletedIds.isEmpty) {
+      return messages;
+    }
+    return messages
+        .where((message) => !deletedIds.contains(message.id))
+        .toList();
+  }
+
+  Future<void> deleteMessages(
+    Conversation conversation,
+    Iterable<int> messageIds,
+  ) async {
+    final ids = messageIds.where((id) => id > 0).toSet().toList();
+    if (ids.isEmpty) {
+      return;
+    }
+    final db = await _database();
+    final statement = db.prepare('''
+      DELETE FROM messages
+      WHERE conversation_type = ? AND conversation_id = ? AND id = ?
+      ''');
+    final tombstoneStatement = db.prepare('''
+      INSERT OR IGNORE INTO local_deleted_messages (
+        conversation_type, conversation_id, id, deleted_at
+      )
+      VALUES (?, ?, ?, ?)
+      ''');
+    try {
+      db.execute('BEGIN IMMEDIATE');
+      final type = _conversationTypeName(conversation.type);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final id in ids) {
+        statement.execute([type, conversation.id, id]);
+        tombstoneStatement.execute([type, conversation.id, id, now]);
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    } finally {
+      statement.dispose();
+      tombstoneStatement.dispose();
+    }
   }
 
   Future<Database> _database() async {
@@ -468,6 +528,15 @@ class CsacLocalCache {
         PRIMARY KEY (conversation_type, conversation_id, id)
       )
       ''');
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS local_deleted_messages (
+        conversation_type TEXT NOT NULL,
+        conversation_id INTEGER NOT NULL,
+        id INTEGER NOT NULL,
+        deleted_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (conversation_type, conversation_id, id)
+      )
+      ''');
     _addColumnIfMissing(
       db,
       'messages',
@@ -512,19 +581,37 @@ class CsacLocalCache {
   }
 
   ChatMessage _messageFromRow(Row row) {
+    final imageUrl = row['image_url'] as String;
+    var body = row['body'] as String;
+    if (imageUrl.isNotEmpty &&
+        (body.startsWith('[image]') || looksLikeImagePath(body))) {
+      body = '[image]';
+    }
     return ChatMessage(
       id: row['id'] as int,
       senderId: row['sender_id'] as int,
       sender: row['sender'] as String,
-      body: row['body'] as String,
+      body: body,
       time: row['time'] as String,
-      imageUrl: row['image_url'] as String,
+      imageUrl: imageUrl,
       canRecall: (row['can_recall'] as int) != 0,
       isRecalled: (row['is_recalled'] as int) != 0,
       isEssence: (row['is_essence'] as int) != 0,
       isMentioned: (row['is_mentioned'] as int) != 0,
       replyTo: row['reply_to'] as int,
     );
+  }
+
+  Set<int> _deletedMessageIds(Database db, Conversation conversation) {
+    final rows = db.select(
+      '''
+      SELECT id
+      FROM local_deleted_messages
+      WHERE conversation_type = ? AND conversation_id = ?
+      ''',
+      [_conversationTypeName(conversation.type), conversation.id],
+    );
+    return rows.map((row) => row['id'] as int).toSet();
   }
 
   String _snippet(String body, String query) {

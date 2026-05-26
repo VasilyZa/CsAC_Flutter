@@ -412,17 +412,23 @@ class ChatMessage {
         asBool(json['is_recalled']) ||
         asBool(json['recalled']) ||
         asBool(json['is_revoked']);
+    final rawImage = firstString(json, const ['image_url', 'image', 'img']);
+    final rawContent = asString(json['content']).trim();
+    final contentLooksLikeImage = looksLikeImagePath(rawContent);
     final image = isRecalled
         ? ''
         : normalizeApiUrl(
-            firstString(json, const ['image_url', 'image', 'img']),
+            contentLooksLikeImage && rawImage.isEmpty ? rawContent : rawImage,
           );
     var body = asString(json['content']).trim();
     if (isRecalled) {
       body = '[recalled]';
     } else {
+      if (image.isNotEmpty && contentLooksLikeImage) {
+        body = '';
+      }
       if (body.isEmpty && image.isNotEmpty) {
-        body = '[image] $image';
+        body = '[image]';
       }
       if (body.isEmpty) {
         body = '[empty]';
@@ -435,12 +441,14 @@ class ChatMessage {
           ? 'UID $senderId'
           : firstString(json, const ['nickname', 'sender_name']),
       body: body,
-      time: firstString(json, const [
-        'add_time',
-        'created_at',
-        'create_time',
-        'time',
-      ]),
+      time: humanReadableTimestamp(
+        firstString(json, const [
+          'add_time',
+          'created_at',
+          'create_time',
+          'time',
+        ]),
+      ),
       imageUrl: image,
       canRecall: asBool(json['can_recall']),
       isRecalled: isRecalled,
@@ -857,6 +865,85 @@ String normalizeApiUrl(String raw) {
   }
   return '$_apiAssetBaseUrl/${value.replaceFirst(RegExp(r'^/+'), '')}';
 }
+
+bool looksLikeImagePath(String value) {
+  final text = value.trim();
+  if (text.isEmpty || text.contains('\n')) {
+    return false;
+  }
+  final uri = Uri.tryParse(text);
+  final path = uri?.path.isNotEmpty == true ? uri!.path : text;
+  final lower = path.toLowerCase().split('?').first.split('#').first;
+  final hasImageExtension = RegExp(
+    r'\.(jpg|jpeg|png|gif|webp|bmp)$',
+  ).hasMatch(lower);
+  if (!hasImageExtension) {
+    return false;
+  }
+  return lower.startsWith('upload/') ||
+      lower.startsWith('/upload/') ||
+      uri?.hasScheme == true;
+}
+
+String humanReadableTimestamp(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) {
+    return '';
+  }
+  final parsed = parseFlexibleTimestamp(value);
+  if (parsed == null) {
+    return value;
+  }
+  final local = parsed.toLocal();
+  final now = DateTime.now();
+  final diff = now.difference(local);
+  if (!diff.isNegative && diff.inSeconds < 60) {
+    return '刚刚';
+  }
+  if (!diff.isNegative && diff.inMinutes < 60) {
+    return '${diff.inMinutes} 分钟前';
+  }
+  final sameDay =
+      local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day;
+  final yesterday = now.subtract(const Duration(days: 1));
+  final wasYesterday =
+      local.year == yesterday.year &&
+      local.month == yesterday.month &&
+      local.day == yesterday.day;
+  final clock = '${_twoDigits(local.hour)}:${_twoDigits(local.minute)}';
+  if (sameDay) {
+    return clock;
+  }
+  if (wasYesterday) {
+    return '昨天 $clock';
+  }
+  if (local.year == now.year) {
+    return '${_twoDigits(local.month)}-${_twoDigits(local.day)} $clock';
+  }
+  return '${local.year}-${_twoDigits(local.month)}-${_twoDigits(local.day)} $clock';
+}
+
+DateTime? parseFlexibleTimestamp(String raw) {
+  final value = raw.trim();
+  final numeric = int.tryParse(value);
+  if (numeric != null) {
+    if (numeric <= 0) {
+      return null;
+    }
+    final milliseconds = numeric > 100000000000
+        ? numeric
+        : numeric > 10000000000
+        ? numeric ~/ 1000
+        : numeric * 1000;
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  }
+  final normalized = value.contains('T') ? value : value.replaceFirst(' ', 'T');
+  return DateTime.tryParse(normalized);
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
 List<ChatMessage> mergeChatMessages(
   List<ChatMessage> existing,

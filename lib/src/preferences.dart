@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models.dart';
+
 enum CsacLanguage { en, zh }
 
 const defaultThemeColorValue = 0xff1f8a70;
@@ -83,5 +85,46 @@ class CsacPreferences {
       }
     }
     return CsacLanguage.zh;
+  }
+}
+
+class ConversationDraftStore {
+  const ConversationDraftStore._();
+
+  static const _draftPrefix = 'csac.draft.';
+
+  static String _key(Conversation conversation) {
+    return '$_draftPrefix${conversation.type.name}:${conversation.id}';
+  }
+
+  static Future<String> load(Conversation conversation) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_key(conversation)) ?? '';
+  }
+
+  static Future<void> save(Conversation conversation, String text) async {
+    final prefs = await SharedPreferences.getInstance();
+    final normalized = text.trimRight();
+    if (normalized.trim().isEmpty) {
+      await prefs.remove(_key(conversation));
+      return;
+    }
+    await prefs.setString(_key(conversation), normalized);
+  }
+
+  static Future<void> clear(Conversation conversation) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key(conversation));
+  }
+
+  static Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_draftPrefix))
+        .toList();
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 }

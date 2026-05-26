@@ -1,5 +1,52 @@
 part of '../../main.dart';
 
+enum _PendingSendStatus { sending, failed }
+
+class _PendingSend {
+  const _PendingSend({
+    required this.localId,
+    required this.text,
+    this.imageBytes,
+    this.imageName = '',
+    this.replyTo = 0,
+    this.mentionUids = const <int>[],
+    this.status = _PendingSendStatus.sending,
+    this.error = '',
+  });
+
+  final int localId;
+  final String text;
+  final Uint8List? imageBytes;
+  final String imageName;
+  final int replyTo;
+  final List<int> mentionUids;
+  final _PendingSendStatus status;
+  final String error;
+
+  bool get hasImage => imageBytes != null;
+
+  _PendingSend copyWith({
+    String? text,
+    Uint8List? imageBytes,
+    String? imageName,
+    int? replyTo,
+    List<int>? mentionUids,
+    _PendingSendStatus? status,
+    String? error,
+  }) {
+    return _PendingSend(
+      localId: localId,
+      text: text ?? this.text,
+      imageBytes: imageBytes ?? this.imageBytes,
+      imageName: imageName ?? this.imageName,
+      replyTo: replyTo ?? this.replyTo,
+      mentionUids: mentionUids ?? this.mentionUids,
+      status: status ?? this.status,
+      error: error ?? this.error,
+    );
+  }
+}
+
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -24,21 +71,38 @@ class _ChatScreenState extends State<ChatScreen> {
   final imagePicker = ImagePicker();
   final itemKeys = <int, GlobalKey>{};
   final messages = <ChatMessage>[];
+  final pendingSends = <_PendingSend>[];
   final mentionTargets = <GroupMember>[];
+  final selectedMessageIds = <int>{};
   Timer? timer;
+  Timer? draftTimer;
+  GroupProfile? groupProfile;
   ChatMessage? replyTarget;
+  int nextPendingId = -1;
   int refreshTicks = 0;
   bool loading = true;
   bool refreshing = false;
-  bool sending = false;
+  bool pickingImage = false;
+  bool applyingDraft = false;
   bool offline = false;
   String? error;
+
+  bool get selectionMode => selectedMessageIds.isNotEmpty;
+
+  List<ChatMessage> get selectedMessages {
+    return messages
+        .where((message) => selectedMessageIds.contains(message.id))
+        .toList();
+  }
 
   @override
   void initState() {
     super.initState();
     widget.state.setActiveConversation(widget.conversation);
     widget.state.markConversationRead(widget.conversation);
+    input.addListener(scheduleDraftSave);
+    loadDraft();
+    loadGroupAnnouncement();
     loadInitial();
     timer = Timer.periodic(
       const Duration(seconds: 4),
@@ -49,12 +113,58 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     timer?.cancel();
+    draftTimer?.cancel();
+    unawaited(ConversationDraftStore.save(widget.conversation, input.text));
     if (widget.state.isActiveConversation(widget.conversation)) {
       widget.state.setActiveConversation(null);
     }
     input.dispose();
     scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> loadDraft() async {
+    final draft = await ConversationDraftStore.load(widget.conversation);
+    if (!mounted || input.text.isNotEmpty) {
+      return;
+    }
+    applyingDraft = true;
+    input
+      ..text = draft
+      ..selection = TextSelection.collapsed(offset: draft.length);
+    applyingDraft = false;
+  }
+
+  void scheduleDraftSave() {
+    if (applyingDraft) {
+      return;
+    }
+    draftTimer?.cancel();
+    draftTimer = Timer(const Duration(milliseconds: 450), () {
+      unawaited(ConversationDraftStore.save(widget.conversation, input.text));
+    });
+  }
+
+  Future<void> clearDraft() async {
+    draftTimer?.cancel();
+    await ConversationDraftStore.clear(widget.conversation);
+  }
+
+  Future<void> loadGroupAnnouncement() async {
+    if (widget.conversation.type != ConversationType.group) {
+      return;
+    }
+    try {
+      final loaded = await widget.state.loadGroupProfile(
+        widget.conversation.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => groupProfile = loaded);
+    } catch (_) {
+      // The chat should remain usable even when the detail request fails.
+    }
   }
 
   Future<void> markCurrentConversationRead() async {
@@ -226,41 +336,41 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> send() async {
     final text = input.text.trim();
-    if (text.isEmpty || sending) {
+    if (text.isEmpty) {
       return;
     }
-    setState(() => sending = true);
-    try {
-      await widget.state.client.sendMessage(
-        widget.conversation,
-        text,
-        replyTo: replyTarget?.id ?? 0,
-        mentionUids: mentionTargets.map((member) => member.uid).toList(),
-      );
+    final pending = _PendingSend(
+      localId: nextPendingId--,
+      text: text,
+      replyTo: replyTarget?.id ?? 0,
+      mentionUids: mentionTargets.map((member) => member.uid).toList(),
+    );
+    setState(() {
+      pendingSends.add(pending);
       input.clear();
-      clearComposeTargets();
-      await widget.state.markConversationRead(widget.conversation);
-      await refresh(silent: true);
-    } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => sending = false);
-      }
-    }
+      replyTarget = null;
+      mentionTargets.clear();
+      error = null;
+    });
+    await clearDraft();
+    scrollToEnd();
+    unawaited(performPendingSend(pending.localId));
   }
 
   Future<void> pickAndSendImage() async {
-    if (sending) {
+    if (pickingImage) {
       return;
     }
+    setState(() => pickingImage = true);
     final picked = await imagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 92,
     );
-    if (picked == null || !mounted) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => pickingImage = false);
+    if (picked == null) {
       return;
     }
     final bytes = await picked.readAsBytes();
@@ -275,28 +385,89 @@ class _ChatScreenState extends State<ChatScreen> {
     if (caption == null) {
       return;
     }
-    setState(() => sending = true);
+    final pending = _PendingSend(
+      localId: nextPendingId--,
+      text: caption.trim(),
+      imageBytes: bytes,
+      imageName: picked.name,
+      replyTo: replyTarget?.id ?? 0,
+      mentionUids: mentionTargets.map((member) => member.uid).toList(),
+    );
+    setState(() {
+      pendingSends.add(pending);
+      replyTarget = null;
+      mentionTargets.clear();
+      error = null;
+    });
+    scrollToEnd();
+    unawaited(performPendingSend(pending.localId));
+  }
+
+  Future<void> performPendingSend(int localId) async {
+    final pending = pendingSends
+        .where((item) => item.localId == localId)
+        .firstOrNull;
+    if (pending == null) {
+      return;
+    }
+    replacePendingSend(
+      localId,
+      (item) => item.copyWith(status: _PendingSendStatus.sending, error: ''),
+    );
     try {
-      await widget.state.client.sendImageMessage(
-        widget.conversation,
-        bytes,
-        picked.name,
-        caption: caption.trim(),
-        replyTo: replyTarget?.id ?? 0,
-        mentionUids: mentionTargets.map((member) => member.uid).toList(),
-      );
-      clearComposeTargets();
+      if (pending.hasImage) {
+        await widget.state.client.sendImageMessage(
+          widget.conversation,
+          pending.imageBytes!,
+          pending.imageName,
+          caption: pending.text,
+          replyTo: pending.replyTo,
+          mentionUids: pending.mentionUids,
+        );
+      } else {
+        await widget.state.client.sendMessage(
+          widget.conversation,
+          pending.text,
+          replyTo: pending.replyTo,
+          mentionUids: pending.mentionUids,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        pendingSends.removeWhere((item) => item.localId == localId);
+      });
       await widget.state.markConversationRead(widget.conversation);
       await refresh(silent: true);
+      scrollToEnd();
     } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => sending = false);
-      }
+      replacePendingSend(
+        localId,
+        (item) => item.copyWith(
+          status: _PendingSendStatus.failed,
+          error: err.toString(),
+        ),
+      );
     }
+  }
+
+  void replacePendingSend(
+    int localId,
+    _PendingSend Function(_PendingSend item) update,
+  ) {
+    if (!mounted) {
+      return;
+    }
+    final index = pendingSends.indexWhere((item) => item.localId == localId);
+    if (index < 0) {
+      return;
+    }
+    setState(() => pendingSends[index] = update(pendingSends[index]));
+  }
+
+  void retryPendingSend(int localId) {
+    unawaited(performPendingSend(localId));
   }
 
   void clearComposeTargets() {
@@ -419,6 +590,9 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     switch (action) {
+      case _MessageAction.select:
+        enterSelection(message);
+        break;
       case _MessageAction.copyText:
         Clipboard.setData(
           ClipboardData(
@@ -452,6 +626,176 @@ class _ChatScreenState extends State<ChatScreen> {
         await toggleEssence(message);
         break;
     }
+  }
+
+  void openConversationDetails() {
+    if (widget.conversation.type == ConversationType.private) {
+      openUserProfile(context, widget.state, widget.conversation.id);
+      return;
+    }
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => ConversationDetailScreen(
+              state: widget.state,
+              conversation: widget.conversation,
+            ),
+          ),
+        )
+        .then((_) => loadGroupAnnouncement());
+  }
+
+  void enterSelection(ChatMessage message) {
+    setState(() {
+      selectedMessageIds
+        ..clear()
+        ..add(message.id);
+    });
+  }
+
+  void toggleMessageSelection(ChatMessage message) {
+    setState(() {
+      if (selectedMessageIds.contains(message.id)) {
+        selectedMessageIds.remove(message.id);
+      } else {
+        selectedMessageIds.add(message.id);
+      }
+    });
+  }
+
+  void clearSelection() {
+    setState(() => selectedMessageIds.clear());
+  }
+
+  Future<void> copySelectedMessages() async {
+    final selected = selectedMessages..sort((a, b) => a.id.compareTo(b.id));
+    if (selected.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(
+      ClipboardData(text: selected.map(formatMessageForCopy).join('\n\n')),
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.strings.text('Selected messages copied.')),
+      ),
+    );
+  }
+
+  Future<void> deleteSelectedLocalMessages() async {
+    final selected = selectedMessages;
+    if (selected.isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.strings.text('Delete selected local messages?')),
+        content: Text(
+          context.strings.text('Only local cached copies will be removed.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.strings.text('Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final ids = selected.map((message) => message.id).toSet();
+    try {
+      await widget.state.cache.deleteMessages(widget.conversation, ids);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        messages.removeWhere((message) => ids.contains(message.id));
+        selectedMessageIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.strings.text('Local messages deleted.')),
+        ),
+      );
+    } catch (err) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => error = err.toString());
+    }
+  }
+
+  Future<void> forwardSelectedMessages() async {
+    final selected = selectedMessages..sort((a, b) => a.id.compareTo(b.id));
+    if (selected.isEmpty) {
+      return;
+    }
+    final target = await showModalBottomSheet<Conversation>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _ForwardConversationSheet(
+        conversations: widget.state.conversations
+            .where(
+              (conversation) =>
+                  conversation.type != widget.conversation.type ||
+                  conversation.id != widget.conversation.id,
+            )
+            .toList(),
+      ),
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+    try {
+      final body = selected.map(formatMessageForForward).join('\n\n');
+      await widget.state.client.sendMessage(target, body);
+      if (!mounted) {
+        return;
+      }
+      setState(() => selectedMessageIds.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.text('Forwarded.'))),
+      );
+    } catch (err) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.format('Forward failed: {error}', {'error': err}),
+          ),
+        ),
+      );
+    }
+  }
+
+  String formatMessageForCopy(ChatMessage message) {
+    return [
+      '#${message.id} ${message.sender}',
+      if (message.time.isNotEmpty) message.time,
+      if (message.body.trim().isNotEmpty) message.body.trim(),
+      if (message.imageUrl.isNotEmpty) message.imageUrl,
+    ].join('\n');
+  }
+
+  String formatMessageForForward(ChatMessage message) {
+    return [
+      '${message.sender}:',
+      if (message.body.trim().isNotEmpty) message.body.trim(),
+      if (message.imageUrl.isNotEmpty)
+        context.strings.format('Image: {url}', {'url': message.imageUrl}),
+    ].join('\n');
   }
 
   void scrollToEnd() {
@@ -510,50 +854,70 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
+    final announcement = groupProfile?.notice.trim() ?? '';
+    final showEmpty = !loading && messages.isEmpty && pendingSends.isEmpty;
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !widget.embedded,
+        automaticallyImplyLeading: !widget.embedded && !selectionMode,
+        leading: selectionMode
+            ? IconButton(
+                tooltip: strings.text('Cancel selection'),
+                onPressed: clearSelection,
+                icon: const Icon(Icons.close),
+              )
+            : null,
         title: Text(
-          widget.conversation.name,
+          selectionMode
+              ? strings.format('{count} messages selected', {
+                  'count': selectedMessageIds.length,
+                })
+              : widget.conversation.name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          if (offline)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.cloud_off_outlined),
-            ),
-          IconButton(
-            tooltip: context.strings.text('Refresh'),
-            onPressed: () => reloadConversationFromNetwork(showLoading: true),
-            icon: const Icon(Icons.refresh),
-          ),
-          if (widget.conversation.type == ConversationType.group)
-            IconButton(
-              tooltip: context.strings.text('Essence'),
-              onPressed: openEssenceList,
-              icon: const Icon(Icons.star_outline),
-            ),
-          IconButton(
-            tooltip: context.strings.text('Details'),
-            onPressed: () {
-              if (widget.conversation.type == ConversationType.private) {
-                openUserProfile(context, widget.state, widget.conversation.id);
-                return;
-              }
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => ConversationDetailScreen(
-                    state: widget.state,
-                    conversation: widget.conversation,
-                  ),
+        actions: selectionMode
+            ? [
+                IconButton(
+                  tooltip: strings.text('Copy selected'),
+                  onPressed: copySelectedMessages,
+                  icon: const Icon(Icons.copy),
                 ),
-              );
-            },
-            icon: const Icon(Icons.info_outline),
-          ),
-        ],
+                IconButton(
+                  tooltip: strings.text('Forward'),
+                  onPressed: forwardSelectedMessages,
+                  icon: const Icon(Icons.forward_outlined),
+                ),
+                IconButton(
+                  tooltip: strings.text('Delete local copies'),
+                  onPressed: deleteSelectedLocalMessages,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ]
+            : [
+                if (offline)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.cloud_off_outlined),
+                  ),
+                IconButton(
+                  tooltip: strings.text('Refresh'),
+                  onPressed: () =>
+                      reloadConversationFromNetwork(showLoading: true),
+                  icon: const Icon(Icons.refresh),
+                ),
+                if (widget.conversation.type == ConversationType.group)
+                  IconButton(
+                    tooltip: strings.text('Essence'),
+                    onPressed: openEssenceList,
+                    icon: const Icon(Icons.star_outline),
+                  ),
+                IconButton(
+                  tooltip: strings.text('Details'),
+                  onPressed: openConversationDetails,
+                  icon: const Icon(Icons.info_outline),
+                ),
+              ],
       ),
       body: Column(
         children: [
@@ -563,22 +927,35 @@ class _ChatScreenState extends State<ChatScreen> {
               actions: [
                 TextButton(
                   onPressed: () => setState(() => error = null),
-                  child: Text(context.strings.text('Dismiss')),
+                  child: Text(strings.text('Dismiss')),
                 ),
               ],
+            ),
+          if (announcement.isNotEmpty)
+            _GroupAnnouncementBar(
+              announcement: announcement,
+              onTap: openConversationDetails,
             ),
           Expanded(
             child: loading
                 ? const Center(child: CircularProgressIndicator())
-                : messages.isEmpty
-                ? _EmptyPanel(message: context.strings.text('No messages.'))
+                : showEmpty
+                ? _EmptyPanel(message: strings.text('No messages.'))
                 : ListView.builder(
                     controller: scroll,
                     padding: const EdgeInsets.all(12),
-                    itemCount: messages.length,
+                    itemCount: messages.length + pendingSends.length,
                     itemBuilder: (context, index) {
+                      if (index >= messages.length) {
+                        final pending = pendingSends[index - messages.length];
+                        return _PendingMessageBubble(
+                          pending: pending,
+                          onRetry: () => retryPendingSend(pending.localId),
+                        );
+                      }
                       final message = messages[index];
                       final mine = widget.state.user?.uid == message.senderId;
+                      final selected = selectedMessageIds.contains(message.id);
                       final replyMessage = messages
                           .where((item) => item.id == message.replyTo)
                           .cast<ChatMessage?>()
@@ -592,7 +969,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         replyMessage: replyMessage,
                         mine: mine,
                         focused: widget.focusMessageId == message.id,
-                        onLongPress: () => showMessageActions(message, mine),
+                        selected: selected,
+                        selectionMode: selectionMode,
+                        onTap: selectionMode
+                            ? () => toggleMessageSelection(message)
+                            : null,
+                        onLongPress: selectionMode
+                            ? null
+                            : () => showMessageActions(message, mine),
                         onReplyTap: message.replyTo > 0
                             ? () => scrollToMessage(message.replyTo)
                             : null,
@@ -628,7 +1012,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => send(),
                           decoration: InputDecoration(
-                            hintText: context.strings.text('Message'),
+                            hintText: strings.text('Message'),
                             border: const OutlineInputBorder(),
                           ),
                         ),
@@ -636,21 +1020,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(width: 8),
                       if (widget.conversation.type == ConversationType.group)
                         IconButton.filledTonal(
-                          tooltip: context.strings.text('Mention'),
-                          onPressed: sending ? null : chooseMentionTargets,
+                          tooltip: strings.text('Mention'),
+                          onPressed: chooseMentionTargets,
                           icon: const Icon(Icons.alternate_email),
                         ),
                       if (widget.conversation.type == ConversationType.group)
                         const SizedBox(width: 8),
                       IconButton.filledTonal(
-                        tooltip: context.strings.text('Image'),
-                        onPressed: sending ? null : pickAndSendImage,
-                        icon: const Icon(Icons.image_outlined),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: sending ? null : send,
-                        child: sending
+                        tooltip: strings.text('Image'),
+                        onPressed: pickingImage ? null : pickAndSendImage,
+                        icon: pickingImage
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
@@ -658,7 +1037,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.send),
+                            : const Icon(Icons.image_outlined),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: send,
+                        child: const Icon(Icons.send),
                       ),
                     ],
                   ),
@@ -679,6 +1063,9 @@ class _MessageBubble extends StatelessWidget {
     this.replyMessage,
     required this.mine,
     this.focused = false,
+    this.selected = false,
+    this.selectionMode = false,
+    this.onTap,
     this.onLongPress,
     this.onReplyTap,
     this.onImageTap,
@@ -688,6 +1075,9 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage? replyMessage;
   final bool mine;
   final bool focused;
+  final bool selected;
+  final bool selectionMode;
+  final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onReplyTap;
   final VoidCallback? onImageTap;
@@ -711,15 +1101,34 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
+        onTap: onTap,
         onLongPress: onLongPress,
         child: Column(
           crossAxisAlignment: align,
           children: [
-            Text(
-              '${message.sender}${message.time.isEmpty ? '' : ' · ${message.time}'}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selectionMode) ...[
+                  Icon(
+                    selected
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                    color: selected ? colors.primary : colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    '${message.sender}${message.time.isEmpty ? '' : ' · ${message.time}'}',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 3),
             Container(
@@ -729,12 +1138,12 @@ class _MessageBubble extends StatelessWidget {
                 color: color,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: focused
+                  color: selected || focused
                       ? colors.primary
                       : mine
                       ? colors.primaryContainer
                       : colors.outlineVariant,
-                  width: focused ? 2 : 1,
+                  width: selected || focused ? 2 : 1,
                 ),
               ),
               child: Column(
@@ -815,7 +1224,192 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _PendingMessageBubble extends StatelessWidget {
+  const _PendingMessageBubble({required this.pending, required this.onRetry});
+
+  final _PendingSend pending;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final strings = context.strings;
+    final failed = pending.status == _PendingSendStatus.failed;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            failed ? strings.text('Send failed') : strings.text('Sending...'),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: failed ? colors.error : colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 320),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: failed ? colors.errorContainer : colors.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: failed ? colors.error : colors.primaryContainer,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (pending.hasImage) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.image_outlined,
+                        size: 18,
+                        color: failed
+                            ? colors.onErrorContainer
+                            : colors.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          pending.imageName,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: failed
+                                ? colors.onErrorContainer
+                                : colors.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (pending.text.isNotEmpty) const SizedBox(height: 8),
+                ],
+                if (pending.text.isNotEmpty)
+                  Text(
+                    pending.text,
+                    style: TextStyle(
+                      color: failed
+                          ? colors.onErrorContainer
+                          : colors.onPrimaryContainer,
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!failed)
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.onPrimaryContainer,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.error_outline,
+                        size: 16,
+                        color: colors.onErrorContainer,
+                      ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        failed && pending.error.isNotEmpty
+                            ? compactMessage(pending.error, max: 80)
+                            : strings.text('Sending...'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: failed
+                              ? colors.onErrorContainer
+                              : colors.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                    if (failed) ...[
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: Text(strings.text('Retry send')),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupAnnouncementBar extends StatelessWidget {
+  const _GroupAnnouncementBar({
+    required this.announcement,
+    required this.onTap,
+  });
+
+  final String announcement;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final strings = context.strings;
+    return Material(
+      color: colors.secondaryContainer,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+          child: Row(
+            children: [
+              Icon(Icons.campaign_outlined, color: colors.onSecondaryContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      strings.text('Group announcement'),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colors.onSecondaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      announcement,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSecondaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, color: colors.onSecondaryContainer),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum _MessageAction {
+  select,
   copyText,
   copyImage,
   openImage,
@@ -843,6 +1437,12 @@ class _MessageActionSheet extends StatelessWidget {
       child: ListView(
         shrinkWrap: true,
         children: [
+          ListTile(
+            leading: const Icon(Icons.checklist),
+            title: Text(strings.text('Select messages')),
+            subtitle: Text(strings.text('Choose multiple messages')),
+            onTap: () => Navigator.of(context).pop(_MessageAction.select),
+          ),
           ListTile(
             leading: const Icon(Icons.reply),
             title: Text(strings.text('Reply')),
@@ -1068,6 +1668,75 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ForwardConversationSheet extends StatelessWidget {
+  const _ForwardConversationSheet({required this.conversations});
+
+  final List<Conversation> conversations;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    return SafeArea(
+      child: SizedBox(
+        height: 520,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                strings.text('Forward to'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Expanded(
+              child: conversations.isEmpty
+                  ? _EmptyPanel(
+                      message: strings.text('No conversations available.'),
+                    )
+                  : ListView.builder(
+                      itemCount: conversations.length,
+                      itemBuilder: (context, index) {
+                        final conversation = conversations[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          child: _RoundedInkClip(
+                            child: ListTile(
+                              leading: Icon(
+                                conversation.type == ConversationType.group
+                                    ? Icons.groups_rounded
+                                    : Icons.person_rounded,
+                              ),
+                              title: Text(
+                                conversation.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: conversation.subtitle.isEmpty
+                                  ? null
+                                  : Text(
+                                      conversation.subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              onTap: () =>
+                                  Navigator.of(context).pop(conversation),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
