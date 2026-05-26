@@ -84,6 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final imagePicker = ImagePicker();
   final audioRecorder = AudioRecorder();
   final audioPlayer = AudioPlayer();
+  StreamSubscription<Object?>? audioErrorSubscription;
   final itemKeys = <int, GlobalKey>{};
   final messages = <ChatMessage>[];
   final pendingSends = <_PendingSend>[];
@@ -123,6 +124,18 @@ class _ChatScreenState extends State<ChatScreen> {
     loadDraft();
     loadGroupAnnouncement();
     loadInitial();
+    audioErrorSubscription = audioPlayer.eventStream.listen(
+      (_) {},
+      onError: (Object err) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => playingMessageId = null);
+        showSnack(
+          context.strings.format('Playback failed: {error}', {'error': err}),
+        );
+      },
+    );
     timer = Timer.periodic(
       const Duration(seconds: 4),
       (_) => refresh(silent: true),
@@ -133,6 +146,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     timer?.cancel();
     draftTimer?.cancel();
+    audioErrorSubscription?.cancel();
     audioPlayer.dispose();
     audioRecorder.dispose();
     unawaited(ConversationDraftStore.save(widget.conversation, input.text));
@@ -446,8 +460,8 @@ class _ChatScreenState extends State<ChatScreen> {
         showSnack(permissionMessage);
         return;
       }
-      var encoder = AudioEncoder.aacLc;
-      var extension = 'mp4';
+      var encoder = Platform.isLinux ? AudioEncoder.wav : AudioEncoder.aacLc;
+      var extension = Platform.isLinux ? 'wav' : 'mp4';
       if (!await audioRecorder.isEncoderSupported(encoder)) {
         encoder = AudioEncoder.wav;
         extension = 'wav';
@@ -636,7 +650,13 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       await audioPlayer.stop();
-      await audioPlayer.play(UrlSource(message.voiceUrl));
+      final source = Platform.isAndroid
+          ? await androidVoiceSource(message.voiceUrl)
+          : UrlSource(
+              message.voiceUrl,
+              mimeType: voiceMimeType(message.voiceUrl),
+            );
+      await audioPlayer.play(source);
       if (!mounted) {
         return;
       }
@@ -653,6 +673,50 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     }
+  }
+
+  Future<Source> androidVoiceSource(String url) async {
+    final uri = Uri.parse(url);
+    final response = await http.get(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+    final dir = await getTemporaryDirectory();
+    final extension = voiceExtension(url);
+    final file = File(
+      p.join(dir.path, 'csac_voice_play_${uri.path.hashCode}.$extension'),
+    );
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    return DeviceFileSource(file.path, mimeType: voiceMimeType(url));
+  }
+
+  String voiceExtension(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    final extension = p.extension(path).replaceFirst('.', '');
+    if (extension.isNotEmpty && extension.length <= 5) {
+      return extension;
+    }
+    return 'wav';
+  }
+
+  String? voiceMimeType(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    if (path.endsWith('.m4a') || path.endsWith('.mp4')) {
+      return 'audio/mp4';
+    }
+    if (path.endsWith('.wav')) {
+      return 'audio/wav';
+    }
+    if (path.endsWith('.ogg')) {
+      return 'audio/ogg';
+    }
+    if (path.endsWith('.webm')) {
+      return 'audio/webm';
+    }
+    if (path.endsWith('.mp3') || path.endsWith('.mpeg')) {
+      return 'audio/mpeg';
+    }
+    return null;
   }
 
   void clearComposeTargets() {
