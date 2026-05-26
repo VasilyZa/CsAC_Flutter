@@ -644,6 +644,38 @@ class CsacApiClient {
     );
   }
 
+  Future<http.Response> downloadAsset(
+    String url, {
+    String accept = '*/*',
+  }) async {
+    var response = await _sendAssetOnce(
+      Uri.parse(normalizeApiUrl(url)),
+      accept,
+    );
+    for (var attempt = 0; _isChallengeResponse(response); attempt++) {
+      if (attempt >= 3) {
+        throw CsacApiException(
+          'Server returned JavaScript challenge again while downloading asset.',
+        );
+      }
+      final retryUri = _solveChallenge(
+        response.request?.url ?? Uri.parse(url),
+        _responseTextSample(response),
+      );
+      response = await _sendAssetOnce(retryUri, accept);
+    }
+    if (response.statusCode == 401) {
+      throw const CsacAuthException('Not logged in.');
+    }
+    if (response.statusCode == 403) {
+      throw const CsacApiException('Access forbidden.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw CsacApiException('HTTP ${response.statusCode}');
+    }
+    return response;
+  }
+
   Future<void> submitReport({
     required String type,
     required String reason,
@@ -874,6 +906,12 @@ class CsacApiClient {
     return response;
   }
 
+  Future<http.Response> _sendAssetOnce(Uri uri, String accept) {
+    final request = http.Request('GET', uri);
+    request.headers['Accept'] = accept;
+    return _sendOnce(request);
+  }
+
   void _prepareHeaders(http.BaseRequest request) {
     request.headers.putIfAbsent(
       'User-Agent',
@@ -930,6 +968,27 @@ class CsacApiClient {
     return body.contains('document.cookie="__test=') &&
         body.contains('/aes.js') &&
         body.contains('slowAES.decrypt');
+  }
+
+  bool _isChallengeResponse(http.Response response) {
+    final type = response.headers['content-type']?.toLowerCase() ?? '';
+    if (!type.contains('text') &&
+        !type.contains('html') &&
+        !type.contains('javascript')) {
+      final sample = _responseTextSample(response);
+      return sample.contains('document.cookie="__test=');
+    }
+    return _isChallenge(_responseTextSample(response));
+  }
+
+  String _responseTextSample(http.Response response) {
+    final sampleLength = response.bodyBytes.length > 65536
+        ? 65536
+        : response.bodyBytes.length;
+    return latin1.decode(
+      response.bodyBytes.take(sampleLength).toList(),
+      allowInvalid: true,
+    );
   }
 
   Uri _solveChallenge(Uri requestUri, String body) {

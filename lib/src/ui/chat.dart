@@ -2,6 +2,13 @@ part of '../../main.dart';
 
 enum _PendingSendStatus { sending, failed }
 
+class _VoiceFileType {
+  const _VoiceFileType(this.extension, this.mimeType);
+
+  final String extension;
+  final String mimeType;
+}
+
 class _PendingSend {
   const _PendingSend({
     required this.localId,
@@ -461,7 +468,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       var encoder = Platform.isLinux ? AudioEncoder.wav : AudioEncoder.aacLc;
-      var extension = Platform.isLinux ? 'wav' : 'mp4';
+      var extension = Platform.isLinux ? 'wav' : 'm4a';
       if (!await audioRecorder.isEncoderSupported(encoder)) {
         encoder = AudioEncoder.wav;
         extension = 'wav';
@@ -475,7 +482,14 @@ class _ChatScreenState extends State<ChatScreen> {
         dir.path,
         'csac_voice_${DateTime.now().millisecondsSinceEpoch}.$extension',
       );
-      await audioRecorder.start(RecordConfig(encoder: encoder), path: path);
+      await audioRecorder.start(
+        RecordConfig(
+          encoder: encoder,
+          bitRate: Platform.isAndroid ? 64000 : 128000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
       if (!mounted) {
         return;
       }
@@ -499,6 +513,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final tooShortMessage = context.strings.text('Voice message is too short.');
     final failedMessage = context.strings.text('Recording failed: {error}');
     try {
+      final fallbackPath = recordingPath;
       final path = await audioRecorder.stop();
       final startedAt = recordingStartedAt;
       if (!mounted) {
@@ -509,7 +524,7 @@ class _ChatScreenState extends State<ChatScreen> {
         recordingPath = null;
         recordingStartedAt = null;
       });
-      final resolvedPath = path ?? recordingPath;
+      final resolvedPath = path?.isNotEmpty == true ? path : fallbackPath;
       if (resolvedPath == null || resolvedPath.isEmpty) {
         showSnack(notSavedMessage);
         return;
@@ -676,18 +691,120 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<Source> androidVoiceSource(String url) async {
-    final uri = Uri.parse(url);
-    final response = await http.get(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}');
+    final response = await widget.state.client.downloadAsset(
+      url,
+      accept: 'audio/*, application/octet-stream, */*',
+    );
+    final bytes = response.bodyBytes;
+    if (bytes.isEmpty) {
+      throw Exception('Empty voice file');
+    }
+    final fileType = resolveVoiceFileType(
+      bytes,
+      response.headers['content-type'],
+      url,
+    );
+    if (fileType == null) {
+      throw Exception('Downloaded voice is not a playable audio file.');
     }
     final dir = await getTemporaryDirectory();
-    final extension = voiceExtension(url);
+    final cacheKey = Object.hash(url, bytes.length).toUnsigned(32);
     final file = File(
-      p.join(dir.path, 'csac_voice_play_${uri.path.hashCode}.$extension'),
+      p.join(dir.path, 'csac_voice_play_$cacheKey.${fileType.extension}'),
     );
-    await file.writeAsBytes(response.bodyBytes, flush: true);
-    return DeviceFileSource(file.path, mimeType: voiceMimeType(url));
+    await file.writeAsBytes(bytes, flush: true);
+    return DeviceFileSource(file.path, mimeType: fileType.mimeType);
+  }
+
+  _VoiceFileType? resolveVoiceFileType(
+    Uint8List bytes,
+    String? contentType,
+    String url,
+  ) {
+    final detected = detectVoiceFileType(bytes);
+    if (detected != null) {
+      return detected;
+    }
+    final fromContentType = voiceFileTypeForMime(contentType);
+    if (fromContentType != null) {
+      return fromContentType;
+    }
+    final mimeType = voiceMimeType(url);
+    final extension = voiceExtension(url);
+    if (mimeType == null) {
+      return null;
+    }
+    return _VoiceFileType(extension, mimeType);
+  }
+
+  _VoiceFileType? detectVoiceFileType(Uint8List bytes) {
+    bool startsWith(List<int> header, [int offset = 0]) {
+      if (bytes.length < offset + header.length) {
+        return false;
+      }
+      for (var i = 0; i < header.length; i++) {
+        if (bytes[offset + i] != header[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (startsWith(const [0x52, 0x49, 0x46, 0x46]) &&
+        startsWith(const [0x57, 0x41, 0x56, 0x45], 8)) {
+      return const _VoiceFileType('wav', 'audio/wav');
+    }
+    if (startsWith(const [0x4f, 0x67, 0x67, 0x53])) {
+      return const _VoiceFileType('ogg', 'audio/ogg');
+    }
+    if (startsWith(const [0x1a, 0x45, 0xdf, 0xa3])) {
+      return const _VoiceFileType('webm', 'audio/webm');
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xff && (bytes[1] & 0xf0) == 0xf0) {
+      return const _VoiceFileType('aac', 'audio/aac');
+    }
+    if (startsWith(const [0x49, 0x44, 0x33]) ||
+        (bytes.length >= 2 && bytes[0] == 0xff && (bytes[1] & 0xe0) == 0xe0)) {
+      return const _VoiceFileType('mp3', 'audio/mpeg');
+    }
+    if (startsWith(const [0x23, 0x21, 0x41, 0x4d, 0x52])) {
+      return const _VoiceFileType('amr', 'audio/amr');
+    }
+    if (startsWith(const [0x66, 0x74, 0x79, 0x70], 4)) {
+      return const _VoiceFileType('m4a', 'audio/mp4');
+    }
+    return null;
+  }
+
+  _VoiceFileType? voiceFileTypeForMime(String? contentType) {
+    final mimeType = contentType?.split(';').first.trim().toLowerCase() ?? '';
+    switch (mimeType) {
+      case 'audio/mp4':
+      case 'audio/x-m4a':
+      case 'audio/m4a':
+        return const _VoiceFileType('m4a', 'audio/mp4');
+      case 'audio/wav':
+      case 'audio/x-wav':
+      case 'audio/vnd.wave':
+        return const _VoiceFileType('wav', 'audio/wav');
+      case 'audio/ogg':
+      case 'application/ogg':
+        return const _VoiceFileType('ogg', 'audio/ogg');
+      case 'audio/webm':
+        return const _VoiceFileType('webm', 'audio/webm');
+      case 'audio/mpeg':
+      case 'audio/mp3':
+        return const _VoiceFileType('mp3', 'audio/mpeg');
+      case 'audio/aac':
+      case 'audio/aacp':
+        return const _VoiceFileType('aac', 'audio/aac');
+      case 'audio/3gpp':
+      case 'audio/3gp':
+        return const _VoiceFileType('3gp', 'audio/3gpp');
+      case 'audio/amr':
+        return const _VoiceFileType('amr', 'audio/amr');
+    }
+    return null;
   }
 
   String voiceExtension(String url) {
@@ -696,13 +813,16 @@ class _ChatScreenState extends State<ChatScreen> {
     if (extension.isNotEmpty && extension.length <= 5) {
       return extension;
     }
-    return 'wav';
+    return 'm4a';
   }
 
   String? voiceMimeType(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
     if (path.endsWith('.m4a') || path.endsWith('.mp4')) {
       return 'audio/mp4';
+    }
+    if (path.endsWith('.aac')) {
+      return 'audio/aac';
     }
     if (path.endsWith('.wav')) {
       return 'audio/wav';
@@ -715,6 +835,12 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (path.endsWith('.mp3') || path.endsWith('.mpeg')) {
       return 'audio/mpeg';
+    }
+    if (path.endsWith('.3gp') || path.endsWith('.3gpp')) {
+      return 'audio/3gpp';
+    }
+    if (path.endsWith('.amr')) {
+      return 'audio/amr';
     }
     return null;
   }
