@@ -547,8 +547,8 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.0.0-15';
-const _csacAppBuild = '15';
+const _csacAppVersion = '1.0.0-18';
+const _csacAppBuild = '18';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
 class AppInfoScreen extends StatelessWidget {
@@ -1246,7 +1246,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ListTile(
                       leading: const Icon(Icons.info_outline),
                       title: Text(strings.text('App information')),
-                      subtitle: const Text('CsAC 1.0.0+1 | Leon'),
+                      subtitle: const Text(
+                        '$_csacAppName $_csacAppVersion | $_csacAppBranch',
+                      ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         Navigator.of(context).push(
