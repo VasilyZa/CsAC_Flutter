@@ -693,6 +693,24 @@ class CsacApiClient {
     ]).map(ChatMessage.fromJson).toList()..sort((a, b) => a.id.compareTo(b.id));
   }
 
+  Future<EssenceStats> essenceStats(int roomId, String type) async {
+    final data = await get('essence/get_essence_stats', <String, String>{
+      'room_id': '$roomId',
+      'type': type,
+    });
+    final raw = _firstMap(data, const ['stats', 'data']) ?? data;
+    return EssenceStats.fromJson(raw);
+  }
+
+  Future<List<FriendDeletedNotice>> deletedFriendNotices() async {
+    final data = await get('friend/get_deleted_notices');
+    return _firstList(data, const [
+      'notices',
+      'list',
+      'data',
+    ]).map(FriendDeletedNotice.fromJson).toList();
+  }
+
   Future<Map<String, dynamic>> get(
     String route, [
     Map<String, String>? values,

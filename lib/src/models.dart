@@ -772,6 +772,127 @@ class GroupApplication {
   }
 }
 
+class EssenceRankItem {
+  const EssenceRankItem({
+    required this.rank,
+    required this.uid,
+    required this.nickname,
+    required this.count,
+  });
+
+  final int rank;
+  final int uid;
+  final String nickname;
+  final int count;
+
+  factory EssenceRankItem.fromJson(Map<String, dynamic> json) {
+    final uid = firstInt(json, const ['uid', 'user_id']);
+    return EssenceRankItem(
+      rank: firstInt(json, const ['rank', 'index', 'no']),
+      uid: uid,
+      nickname: firstString(json, const [
+        'nickname',
+        'name',
+      ]).ifEmpty('UID $uid'),
+      count: firstInt(json, const ['count', 'total']),
+    );
+  }
+}
+
+class EssenceStats {
+  const EssenceStats({
+    required this.type,
+    required this.typeName,
+    required this.total,
+    required this.textCount,
+    required this.imageCount,
+    required this.voiceCount,
+    required this.latestSetTime,
+    required this.rank,
+  });
+
+  final String type;
+  final String typeName;
+  final int total;
+  final int textCount;
+  final int imageCount;
+  final int voiceCount;
+  final String latestSetTime;
+  final List<EssenceRankItem> rank;
+
+  factory EssenceStats.fromJson(Map<String, dynamic> json) {
+    final rankList = json['rank'];
+    return EssenceStats(
+      type: firstString(json, const ['type', 'range']),
+      typeName: firstString(json, const ['type_name', 'name', 'label']),
+      total: firstInt(json, const ['total', 'total_count']),
+      textCount: firstInt(json, const ['text_count', 'texts']),
+      imageCount: firstInt(json, const ['image_count', 'images']),
+      voiceCount: firstInt(json, const ['voice_count', 'voices']),
+      latestSetTime: humanReadableTimestamp(
+        firstString(json, const ['latest_set_time', 'latest_time', 'set_time']),
+      ),
+      rank: rankList is List
+          ? rankList
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      EssenceRankItem.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList()
+          : const <EssenceRankItem>[],
+    );
+  }
+}
+
+class FriendDeletedNotice {
+  const FriendDeletedNotice({
+    required this.id,
+    required this.uid,
+    required this.nickname,
+    required this.content,
+    required this.time,
+  });
+
+  final int id;
+  final int uid;
+  final String nickname;
+  final String content;
+  final String time;
+
+  factory FriendDeletedNotice.fromJson(Map<String, dynamic> json) {
+    final uid = firstInt(json, const [
+      'uid',
+      'friend_id',
+      'from_uid',
+      'user_id',
+    ]);
+    return FriendDeletedNotice(
+      id: firstInt(json, const ['id', 'notice_id']),
+      uid: uid,
+      nickname: firstString(json, const [
+        'nickname',
+        'name',
+        'username',
+      ]).ifEmpty('UID $uid'),
+      content: firstString(json, const [
+        'content',
+        'message',
+        'reason',
+        'body',
+      ]),
+      time: humanReadableTimestamp(
+        firstString(json, const [
+          'time',
+          'add_time',
+          'created_at',
+          'create_time',
+        ]),
+      ),
+    );
+  }
+}
+
 int asInt(Object? value) {
   if (value is int) {
     return value;

@@ -10,7 +10,7 @@ class NoticeCenterScreen extends StatelessWidget {
     final counts = state.notificationCounts;
     final strings = context.strings;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: Text(strings.text('Notices')),
@@ -38,6 +38,10 @@ class NoticeCenterScreen extends StatelessWidget {
                 text: strings.text('Mentions'),
               ),
               Tab(
+                icon: const Icon(Icons.person_remove_outlined),
+                text: strings.text('Friend changes'),
+              ),
+              Tab(
                 icon: _TabBadgeIcon(
                   icon: Icons.person_add_alt,
                   count: counts.friendRequests,
@@ -58,10 +62,90 @@ class NoticeCenterScreen extends StatelessWidget {
           children: [
             NoticesPage(state: state),
             MentionsPage(state: state),
+            FriendDeletedNoticesPage(state: state),
             FriendRequestsPage(state: state),
             GroupApplicationsPage(state: state),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class FriendDeletedNoticesPage extends StatefulWidget {
+  const FriendDeletedNoticesPage({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<FriendDeletedNoticesPage> createState() =>
+      _FriendDeletedNoticesPageState();
+}
+
+class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
+  List<FriendDeletedNotice> notices = const <FriendDeletedNotice>[];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final loaded = await widget.state.loadDeletedFriendNotices();
+      if (mounted) {
+        setState(() => notices = loaded);
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    return RefreshIndicator(
+      onRefresh: load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        children: [
+          if (loading) const LinearProgressIndicator(minHeight: 2),
+          if (error != null) _InlineError(message: error!, onRetry: load),
+          if (!loading && notices.isEmpty)
+            _EmptyPanel(message: strings.text('No friend changes.'))
+          else
+            for (final notice in notices)
+              Card(
+                elevation: 0,
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                child: ListTile(
+                  leading: const Icon(Icons.person_remove_outlined),
+                  title: Text(notice.nickname),
+                  subtitle: Text(
+                    [
+                      if (notice.time.isNotEmpty) notice.time,
+                      if (notice.content.isNotEmpty) notice.content,
+                      if (notice.uid > 0) 'UID ${notice.uid}',
+                    ].join(' | '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+        ],
       ),
     );
   }

@@ -428,6 +428,10 @@ class CsacAppState extends ChangeNotifier {
       ..sort((a, b) => b.createTime.compareTo(a.createTime));
   }
 
+  Future<List<FriendDeletedNotice>> loadDeletedFriendNotices() {
+    return client.deletedFriendNotices();
+  }
+
   Future<void> handleGroupApplication(int applyId, String action) async {
     await client.handleGroupApplication(applyId, action);
     await refreshNotificationCounts();
@@ -579,6 +583,10 @@ class CsacAppState extends ChangeNotifier {
 
   Future<List<ChatMessage>> loadEssenceMessages(int roomId) {
     return client.essenceMessages(roomId);
+  }
+
+  Future<EssenceStats> loadEssenceStats(int roomId, String type) {
+    return client.essenceStats(roomId, type);
   }
 
   Future<List<ChatMessage>> syncMessages(

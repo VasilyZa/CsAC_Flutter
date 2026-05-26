@@ -2133,6 +2133,20 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
         title: Text(context.strings.text('Essence messages')),
         actions: [
           IconButton(
+            tooltip: context.strings.text('Essence stats'),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => EssenceStatsScreen(
+                    state: widget.state,
+                    conversation: widget.conversation,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.query_stats_outlined),
+          ),
+          IconButton(
             tooltip: context.strings.text('Refresh'),
             onPressed: load,
             icon: const Icon(Icons.refresh),
@@ -2172,6 +2186,196 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
                     trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EssenceStatsScreen extends StatefulWidget {
+  const EssenceStatsScreen({
+    super.key,
+    required this.state,
+    required this.conversation,
+  });
+
+  final CsacAppState state;
+  final Conversation conversation;
+
+  @override
+  State<EssenceStatsScreen> createState() => _EssenceStatsScreenState();
+}
+
+class _EssenceStatsScreenState extends State<EssenceStatsScreen> {
+  static const types = <String>['today', 'week', 'month', 'all'];
+
+  String selectedType = 'today';
+  EssenceStats? stats;
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final loaded = await widget.state.loadEssenceStats(
+        widget.conversation.id,
+        selectedType,
+      );
+      if (mounted) {
+        setState(() => stats = loaded);
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final loaded = stats;
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.text('Essence stats'))),
+      body: RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            SegmentedButton<String>(
+              segments: [
+                for (final type in types)
+                  ButtonSegment(
+                    value: type,
+                    label: Text(strings.text('stats.$type')),
+                  ),
+              ],
+              selected: {selectedType},
+              onSelectionChanged: (value) {
+                setState(() => selectedType = value.first);
+                load();
+              },
+            ),
+            const SizedBox(height: 12),
+            if (loading) const LinearProgressIndicator(minHeight: 2),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (loaded != null) ...[
+              GridView.count(
+                crossAxisCount: MediaQuery.sizeOf(context).width > 520 ? 4 : 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 1.8,
+                children: [
+                  _StatTile(
+                    label: strings.text('Total'),
+                    value: '${loaded.total}',
+                  ),
+                  _StatTile(
+                    label: strings.text('Text'),
+                    value: '${loaded.textCount}',
+                  ),
+                  _StatTile(
+                    label: strings.text('Images'),
+                    value: '${loaded.imageCount}',
+                  ),
+                  _StatTile(
+                    label: strings.text('Voice'),
+                    value: '${loaded.voiceCount}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 0,
+                child: ListTile(
+                  leading: const Icon(Icons.schedule),
+                  title: Text(strings.text('Latest set time')),
+                  subtitle: Text(
+                    loaded.latestSetTime.isEmpty
+                        ? strings.text('(empty)')
+                        : loaded.latestSetTime,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                strings.text('Contribution rank'),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (loaded.rank.isEmpty)
+                _EmptyPanel(message: strings.text('No rank data.'))
+              else
+                for (final item in loaded.rank)
+                  Card(
+                    elevation: 0,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Text(
+                          '${item.rank == 0 ? loaded.rank.indexOf(item) + 1 : item.rank}',
+                        ),
+                      ),
+                      title: Text(item.nickname),
+                      subtitle: Text('UID ${item.uid}'),
+                      trailing: Text('${item.count}'),
+                    ),
+                  ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ],
         ),
       ),
