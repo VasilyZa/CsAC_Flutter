@@ -456,6 +456,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     ),
                     const Divider(height: 1),
                     ListTile(
+                      leading: const Icon(Icons.security_outlined),
+                      title: Text(strings.text('Account security')),
+                      subtitle: Text(
+                        strings.text('Password upgrade and account deletion'),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                AccountSecurityScreen(state: widget.state),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
                       leading: const Icon(Icons.bug_report_outlined),
                       title: Text(strings.text('Feedback Bug')),
                       subtitle: Text(strings.text('Send feedback to admins')),
@@ -486,6 +503,276 @@ class _PasswordChange {
   final String oldPassword;
   final String newPassword;
   final String confirmPassword;
+}
+
+class AccountSecurityScreen extends StatefulWidget {
+  const AccountSecurityScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<AccountSecurityScreen> createState() => _AccountSecurityScreenState();
+}
+
+class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
+  bool upgrading = false;
+  bool deleting = false;
+
+  void showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> upgradePassword() async {
+    final oldPassword = TextEditingController();
+    final newPassword = TextEditingController();
+    final confirmPassword = TextEditingController();
+    final strings = context.strings;
+    final result = await showDialog<_PasswordChange>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Upgrade password')),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: oldPassword,
+                obscureText: true,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: strings.text('Old password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPassword,
+                obscureText: true,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: strings.text('New password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPassword,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: strings.text('Confirm password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(
+              _PasswordChange(
+                oldPassword.text,
+                newPassword.text,
+                confirmPassword.text,
+              ),
+            ),
+            child: Text(strings.text('Save')),
+          ),
+        ],
+      ),
+    );
+    oldPassword.dispose();
+    newPassword.dispose();
+    confirmPassword.dispose();
+    if (result == null || !mounted) {
+      return;
+    }
+    if (result.newPassword.isEmpty || result.confirmPassword.isEmpty) {
+      showSnack(context.strings.text('Please fill all password fields.'));
+      return;
+    }
+    if (result.newPassword.length < 6) {
+      showSnack(
+        context.strings.text('New password must be at least 6 characters.'),
+      );
+      return;
+    }
+    if (result.newPassword != result.confirmPassword) {
+      showSnack(context.strings.text('Passwords do not match.'));
+      return;
+    }
+    setState(() => upgrading = true);
+    try {
+      await widget.state.upgradePassword(
+        result.oldPassword,
+        result.newPassword,
+        result.confirmPassword,
+      );
+      if (mounted) {
+        showSnack(context.strings.text('Password upgraded.'));
+      }
+    } catch (err) {
+      if (mounted) {
+        showSnack(
+          context.strings.format('Update failed: {error}', {'error': err}),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => upgrading = false);
+      }
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final strings = context.strings;
+    final first = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Delete account?')),
+        content: Text(strings.text('Account deletion cannot be recovered.')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(strings.text('Continue')),
+          ),
+        ],
+      ),
+    );
+    if (first != true || !mounted) {
+      return;
+    }
+    final confirm = TextEditingController();
+    final second = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Confirm account deletion')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(strings.text('Type DELETE to confirm permanent deletion.')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirm,
+              decoration: InputDecoration(
+                labelText: strings.text('Confirmation text'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.text('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(confirm.text == 'DELETE'),
+            child: Text(strings.text('Delete account')),
+          ),
+        ],
+      ),
+    );
+    confirm.dispose();
+    if (second != true || !mounted) {
+      if (second == false && mounted) {
+        showSnack(context.strings.text('Confirmation text did not match.'));
+      }
+      return;
+    }
+    setState(() => deleting = true);
+    try {
+      await widget.state.deleteAccount();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (err) {
+      if (mounted) {
+        setState(() => deleting = false);
+        showSnack(
+          context.strings.format('Delete failed: {error}', {'error': err}),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.text('Account security'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            Card(
+              elevation: 0,
+              child: _RoundedInkClip(
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.password_outlined),
+                      title: Text(strings.text('Upgrade password')),
+                      subtitle: Text(
+                        strings.text('Use the newer password API'),
+                      ),
+                      trailing: upgrading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.chevron_right),
+                      onTap: upgrading || deleting ? null : upgradePassword,
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: Icon(
+                        Icons.delete_forever_outlined,
+                        color: colors.error,
+                      ),
+                      title: Text(
+                        strings.text('Delete account'),
+                        style: TextStyle(color: colors.error),
+                      ),
+                      subtitle: Text(
+                        strings.text(
+                          'Permanently delete this account and local data',
+                        ),
+                      ),
+                      trailing: deleting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.chevron_right),
+                      onTap: upgrading || deleting ? null : deleteAccount,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ThemeColorOption {
@@ -558,7 +845,7 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.0.0-22';
+const _csacAppVersion = '1.0.0-23';
 const _csacAppBuild = '19';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 

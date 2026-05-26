@@ -207,6 +207,31 @@ class CsacAppState extends ChangeNotifier {
     return client.updatePassword(oldPassword, newPassword, confirmPassword);
   }
 
+  Future<void> upgradePassword(
+    String oldPassword,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return client.upgradePassword(oldPassword, newPassword, confirmPassword);
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await client.deleteAccount();
+    } finally {
+      await cache.clear();
+      await ConversationDraftStore.clearAll();
+      user = null;
+      conversations = const <Conversation>[];
+      notificationCounts = const NotificationCounts();
+      activeConversation = null;
+      offlineMode = false;
+      sessionExpired = false;
+      error = null;
+      notifyListeners();
+    }
+  }
+
   void _applyPreferredServer() {
     client.setBaseUrl(preferences.serverUrl);
   }

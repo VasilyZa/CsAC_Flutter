@@ -192,6 +192,26 @@ class CsacApiClient {
     });
   }
 
+  Future<void> upgradePassword(
+    String oldPassword,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return postForm('user/upgrade_password', <String, String>{
+      if (oldPassword.isNotEmpty) 'old_password': oldPassword,
+      'new_password': newPassword,
+      'confirm_password': confirmPassword,
+    });
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await postForm('user/delete_account');
+    } finally {
+      await clearSession();
+    }
+  }
+
   Future<void> updateAvatar(Uint8List avatarBytes, String fileName) {
     return postMultipart(
       'user/update_profile',
