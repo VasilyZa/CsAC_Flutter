@@ -8,6 +8,16 @@ String compactMessage(String text, {int max = 80}) {
   return '${value.substring(0, max - 3)}...';
 }
 
+String formatVoiceDuration(int seconds) {
+  final value = seconds <= 0 ? 1 : seconds;
+  final minutes = value ~/ 60;
+  final rest = value % 60;
+  if (minutes <= 0) {
+    return '${rest}s';
+  }
+  return '$minutes:${rest.toString().padLeft(2, '0')}';
+}
+
 extension FirstOrNullExtension<T> on Iterable<T> {
   T? get firstOrNull {
     final iterator = this.iterator;

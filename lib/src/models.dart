@@ -356,6 +356,8 @@ class ChatMessage {
     required this.body,
     this.time = '',
     this.imageUrl = '',
+    this.voiceUrl = '',
+    this.voiceDuration = 0,
     this.canRecall = false,
     this.isRecalled = false,
     this.isEssence = false,
@@ -369,6 +371,8 @@ class ChatMessage {
   final String body;
   final String time;
   final String imageUrl;
+  final String voiceUrl;
+  final int voiceDuration;
   final bool canRecall;
   final bool isRecalled;
   final bool isEssence;
@@ -382,6 +386,8 @@ class ChatMessage {
     String? body,
     String? time,
     String? imageUrl,
+    String? voiceUrl,
+    int? voiceDuration,
     bool? canRecall,
     bool? isRecalled,
     bool? isEssence,
@@ -395,6 +401,8 @@ class ChatMessage {
       body: body ?? this.body,
       time: time ?? this.time,
       imageUrl: imageUrl ?? this.imageUrl,
+      voiceUrl: voiceUrl ?? this.voiceUrl,
+      voiceDuration: voiceDuration ?? this.voiceDuration,
       canRecall: canRecall ?? this.canRecall,
       isRecalled: isRecalled ?? this.isRecalled,
       isEssence: isEssence ?? this.isEssence,
@@ -413,12 +421,24 @@ class ChatMessage {
         asBool(json['recalled']) ||
         asBool(json['is_revoked']);
     final rawImage = firstString(json, const ['image_url', 'image', 'img']);
+    final rawVoice = firstString(json, const [
+      'voice_url',
+      'voice',
+      'audio_url',
+      'audio',
+    ]);
     final rawContent = asString(json['content']).trim();
     final contentLooksLikeImage = looksLikeImagePath(rawContent);
+    final contentLooksLikeVoice = looksLikeVoicePath(rawContent);
     final image = isRecalled
         ? ''
         : normalizeApiUrl(
             contentLooksLikeImage && rawImage.isEmpty ? rawContent : rawImage,
+          );
+    final voice = isRecalled
+        ? ''
+        : normalizeApiUrl(
+            contentLooksLikeVoice && rawVoice.isEmpty ? rawContent : rawVoice,
           );
     var body = asString(json['content']).trim();
     if (isRecalled) {
@@ -427,8 +447,14 @@ class ChatMessage {
       if (image.isNotEmpty && contentLooksLikeImage) {
         body = '';
       }
+      if (voice.isNotEmpty && contentLooksLikeVoice) {
+        body = '';
+      }
       if (body.isEmpty && image.isNotEmpty) {
         body = '[image]';
+      }
+      if (body.isEmpty && voice.isNotEmpty) {
+        body = '[voice]';
       }
       if (body.isEmpty) {
         body = '[empty]';
@@ -450,6 +476,8 @@ class ChatMessage {
         ]),
       ),
       imageUrl: image,
+      voiceUrl: voice,
+      voiceDuration: firstInt(json, const ['duration', 'voice_duration']),
       canRecall: asBool(json['can_recall']),
       isRecalled: isRecalled,
       isEssence: asBool(json['is_essence']),
@@ -878,6 +906,25 @@ bool looksLikeImagePath(String value) {
     r'\.(jpg|jpeg|png|gif|webp|bmp)$',
   ).hasMatch(lower);
   if (!hasImageExtension) {
+    return false;
+  }
+  return lower.startsWith('upload/') ||
+      lower.startsWith('/upload/') ||
+      uri?.hasScheme == true;
+}
+
+bool looksLikeVoicePath(String value) {
+  final text = value.trim();
+  if (text.isEmpty || text.contains('\n')) {
+    return false;
+  }
+  final uri = Uri.tryParse(text);
+  final path = uri?.path.isNotEmpty == true ? uri!.path : text;
+  final lower = path.toLowerCase().split('?').first.split('#').first;
+  final hasAudioExtension = RegExp(
+    r'\.(webm|ogg|mp3|mpeg|wav|m4a|mp4|aac)$',
+  ).hasMatch(lower);
+  if (!hasAudioExtension) {
     return false;
   }
   return lower.startsWith('upload/') ||

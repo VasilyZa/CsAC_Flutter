@@ -8,6 +8,9 @@ class _PendingSend {
     required this.text,
     this.imageBytes,
     this.imageName = '',
+    this.voiceBytes,
+    this.voiceName = '',
+    this.voiceDuration = 0,
     this.replyTo = 0,
     this.mentionUids = const <int>[],
     this.status = _PendingSendStatus.sending,
@@ -18,17 +21,24 @@ class _PendingSend {
   final String text;
   final Uint8List? imageBytes;
   final String imageName;
+  final Uint8List? voiceBytes;
+  final String voiceName;
+  final int voiceDuration;
   final int replyTo;
   final List<int> mentionUids;
   final _PendingSendStatus status;
   final String error;
 
   bool get hasImage => imageBytes != null;
+  bool get hasVoice => voiceBytes != null;
 
   _PendingSend copyWith({
     String? text,
     Uint8List? imageBytes,
     String? imageName,
+    Uint8List? voiceBytes,
+    String? voiceName,
+    int? voiceDuration,
     int? replyTo,
     List<int>? mentionUids,
     _PendingSendStatus? status,
@@ -39,6 +49,9 @@ class _PendingSend {
       text: text ?? this.text,
       imageBytes: imageBytes ?? this.imageBytes,
       imageName: imageName ?? this.imageName,
+      voiceBytes: voiceBytes ?? this.voiceBytes,
+      voiceName: voiceName ?? this.voiceName,
+      voiceDuration: voiceDuration ?? this.voiceDuration,
       replyTo: replyTo ?? this.replyTo,
       mentionUids: mentionUids ?? this.mentionUids,
       status: status ?? this.status,
@@ -69,6 +82,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final input = TextEditingController();
   final scroll = ScrollController();
   final imagePicker = ImagePicker();
+  final audioRecorder = AudioRecorder();
+  final audioPlayer = AudioPlayer();
   final itemKeys = <int, GlobalKey>{};
   final messages = <ChatMessage>[];
   final pendingSends = <_PendingSend>[];
@@ -80,9 +95,13 @@ class _ChatScreenState extends State<ChatScreen> {
   ChatMessage? replyTarget;
   int nextPendingId = -1;
   int refreshTicks = 0;
+  DateTime? recordingStartedAt;
+  String? recordingPath;
+  int? playingMessageId;
   bool loading = true;
   bool refreshing = false;
   bool pickingImage = false;
+  bool recording = false;
   bool applyingDraft = false;
   bool offline = false;
   String? error;
@@ -114,6 +133,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     timer?.cancel();
     draftTimer?.cancel();
+    audioPlayer.dispose();
+    audioRecorder.dispose();
     unawaited(ConversationDraftStore.save(widget.conversation, input.text));
     if (widget.state.isActiveConversation(widget.conversation)) {
       widget.state.setActiveConversation(null);
@@ -403,6 +424,122 @@ class _ChatScreenState extends State<ChatScreen> {
     unawaited(performPendingSend(pending.localId));
   }
 
+  Future<void> toggleRecording() async {
+    if (recording) {
+      await stopAndSendVoice();
+      return;
+    }
+    await startRecording();
+  }
+
+  Future<void> startRecording() async {
+    final permissionMessage = context.strings.text(
+      'Microphone permission is required.',
+    );
+    final unavailableMessage = context.strings.text(
+      'Voice recording is not available.',
+    );
+    final failedMessage = context.strings.text('Recording failed: {error}');
+    try {
+      final allowed = await audioRecorder.hasPermission();
+      if (!allowed) {
+        showSnack(permissionMessage);
+        return;
+      }
+      var encoder = AudioEncoder.aacLc;
+      var extension = 'm4a';
+      if (!await audioRecorder.isEncoderSupported(encoder)) {
+        encoder = AudioEncoder.wav;
+        extension = 'wav';
+      }
+      if (!await audioRecorder.isEncoderSupported(encoder)) {
+        showSnack(unavailableMessage);
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path = p.join(
+        dir.path,
+        'csac_voice_${DateTime.now().millisecondsSinceEpoch}.$extension',
+      );
+      await audioRecorder.start(RecordConfig(encoder: encoder), path: path);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        recording = true;
+        recordingPath = path;
+        recordingStartedAt = DateTime.now();
+        error = null;
+      });
+    } catch (err) {
+      if (mounted) {
+        showSnack(failedMessage.replaceAll('{error}', '$err'));
+      }
+    }
+  }
+
+  Future<void> stopAndSendVoice() async {
+    final notSavedMessage = context.strings.text(
+      'No voice recording was saved.',
+    );
+    final tooShortMessage = context.strings.text('Voice message is too short.');
+    final failedMessage = context.strings.text('Recording failed: {error}');
+    try {
+      final path = await audioRecorder.stop();
+      final startedAt = recordingStartedAt;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        recording = false;
+        recordingPath = null;
+        recordingStartedAt = null;
+      });
+      final resolvedPath = path ?? recordingPath;
+      if (resolvedPath == null || resolvedPath.isEmpty) {
+        showSnack(notSavedMessage);
+        return;
+      }
+      final file = File(resolvedPath);
+      if (!await file.exists()) {
+        showSnack(notSavedMessage);
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      final duration = startedAt == null
+          ? 1
+          : DateTime.now().difference(startedAt).inSeconds.clamp(1, 600);
+      if (duration < 1 || bytes.isEmpty) {
+        showSnack(tooShortMessage);
+        return;
+      }
+      final pending = _PendingSend(
+        localId: nextPendingId--,
+        text: '',
+        voiceBytes: bytes,
+        voiceName: p.basename(resolvedPath),
+        voiceDuration: duration,
+      );
+      setState(() {
+        pendingSends.add(pending);
+        replyTarget = null;
+        mentionTargets.clear();
+        error = null;
+      });
+      scrollToEnd();
+      unawaited(performPendingSend(pending.localId));
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          recording = false;
+          recordingPath = null;
+          recordingStartedAt = null;
+        });
+        showSnack(failedMessage.replaceAll('{error}', '$err'));
+      }
+    }
+  }
+
   Future<void> performPendingSend(int localId) async {
     final pending = pendingSends
         .where((item) => item.localId == localId)
@@ -415,7 +552,14 @@ class _ChatScreenState extends State<ChatScreen> {
       (item) => item.copyWith(status: _PendingSendStatus.sending, error: ''),
     );
     try {
-      if (pending.hasImage) {
+      if (pending.hasVoice) {
+        await widget.state.client.sendVoiceMessage(
+          widget.conversation,
+          pending.voiceBytes!,
+          pending.voiceName,
+          durationSeconds: pending.voiceDuration,
+        );
+      } else if (pending.hasImage) {
         await widget.state.client.sendImageMessage(
           widget.conversation,
           pending.imageBytes!,
@@ -468,6 +612,47 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void retryPendingSend(int localId) {
     unawaited(performPendingSend(localId));
+  }
+
+  void showSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> toggleVoicePlayback(ChatMessage message) async {
+    if (message.voiceUrl.isEmpty) {
+      return;
+    }
+    try {
+      if (playingMessageId == message.id) {
+        await audioPlayer.pause();
+        if (mounted) {
+          setState(() => playingMessageId = null);
+        }
+        return;
+      }
+      await audioPlayer.stop();
+      await audioPlayer.play(UrlSource(message.voiceUrl));
+      if (!mounted) {
+        return;
+      }
+      setState(() => playingMessageId = message.id);
+      audioPlayer.onPlayerComplete.first.then((_) {
+        if (mounted && playingMessageId == message.id) {
+          setState(() => playingMessageId = null);
+        }
+      });
+    } catch (err) {
+      if (mounted) {
+        showSnack(
+          context.strings.format('Playback failed: {error}', {'error': err}),
+        );
+      }
+    }
   }
 
   void clearComposeTargets() {
@@ -983,6 +1168,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         onImageTap: message.imageUrl.isEmpty
                             ? null
                             : () => showImagePreview(context, message.imageUrl),
+                        onVoiceTap: message.voiceUrl.isEmpty
+                            ? null
+                            : () => toggleVoicePlayback(message),
+                        playingVoice: playingMessageId == message.id,
                       );
                     },
                   ),
@@ -1027,6 +1216,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (widget.conversation.type == ConversationType.group)
                         const SizedBox(width: 8),
                       IconButton.filledTonal(
+                        tooltip: recording
+                            ? strings.text('Stop recording')
+                            : strings.text('Voice'),
+                        onPressed: toggleRecording,
+                        icon: Icon(
+                          recording ? Icons.stop : Icons.mic_none_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
                         tooltip: strings.text('Image'),
                         onPressed: pickingImage ? null : pickAndSendImage,
                         icon: pickingImage
@@ -1069,6 +1268,8 @@ class _MessageBubble extends StatelessWidget {
     this.onLongPress,
     this.onReplyTap,
     this.onImageTap,
+    this.onVoiceTap,
+    this.playingVoice = false,
   });
 
   final ChatMessage message;
@@ -1081,6 +1282,8 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onReplyTap;
   final VoidCallback? onImageTap;
+  final VoidCallback? onVoiceTap;
+  final bool playingVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -1211,8 +1414,21 @@ class _MessageBubble extends StatelessWidget {
                         !message.body.startsWith('[image]'))
                       const SizedBox(height: 8),
                   ],
+                  if (message.voiceUrl.isNotEmpty) ...[
+                    _VoiceMessageControl(
+                      durationSeconds: message.voiceDuration,
+                      playing: playingVoice,
+                      onTap: onVoiceTap,
+                      foreground: textColor,
+                      secondary: secondaryTextColor,
+                    ),
+                    if (message.body.isNotEmpty &&
+                        !message.body.startsWith('[voice]'))
+                      const SizedBox(height: 8),
+                  ],
                   if (message.body.isNotEmpty &&
-                      !message.body.startsWith('[image]'))
+                      !message.body.startsWith('[image]') &&
+                      !message.body.startsWith('[voice]'))
                     Text(message.body, style: TextStyle(color: textColor)),
                 ],
               ),
@@ -1290,6 +1506,22 @@ class _PendingMessageBubble extends StatelessWidget {
                   ),
                   if (pending.text.isNotEmpty) const SizedBox(height: 8),
                 ],
+                if (pending.hasVoice) ...[
+                  _VoiceMessageControl(
+                    durationSeconds: pending.voiceDuration,
+                    playing: false,
+                    onTap: null,
+                    foreground: failed
+                        ? colors.onErrorContainer
+                        : colors.onPrimaryContainer,
+                    secondary:
+                        (failed
+                                ? colors.onErrorContainer
+                                : colors.onPrimaryContainer)
+                            .withValues(alpha: 0.72),
+                  ),
+                  if (pending.text.isNotEmpty) const SizedBox(height: 8),
+                ],
                 if (pending.text.isNotEmpty)
                   Text(
                     pending.text,
@@ -1345,6 +1577,69 @@ class _PendingMessageBubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VoiceMessageControl extends StatelessWidget {
+  const _VoiceMessageControl({
+    required this.durationSeconds,
+    required this.playing,
+    required this.onTap,
+    required this.foreground,
+    required this.secondary,
+  });
+
+  final int durationSeconds;
+  final bool playing;
+  final VoidCallback? onTap;
+  final Color foreground;
+  final Color secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = formatVoiceDuration(durationSeconds);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 132, maxWidth: 220),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                playing
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_fill_outlined,
+                color: foreground,
+                size: 30,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: playing ? null : 0,
+                    minHeight: 5,
+                    color: foreground,
+                    backgroundColor: secondary.withValues(alpha: 0.24),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

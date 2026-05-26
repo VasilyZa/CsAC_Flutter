@@ -579,6 +579,28 @@ class CsacApiClient {
     );
   }
 
+  Future<void> sendVoiceMessage(
+    Conversation conversation,
+    Uint8List voiceBytes,
+    String fileName, {
+    required int durationSeconds,
+  }) {
+    final fields = <String, String>{
+      'duration': '${durationSeconds <= 0 ? 1 : durationSeconds}',
+      if (conversation.type == ConversationType.group)
+        'room_id': '${conversation.id}',
+      if (conversation.type == ConversationType.private)
+        'friend_id': '${conversation.id}',
+    };
+    return postMultipart(
+      'message/send_voice_msg',
+      fields,
+      fileField: 'voice',
+      fileBytes: voiceBytes,
+      fileName: fileName,
+    );
+  }
+
   Future<void> recallMessage(Conversation conversation, int msgId) {
     return postForm('message/recall_msg', <String, String>{
       'msg_id': '$msgId',
