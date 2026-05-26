@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,21 +7,28 @@ import 'api_client.dart';
 import 'l10n.dart';
 import 'local_cache.dart';
 import 'models.dart';
+import 'notification_service.dart';
 import 'preferences.dart';
 
 class CsacAppState extends ChangeNotifier {
-  CsacAppState({CsacApiClient? client, CsacLocalCache? cache})
-    : client = client ?? CsacApiClient(),
-      cache = cache ?? CsacLocalCache();
+  CsacAppState({
+    CsacApiClient? client,
+    CsacLocalCache? cache,
+    CsacNotificationService? notifications,
+  }) : notifications = notifications ?? CsacNotificationService(),
+       client = client ?? CsacApiClient(),
+       cache = cache ?? CsacLocalCache();
 
   final CsacApiClient client;
   final CsacLocalCache cache;
+  final CsacNotificationService notifications;
 
   CsacUser? user;
   List<Conversation> conversations = const <Conversation>[];
   NotificationCounts notificationCounts = const NotificationCounts();
   CsacPreferences preferences = const CsacPreferences();
   Conversation? activeConversation;
+  Set<String> mutedConversationKeys = const <String>{};
   bool bootstrapping = true;
   bool loading = false;
   bool offlineMode = false;
@@ -40,6 +48,8 @@ class CsacAppState extends ChangeNotifier {
     try {
       await cache.open();
       preferences = await CsacPreferences.load();
+      mutedConversationKeys = await MutedConversationStore.load();
+      unawaited(notifications.initialize());
       _applyPreferredServer();
       await client.loadSession();
       restoreStatus = CsacStrings(
@@ -243,6 +253,30 @@ class CsacAppState extends ChangeNotifier {
 
   void setActiveConversation(Conversation? conversation) {
     activeConversation = conversation;
+  }
+
+  bool isConversationMuted(Conversation conversation) {
+    return mutedConversationKeys.contains(_conversationKey(conversation));
+  }
+
+  Future<void> setConversationMuted(
+    Conversation conversation,
+    bool muted,
+  ) async {
+    final updated = mutedConversationKeys.toSet();
+    final key = _conversationKey(conversation);
+    if (muted) {
+      updated.add(key);
+    } else {
+      updated.remove(key);
+    }
+    mutedConversationKeys = updated;
+    await MutedConversationStore.save(updated);
+    notifyListeners();
+  }
+
+  String _conversationKey(Conversation conversation) {
+    return '${conversation.type.name}:${conversation.id}';
   }
 
   Future<void> loadConversations() async {

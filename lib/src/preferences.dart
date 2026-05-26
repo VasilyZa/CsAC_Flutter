@@ -128,3 +128,19 @@ class ConversationDraftStore {
     }
   }
 }
+
+class MutedConversationStore {
+  const MutedConversationStore._();
+
+  static const _key = 'csac.muted_conversations';
+
+  static Future<Set<String>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_key) ?? const <String>[]).toSet();
+  }
+
+  static Future<void> save(Set<String> keys) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, keys.toList()..sort());
+  }
+}

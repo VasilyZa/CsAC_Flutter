@@ -35,6 +35,10 @@ class _MainShellState extends State<MainShell> {
   Future<void> refreshHomeWithHint() async {
     final strings = context.strings;
     final messenger = ScaffoldMessenger.of(context);
+    final beforeUnread = {
+      for (final conversation in widget.state.conversations)
+        _conversationKey(conversation): conversation.unreadCount,
+    };
     try {
       await widget.state.refreshHome();
     } catch (_) {
@@ -71,7 +75,30 @@ class _MainShellState extends State<MainShell> {
       });
       messenger.showSnackBar(SnackBar(content: Text(message)));
     }
+    await showSystemNotifications(beforeUnread);
     lastUnreadChats = after;
+  }
+
+  Future<void> showSystemNotifications(Map<String, int> beforeUnread) async {
+    for (final conversation in widget.state.conversations) {
+      if (widget.state.isConversationMuted(conversation) ||
+          widget.state.isActiveConversation(conversation)) {
+        continue;
+      }
+      final before = beforeUnread[_conversationKey(conversation)] ?? 0;
+      final delta = conversation.unreadCount - before;
+      if (delta <= 0) {
+        continue;
+      }
+      await widget.state.notifications.showMessageNotification(
+        conversation: conversation,
+        unreadDelta: delta,
+      );
+    }
+  }
+
+  String _conversationKey(Conversation conversation) {
+    return '${conversation.type.name}:${conversation.id}';
   }
 
   @override
@@ -520,8 +547,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final action = await showModalBottomSheet<_ConversationAction>(
       context: context,
       showDragHandle: true,
-      builder: (context) =>
-          _ConversationActionSheet(conversation: conversation),
+      builder: (context) => _ConversationActionSheet(
+        conversation: conversation,
+        muted: widget.state.isConversationMuted(conversation),
+      ),
     );
     if (action == null || !mounted) {
       return;
@@ -549,6 +578,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
           messenger.showSnackBar(
             SnackBar(
               content: Text(strings.text('Conversation cache cleared.')),
+            ),
+          );
+          break;
+        case _ConversationAction.toggleMute:
+          final muted = !widget.state.isConversationMuted(conversation);
+          await widget.state.setConversationMuted(conversation, muted);
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                strings.text(
+                  muted
+                      ? 'Do not disturb enabled.'
+                      : 'Do not disturb disabled.',
+                ),
+              ),
             ),
           );
           break;
@@ -628,12 +672,16 @@ class _ConversationTile extends StatelessWidget {
   }
 }
 
-enum _ConversationAction { markRead, markUnread, clearCache }
+enum _ConversationAction { markRead, markUnread, clearCache, toggleMute }
 
 class _ConversationActionSheet extends StatelessWidget {
-  const _ConversationActionSheet({required this.conversation});
+  const _ConversationActionSheet({
+    required this.conversation,
+    required this.muted,
+  });
 
   final Conversation conversation;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -642,6 +690,20 @@ class _ConversationActionSheet extends StatelessWidget {
       child: ListView(
         shrinkWrap: true,
         children: [
+          ListTile(
+            leading: Icon(
+              muted
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
+            ),
+            title: Text(
+              strings.text(
+                muted ? 'Disable do not disturb' : 'Enable do not disturb',
+              ),
+            ),
+            onTap: () =>
+                Navigator.of(context).pop(_ConversationAction.toggleMute),
+          ),
           ListTile(
             leading: const Icon(Icons.done_all),
             title: Text(strings.text('Mark read')),
