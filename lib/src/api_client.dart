@@ -251,6 +251,18 @@ class CsacApiClient {
     ]).map(GroupProfile.fromJson).toList();
   }
 
+  Future<CreatedGroup> createGroup(String roomName) async {
+    final data = await postForm('group/create', <String, String>{
+      'room_name': roomName.trim(),
+    });
+    final id = firstInt(data, const ['room_id', 'id', 'rid']);
+    return CreatedGroup(
+      id: id,
+      name: roomName.trim(),
+      inviteCode: firstString(data, const ['invite_code', 'code']),
+    );
+  }
+
   Future<GroupProfile> groupProfile(int roomId) async {
     final data = await get('group/get_group_view_info', <String, String>{
       'room_id': '$roomId',

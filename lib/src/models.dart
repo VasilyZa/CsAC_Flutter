@@ -327,6 +327,24 @@ class GroupProfile {
   }
 }
 
+class CreatedGroup {
+  const CreatedGroup({
+    required this.id,
+    required this.name,
+    this.inviteCode = '',
+  });
+
+  final int id;
+  final String name;
+  final String inviteCode;
+
+  Conversation get conversation => Conversation(
+    type: ConversationType.group,
+    id: id,
+    name: name.isEmpty ? 'Room $id' : name,
+  );
+}
+
 class CommonGroup {
   const CommonGroup({required this.id, required this.name, this.subtitle = ''});
 

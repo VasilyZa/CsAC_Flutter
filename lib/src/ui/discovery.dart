@@ -9,6 +9,167 @@ class AddFriendScreen extends StatefulWidget {
   State<AddFriendScreen> createState() => _AddFriendScreenState();
 }
 
+class CreateGroupScreen extends StatefulWidget {
+  const CreateGroupScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<CreateGroupScreen> createState() => _CreateGroupScreenState();
+}
+
+class _CreateGroupScreenState extends State<CreateGroupScreen> {
+  final roomName = TextEditingController();
+  bool creating = false;
+  String? error;
+
+  @override
+  void dispose() {
+    roomName.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final name = roomName.text.trim();
+    if (name.isEmpty) {
+      setState(
+        () => error = context.strings.text('Please enter a group name.'),
+      );
+      return;
+    }
+    if (name.length > 32) {
+      setState(
+        () => error = context.strings.text(
+          'Group name can be up to 32 characters.',
+        ),
+      );
+      return;
+    }
+    setState(() {
+      creating = true;
+      error = null;
+    });
+    try {
+      final created = await widget.state.createGroup(name);
+      if (!mounted) {
+        return;
+      }
+      await showCreatedGroupDialog(created);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => creating = false);
+      }
+    }
+  }
+
+  Future<void> showCreatedGroupDialog(CreatedGroup created) {
+    final strings = context.strings;
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(strings.text('Group created.')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(strings.format('Room ID: {id}', {'id': created.id})),
+            if (created.inviteCode.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SelectableText(
+                strings.format('Invite code: {code}', {
+                  'code': created.inviteCode,
+                }),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Close')),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => ConversationDetailScreen(
+                    state: widget.state,
+                    conversation: created.conversation,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.info_outline),
+            label: Text(strings.text('Group details')),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => ChatScreen(
+                    state: widget.state,
+                    conversation: created.conversation,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: Text(strings.text('Open chat')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.text('Create group'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            TextField(
+              controller: roomName,
+              maxLength: 32,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => submit(),
+              decoration: InputDecoration(
+                labelText: strings.text('Group name'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            if (error != null) _InlineError(message: error!, onRetry: submit),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: creating ? null : submit,
+              icon: creating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add),
+              label: Text(strings.text('Create group')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AddFriendScreenState extends State<AddFriendScreen> {
   final uid = TextEditingController();
   final message = TextEditingController(text: '请求添加你为好友');

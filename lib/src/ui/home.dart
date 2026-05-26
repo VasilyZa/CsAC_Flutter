@@ -412,6 +412,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   },
                   icon: const Icon(Icons.group_add_outlined),
                 ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: strings.text('Create group'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CreateGroupScreen(state: widget.state),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_business_outlined),
+                ),
               ],
             ),
           ),

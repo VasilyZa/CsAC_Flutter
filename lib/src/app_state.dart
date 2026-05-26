@@ -508,6 +508,12 @@ class CsacAppState extends ChangeNotifier {
     await syncConversations();
   }
 
+  Future<CreatedGroup> createGroup(String roomName) async {
+    final created = await client.createGroup(roomName);
+    await syncConversations();
+    return created;
+  }
+
   Future<void> leaveGroup(int roomId) async {
     await client.leaveGroup(roomId);
     await syncConversations();
