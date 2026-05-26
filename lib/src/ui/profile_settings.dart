@@ -454,6 +454,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       trailing: progressOrChevron(updatingPassword),
                       onTap: updatingPassword ? null : changePassword,
                     ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.bug_report_outlined),
+                      title: Text(strings.text('Feedback Bug')),
+                      subtitle: Text(strings.text('Send feedback to admins')),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showBugReportDialog(
+                        context: context,
+                        state: widget.state,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -547,7 +558,7 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.0.0-20';
+const _csacAppVersion = '1.0.0-21';
 const _csacAppBuild = '19';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 

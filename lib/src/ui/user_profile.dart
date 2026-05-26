@@ -336,6 +336,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Future<void> reportUser(UserProfile profile) {
+    return showReportDialog(
+      context: context,
+      state: widget.state,
+      type: 'user',
+      title: context.strings.text('Report user'),
+      uid: profile.uid,
+      nickname: profile.displayName,
+      username: profile.username,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -474,6 +486,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               onTap: loaded.isFriend
                                   ? () => blockFriend(loaded)
                                   : null,
+                            ),
+                            const Divider(height: 1),
+                            actionTile(
+                              icon: Icons.flag_outlined,
+                              title: strings.text('Report user'),
+                              color: colors.error,
+                              onTap: () => reportUser(loaded),
                             ),
                           ],
                         ),

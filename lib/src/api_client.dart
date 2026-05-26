@@ -601,6 +601,41 @@ class CsacApiClient {
     );
   }
 
+  Future<void> submitReport({
+    required String type,
+    required String reason,
+    required bool anonymous,
+    int uid = 0,
+    int rid = 0,
+    int messageId = 0,
+    String nickname = '',
+    String username = '',
+    String roomName = '',
+  }) {
+    return postForm('report/submit_report', <String, String>{
+      'type': type,
+      'reason': reason.trim(),
+      'anonymous': anonymous ? '1' : '0',
+      if (uid > 0) 'uid': '$uid',
+      if (rid > 0) 'rid': '$rid',
+      if (messageId > 0) 'msg_id': '$messageId',
+      if (messageId > 0) 'message_id': '$messageId',
+      if (nickname.trim().isNotEmpty) 'nickname': nickname.trim(),
+      if (username.trim().isNotEmpty) 'username': username.trim(),
+      if (roomName.trim().isNotEmpty) 'room_name': roomName.trim(),
+    });
+  }
+
+  Future<void> submitBugReport({
+    required String title,
+    required String description,
+  }) {
+    return postForm('bug_report', <String, String>{
+      'title': title.trim(),
+      'description': description.trim(),
+    });
+  }
+
   Future<void> recallMessage(Conversation conversation, int msgId) {
     return postForm('message/recall_msg', <String, String>{
       'msg_id': '$msgId',

@@ -1346,6 +1346,17 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     );
   }
 
+  Future<void> reportGroup(GroupProfile profile) {
+    return showReportDialog(
+      context: context,
+      state: widget.state,
+      type: 'group',
+      title: context.strings.text('Report group'),
+      rid: profile.id,
+      roomName: profile.name,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -1414,6 +1425,18 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      elevation: 0,
+                      child: _RoundedInkClip(
+                        child: actionTile(
+                          icon: Icons.flag_outlined,
+                          title: strings.text('Report group'),
+                          color: colors.error,
+                          onTap: () => reportGroup(group),
                         ),
                       ),
                     ),

@@ -810,6 +810,25 @@ class _ChatScreenState extends State<ChatScreen> {
       case _MessageAction.essence:
         await toggleEssence(message);
         break;
+      case _MessageAction.report:
+        await showReportDialog(
+          context: context,
+          state: widget.state,
+          type: widget.conversation.type == ConversationType.group
+              ? 'group'
+              : 'user',
+          title: context.strings.text('Report message'),
+          uid: message.senderId,
+          rid: widget.conversation.type == ConversationType.group
+              ? widget.conversation.id
+              : 0,
+          messageId: message.id,
+          nickname: message.sender,
+          roomName: widget.conversation.type == ConversationType.group
+              ? widget.conversation.name
+              : '',
+        );
+        break;
     }
   }
 
@@ -1712,6 +1731,7 @@ enum _MessageAction {
   reply,
   recall,
   essence,
+  report,
 }
 
 class _MessageActionSheet extends StatelessWidget {
@@ -1786,6 +1806,11 @@ class _MessageActionSheet extends StatelessWidget {
               ),
               onTap: () => Navigator.of(context).pop(_MessageAction.essence),
             ),
+          ListTile(
+            leading: const Icon(Icons.flag_outlined),
+            title: Text(strings.text('Report message')),
+            onTap: () => Navigator.of(context).pop(_MessageAction.report),
+          ),
         ],
       ),
     );
