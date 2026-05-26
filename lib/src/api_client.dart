@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -639,6 +640,7 @@ class CsacApiClient {
       fileField: 'voice',
       fileBytes: voiceBytes,
       fileName: fileName,
+      contentType: voiceContentType(fileName),
     );
   }
 
@@ -749,16 +751,39 @@ class CsacApiClient {
     required String fileField,
     required Uint8List fileBytes,
     required String fileName,
+    MediaType? contentType,
   }) {
     final uri = _routeUri(route);
     return _send(() {
       final request = http.MultipartRequest('POST', uri);
       request.fields.addAll(fields);
       request.files.add(
-        http.MultipartFile.fromBytes(fileField, fileBytes, filename: fileName),
+        http.MultipartFile.fromBytes(
+          fileField,
+          fileBytes,
+          filename: fileName,
+          contentType: contentType,
+        ),
       );
       return request;
     });
+  }
+
+  MediaType voiceContentType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.wav')) {
+      return MediaType('audio', 'wav');
+    }
+    if (lower.endsWith('.ogg')) {
+      return MediaType('audio', 'ogg');
+    }
+    if (lower.endsWith('.webm')) {
+      return MediaType('audio', 'webm');
+    }
+    if (lower.endsWith('.mp3') || lower.endsWith('.mpeg')) {
+      return MediaType('audio', 'mpeg');
+    }
+    return MediaType('audio', 'mp4');
   }
 
   Map<String, String> _sendFields({

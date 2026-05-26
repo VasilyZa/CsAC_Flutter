@@ -447,7 +447,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       var encoder = AudioEncoder.aacLc;
-      var extension = 'm4a';
+      var extension = 'mp4';
       if (!await audioRecorder.isEncoderSupported(encoder)) {
         encoder = AudioEncoder.wav;
         extension = 'wav';
