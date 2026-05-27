@@ -35,6 +35,7 @@ class Friend {
     required this.id,
     required this.uid,
     required this.name,
+    this.avatar = '',
     this.subtitle = '',
     this.unreadCount = 0,
     this.searchText = '',
@@ -43,6 +44,7 @@ class Friend {
   final int id;
   final int uid;
   final String name;
+  final String avatar;
   final String subtitle;
   final int unreadCount;
   final String searchText;
@@ -63,6 +65,7 @@ class Friend {
       name: remark.isEmpty
           ? (nickname.isEmpty ? 'User $id' : nickname)
           : remark,
+      avatar: normalizeApiUrl(asString(json['avatar'])),
       subtitle: [
         online,
         last,
@@ -83,6 +86,7 @@ class Group {
   const Group({
     required this.id,
     required this.name,
+    this.avatar = '',
     this.subtitle = '',
     this.unreadCount = 0,
     this.searchText = '',
@@ -90,6 +94,7 @@ class Group {
 
   final int id;
   final String name;
+  final String avatar;
   final String subtitle;
   final int unreadCount;
   final String searchText;
@@ -112,6 +117,7 @@ class Group {
     return Group(
       id: id,
       name: roomName.isEmpty ? 'Room $id' : roomName,
+      avatar: normalizeApiUrl(asString(json['avatar'])),
       subtitle: parts.join(' | '),
       unreadCount: asInt(json['unread_count']),
       searchText: [
@@ -131,6 +137,7 @@ class Conversation {
     required this.type,
     required this.id,
     required this.name,
+    this.avatar = '',
     this.subtitle = '',
     this.unreadCount = 0,
     this.searchText = '',
@@ -139,6 +146,7 @@ class Conversation {
   final ConversationType type;
   final int id;
   final String name;
+  final String avatar;
   final String subtitle;
   final int unreadCount;
   final String searchText;
@@ -147,6 +155,7 @@ class Conversation {
     ConversationType? type,
     int? id,
     String? name,
+    String? avatar,
     String? subtitle,
     int? unreadCount,
     String? searchText,
@@ -155,6 +164,7 @@ class Conversation {
       type: type ?? this.type,
       id: id ?? this.id,
       name: name ?? this.name,
+      avatar: avatar ?? this.avatar,
       subtitle: subtitle ?? this.subtitle,
       unreadCount: unreadCount ?? this.unreadCount,
       searchText: searchText ?? this.searchText,

@@ -1,5 +1,53 @@
 part of '../../main.dart';
 
+// ============================================================================
+// 主题构建
+// ============================================================================
+
+CupertinoThemeData buildCupertinoTheme(Brightness brightness, Color seedColor) {
+  final isDark = brightness == Brightness.dark;
+  return CupertinoThemeData(
+    brightness: brightness,
+    primaryColor: seedColor,
+    scaffoldBackgroundColor:
+        isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
+    barBackgroundColor:
+        isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF9F9F9),
+    textTheme: CupertinoTextThemeData(
+      primaryColor: seedColor,
+      textStyle: TextStyle(
+        fontSize: 16,
+        color: isDark ? CupertinoColors.white : CupertinoColors.black,
+      ),
+      navTitleTextStyle: TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        color: isDark ? CupertinoColors.white : CupertinoColors.black,
+      ),
+      navLargeTitleTextStyle: TextStyle(
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        color: isDark ? CupertinoColors.white : CupertinoColors.black,
+      ),
+    ),
+  );
+}
+
+Brightness resolvedBrightness(ThemeMode mode, BuildContext context) {
+  switch (mode) {
+    case ThemeMode.light:
+      return Brightness.light;
+    case ThemeMode.dark:
+      return Brightness.dark;
+    case ThemeMode.system:
+      return MediaQuery.platformBrightnessOf(context);
+  }
+}
+
+// ============================================================================
+// 根应用
+// ============================================================================
+
 class CsacMobileApp extends StatefulWidget {
   const CsacMobileApp({super.key});
 
@@ -21,7 +69,11 @@ class _CsacMobileAppState extends State<CsacMobileApp> {
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
-        return MaterialApp(
+        final brightness = resolvedBrightness(
+          state.preferences.themeMode,
+          context,
+        );
+        return CupertinoApp(
           title: CsacStrings(
             localeForLanguage(state.preferences.language),
           ).text(appClientNameKey()),
@@ -34,15 +86,10 @@ class _CsacMobileAppState extends State<CsacMobileApp> {
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
-          theme: buildCsacTheme(
-            Brightness.light,
+          theme: buildCupertinoTheme(
+            brightness,
             Color(state.preferences.themeColorValue),
           ),
-          darkTheme: buildCsacTheme(
-            Brightness.dark,
-            Color(state.preferences.themeColorValue),
-          ),
-          themeMode: state.preferences.themeMode,
           home: state.bootstrapping
               ? SplashScreen(status: state.restoreStatus)
               : state.user == null
@@ -54,104 +101,64 @@ class _CsacMobileAppState extends State<CsacMobileApp> {
   }
 }
 
-ThemeData buildCsacTheme(Brightness brightness, Color seedColor) {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: seedColor,
-    brightness: brightness,
-  );
-  final base = ThemeData(colorScheme: scheme, useMaterial3: true);
-  return base.copyWith(
-    scaffoldBackgroundColor: scheme.surface,
-    canvasColor: scheme.surface,
-    cardColor: scheme.surfaceContainerLow,
-    appBarTheme: AppBarTheme(
-      backgroundColor: scheme.surface,
-      foregroundColor: scheme.onSurface,
-      surfaceTintColor: scheme.surfaceTint,
-      elevation: 0,
-    ),
-    bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: scheme.surface,
-      modalBackgroundColor: scheme.surface,
-      surfaceTintColor: scheme.surfaceTint,
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: scheme.surfaceContainer,
-      indicatorColor: scheme.secondaryContainer,
-      labelTextStyle: WidgetStatePropertyAll(
-        base.textTheme.labelMedium?.copyWith(color: scheme.onSurface),
-      ),
-      iconTheme: WidgetStateProperty.resolveWith((states) {
-        return IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? scheme.onSecondaryContainer
-              : scheme.onSurfaceVariant,
-        );
-      }),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: false,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.primary, width: 1.6),
-      ),
-    ),
-    chipTheme: base.chipTheme.copyWith(
-      backgroundColor: scheme.surfaceContainerHighest,
-      selectedColor: scheme.secondaryContainer,
-      labelStyle: TextStyle(color: scheme.onSurface),
-      secondaryLabelStyle: TextStyle(color: scheme.onSecondaryContainer),
-      iconTheme: IconThemeData(color: scheme.onSurfaceVariant),
-      side: BorderSide(color: scheme.outlineVariant),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: scheme.inverseSurface,
-      contentTextStyle: TextStyle(color: scheme.onInverseSurface),
-      actionTextColor: scheme.inversePrimary,
-      behavior: SnackBarBehavior.floating,
-    ),
-    dividerTheme: DividerThemeData(color: scheme.outlineVariant),
-    listTileTheme: ListTileThemeData(
-      iconColor: scheme.onSurfaceVariant,
-      textColor: scheme.onSurface,
-      subtitleTextStyle: base.textTheme.bodyMedium?.copyWith(
-        color: scheme.onSurfaceVariant,
-      ),
-    ),
-  );
-}
+// ============================================================================
+// 启动屏
+// ============================================================================
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key, required this.status});
-
   final String status;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.forum_rounded,
-              size: 54,
-              color: Theme.of(context).colorScheme.primary,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primary, primary.withValues(alpha: 0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: primary.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                CupertinoIcons.chat_bubble_2_fill,
+                size: 40,
+                color: CupertinoColors.white,
+              ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             Text(
               context.strings.text(appClientNameKey()),
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: colors.label,
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(status),
-            const SizedBox(height: 18),
-            const CircularProgressIndicator(),
+            const SizedBox(height: 8),
+            Text(
+              status,
+              style: TextStyle(fontSize: 14, color: colors.secondaryLabel),
+            ),
+            const SizedBox(height: 24),
+            CupertinoActivityIndicator(radius: 12, color: primary),
           ],
         ),
       ),
@@ -159,9 +166,12 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// 登录页
+// ============================================================================
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.state});
-
   final CsacAppState state;
 
   @override
@@ -169,149 +179,252 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final username = TextEditingController();
-  final password = TextEditingController();
-  String? error;
+  final _username = TextEditingController();
+  final _password = TextEditingController();
+  String? _error;
 
   @override
   void dispose() {
-    username.dispose();
-    password.dispose();
+    _username.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> submit() async {
-    final name = username.text.trim();
-    if (name.isEmpty || password.text.isEmpty) {
-      setState(
-        () =>
-            error = context.strings.text('Username and password are required.'),
-      );
+  Future<void> _submit() async {
+    if (_username.text.trim().isEmpty || _password.text.isEmpty) {
+      setState(() => _error = context.strings.text('Username and password are required.'));
       return;
     }
+    setState(() => _error = null);
     try {
-      await widget.state.login(name, password.text);
-    } catch (err) {
-      setState(() => error = err.toString());
+      await widget.state.login(_username.text.trim(), _password.text);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 
-  Future<void> openRegister() async {
-    error = null;
+  Future<void> _openRegister() async {
+    setState(() => _error = null);
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => RegisterScreen(state: widget.state),
-      ),
+      CupertinoPageRoute<void>(builder: (_) => RegisterScreen(state: widget.state)),
     );
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
-  Future<void> openServerSettings() async {
+  Future<void> _openServerSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => SettingsScreen(
           state: widget.state,
           initialDeveloperOptionsExpanded: true,
         ),
       ),
     );
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     final serverUrl = widget.state.preferences.serverUrl.trim().isEmpty
         ? strings.text('Default server')
         : widget.state.preferences.serverUrl.trim();
-    return Scaffold(
-      body: SafeArea(
+
+    return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
+      child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.forum_rounded,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.primary,
+                  // ── App 图标 ──
+                  Center(
+                    child: Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primary, primary.withValues(alpha: 0.65)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primary.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.chat_bubble_2_fill,
+                        size: 44,
+                        color: CupertinoColors.white,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 28),
                   Text(
                     strings.text(appClientNameKey()),
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    style: TextStyle(
+                      fontSize: 30,
                       fontWeight: FontWeight.w800,
+                      color: colors.label,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: username,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Username'),
-                      prefixIcon: const Icon(Icons.person_outline),
-                      border: const OutlineInputBorder(),
+                  const SizedBox(height: 6),
+                  Text(
+                    strings.text('Sign in to continue'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, color: colors.secondaryLabel),
+                  ),
+                  const SizedBox(height: 36),
+
+                  // ── 输入框组 ──
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      color: colors.cardBackground,
+                      child: Column(
+                        children: [
+                          _LoginField(
+                            controller: _username,
+                            placeholder: strings.text('Username'),
+                            icon: CupertinoIcons.person,
+                            textInputAction: TextInputAction.next,
+                          ),
+                          Container(height: 0.5, color: colors.separator),
+                          _LoginField(
+                            controller: _password,
+                            placeholder: strings.text('Password'),
+                            icon: CupertinoIcons.lock,
+                            obscureText: true,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: password,
-                    obscureText: true,
-                    onSubmitted: (_) => submit(),
-                    decoration: InputDecoration(
-                      labelText: strings.text('Password'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+
+                  // ── 错误提示 ──
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: colors.destructive.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.exclamationmark_circle, size: 15, color: colors.destructive),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(fontSize: 13, color: colors.destructive),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                   const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: widget.state.loading ? null : submit,
-                    icon: widget.state.loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.login),
-                    label: Text(strings.text('Login')),
+
+                  // ── 登录按钮 ──
+                  GestureDetector(
+                    onTap: widget.state.loading ? null : _submit,
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: widget.state.loading
+                              ? [colors.tertiaryFill, colors.tertiaryFill]
+                              : [primary, primary.withValues(alpha: 0.8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: widget.state.loading
+                            ? []
+                            : [
+                                BoxShadow(
+                                  color: primary.withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                      ),
+                      child: Center(
+                        child: widget.state.loading
+                            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                            : Text(
+                                strings.text('Login'),
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: CupertinoColors.white,
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: widget.state.loading ? null : openRegister,
-                    icon: const Icon(Icons.person_add_alt),
-                    label: Text(strings.text('Create account')),
+
+                  // ── 注册按钮 ──
+                  GestureDetector(
+                    onTap: widget.state.loading ? null : _openRegister,
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: colors.cardBackground,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: colors.separator),
+                      ),
+                      child: Center(
+                        child: Text(
+                          strings.text('Create account'),
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w500,
+                            color: primary,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: openServerSettings,
-                    icon: const Icon(Icons.developer_mode_outlined),
-                    label: Text(strings.text('Developer options')),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    strings.format('Current server: {server}', {
-                      'server': serverUrl,
-                    }),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(height: 24),
+
+                  // ── 服务器信息 ──
+                  GestureDetector(
+                    onTap: _openServerSettings,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(CupertinoIcons.globe, size: 13, color: colors.tertiaryLabel),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            serverUrl,
+                            style: TextStyle(fontSize: 12, color: colors.tertiaryLabel),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(CupertinoIcons.pencil, size: 11, color: colors.tertiaryLabel),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -323,9 +436,51 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+/// 登录页专用输入框行
+class _LoginField extends StatelessWidget {
+  const _LoginField({
+    required this.controller,
+    required this.placeholder,
+    required this.icon,
+    this.obscureText = false,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final IconData icon;
+  final bool obscureText;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CupertinoTextField(
+      controller: controller,
+      placeholder: placeholder,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      prefix: Padding(
+        padding: const EdgeInsets.only(left: 16),
+        child: Icon(icon, size: 18, color: colors.secondaryLabel),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 16, 16, 16),
+      decoration: const BoxDecoration(),
+      style: TextStyle(fontSize: 16, color: CsacColors.of(context).label),
+      placeholderStyle: TextStyle(fontSize: 16, color: colors.tertiaryLabel),
+    );
+  }
+}
+
+// ============================================================================
+// 注册页
+// ============================================================================
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, required this.state});
-
   final CsacAppState state;
 
   @override
@@ -333,252 +488,187 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final imagePicker = ImagePicker();
-  final username = TextEditingController();
-  final nickname = TextEditingController();
-  final password = TextEditingController();
-  final confirmPassword = TextEditingController();
-  final usernameFocus = FocusNode();
-  final nicknameFocus = FocusNode();
-  final passwordFocus = FocusNode();
-  final confirmPasswordFocus = FocusNode();
-  Uint8List? avatarBytes;
-  String? avatarFileName;
-  String? error;
-  bool submitting = false;
+  final _imagePicker = ImagePicker();
+  final _username = TextEditingController();
+  final _nickname = TextEditingController();
+  final _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
+  Uint8List? _avatarBytes;
+  String? _avatarFileName;
+  String? _error;
+  bool _submitting = false;
 
   @override
   void dispose() {
-    username.dispose();
-    nickname.dispose();
-    password.dispose();
-    confirmPassword.dispose();
-    usernameFocus.dispose();
-    nicknameFocus.dispose();
-    passwordFocus.dispose();
-    confirmPasswordFocus.dispose();
+    _username.dispose();
+    _nickname.dispose();
+    _password.dispose();
+    _confirmPassword.dispose();
     super.dispose();
   }
 
-  Future<void> chooseAvatar() async {
-    final picked = await imagePicker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 90,
-    );
-    if (picked == null || !mounted) {
-      return;
-    }
+  Future<void> _chooseAvatar() async {
+    final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null || !mounted) return;
     final bytes = await picked.readAsBytes();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      avatarBytes = bytes;
-      avatarFileName = picked.name;
-      error = null;
-    });
+    if (!mounted) return;
+    setState(() { _avatarBytes = bytes; _avatarFileName = picked.name; });
   }
 
-  String? validate() {
-    final name = username.text.trim();
-    final nick = nickname.text.trim();
-    final usernamePattern = RegExp(r'^[A-Za-z0-9_@.-]+$');
-    if (name.length < 3 || name.length > 32) {
-      return context.strings.text('Username must be 3-32 characters.');
-    }
-    if (!usernamePattern.hasMatch(name)) {
-      return context.strings.text(
-        'Username can only contain letters, numbers, _, @, ., and -.',
-      );
-    }
-    if (nick.isEmpty) {
-      return context.strings.text('Please enter a nickname.');
-    }
-    if (nick.length > 16) {
-      return context.strings.text('Nickname can be up to 16 characters.');
-    }
-    if (password.text.length < 6) {
-      return context.strings.text('Password must be at least 6 characters.');
-    }
-    if (password.text != confirmPassword.text) {
-      return context.strings.text('Passwords do not match.');
-    }
+  String? _validate() {
+    final name = _username.text.trim();
+    final nick = _nickname.text.trim();
+    if (name.length < 3 || name.length > 32) return context.strings.text('Username must be 3-32 characters.');
+    if (!RegExp(r'^[A-Za-z0-9_@.-]+$').hasMatch(name)) return context.strings.text('Username can only contain letters, numbers, _, @, ., and -.');
+    if (nick.isEmpty) return context.strings.text('Please enter a nickname.');
+    if (nick.length > 16) return context.strings.text('Nickname can be up to 16 characters.');
+    if (_password.text.length < 6) return context.strings.text('Password must be at least 6 characters.');
+    if (_password.text != _confirmPassword.text) return context.strings.text('Passwords do not match.');
     return null;
   }
 
-  Future<void> submit() async {
-    final validationError = validate();
-    if (validationError != null) {
-      setState(() => error = validationError);
-      return;
-    }
-    setState(() {
-      submitting = true;
-      error = null;
-    });
+  Future<void> _submit() async {
+    final err = _validate();
+    if (err != null) { setState(() => _error = err); return; }
+    setState(() { _submitting = true; _error = null; });
     try {
       await widget.state.register(
-        username: username.text.trim(),
-        nickname: nickname.text.trim(),
-        password: password.text,
-        confirmPassword: confirmPassword.text,
-        avatarBytes: avatarBytes,
-        avatarFileName: avatarFileName,
+        username: _username.text.trim(),
+        nickname: _nickname.text.trim(),
+        password: _password.text,
+        confirmPassword: _confirmPassword.text,
+        avatarBytes: _avatarBytes,
+        avatarFileName: _avatarFileName,
       );
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Account created.'))),
-      );
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Account created.'));
       Navigator.of(context).pop();
-    } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) {
-        setState(() => submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Register account'))),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+
+    return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Register account')),
+        backgroundColor: colors.navBarBackground,
+        border: null,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── 头像选择 ──
+                Center(
+                  child: GestureDetector(
+                    onTap: _submitting ? null : _chooseAvatar,
                     child: Stack(
-                      alignment: Alignment.bottomRight,
                       children: [
-                        CircleAvatar(
-                          radius: 46,
-                          backgroundColor: scheme.primaryContainer,
-                          backgroundImage: avatarBytes == null
-                              ? null
-                              : MemoryImage(avatarBytes!),
-                          child: avatarBytes == null
-                              ? Icon(
-                                  Icons.person_add_alt_rounded,
-                                  size: 42,
-                                  color: scheme.onPrimaryContainer,
-                                )
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            gradient: _avatarBytes == null
+                                ? LinearGradient(
+                                    colors: [primary.withValues(alpha: 0.15), primary.withValues(alpha: 0.05)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : null,
+                            image: _avatarBytes != null
+                                ? DecorationImage(image: MemoryImage(_avatarBytes!), fit: BoxFit.cover)
+                                : null,
+                          ),
+                          child: _avatarBytes == null
+                              ? Icon(CupertinoIcons.camera_fill, size: 32, color: primary)
                               : null,
                         ),
-                        IconButton.filledTonal(
-                          onPressed: submitting ? null : chooseAvatar,
-                          icon: const Icon(Icons.photo_camera_outlined),
-                          tooltip: strings.text(
-                            avatarBytes == null
-                                ? 'Choose avatar'
-                                : 'Change avatar',
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: colors.systemBackground, width: 2),
+                            ),
+                            child: const Icon(CupertinoIcons.pencil, size: 13, color: CupertinoColors.white),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    strings.text(
-                      avatarBytes == null
-                          ? 'Skip avatar for now'
-                          : 'Avatar selected',
-                    ),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: username,
-                    focusNode: usernameFocus,
-                    enabled: !submitting,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Username'),
-                      prefixIcon: const Icon(Icons.alternate_email),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => nicknameFocus.requestFocus(),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nickname,
-                    focusNode: nicknameFocus,
-                    enabled: !submitting,
-                    maxLength: 16,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Nickname'),
-                      prefixIcon: const Icon(Icons.badge_outlined),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => passwordFocus.requestFocus(),
-                  ),
-                  const SizedBox(height: 2),
-                  TextField(
-                    controller: password,
-                    focusNode: passwordFocus,
-                    enabled: !submitting,
-                    obscureText: true,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Password'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => confirmPasswordFocus.requestFocus(),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: confirmPassword,
-                    focusNode: confirmPasswordFocus,
-                    enabled: !submitting,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Confirm password'),
-                      prefixIcon: const Icon(Icons.lock_reset),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => submit(),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 14),
-                    Text(error!, style: TextStyle(color: scheme.error)),
+                ),
+                const SizedBox(height: 24),
+
+                // ── 表单 ──
+                _CupertinoGroupedCard(
+                  margin: EdgeInsets.zero,
+                  children: [
+                    _CupertinoFormField(controller: _username, placeholder: strings.text('Username'), icon: CupertinoIcons.at, enabled: !_submitting, textInputAction: TextInputAction.next),
+                    _CupertinoFormField(controller: _nickname, placeholder: strings.text('Nickname'), icon: CupertinoIcons.person, enabled: !_submitting, textInputAction: TextInputAction.next),
+                    _CupertinoFormField(controller: _password, placeholder: strings.text('Password'), icon: CupertinoIcons.lock, obscureText: true, enabled: !_submitting, textInputAction: TextInputAction.next),
+                    _CupertinoFormField(controller: _confirmPassword, placeholder: strings.text('Confirm password'), icon: CupertinoIcons.lock_rotation, obscureText: true, enabled: !_submitting, textInputAction: TextInputAction.done, onSubmitted: (_) => _submit()),
                   ],
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: submitting ? null : submit,
-                    icon: submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.person_add_alt),
-                    label: Text(strings.text('Create account')),
-                  ),
+                ),
+
+                if (_error != null) ...[
                   const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: submitting ? null : () => Navigator.pop(context),
-                    child: Text(strings.text('Back to login')),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: colors.destructive.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(_error!, style: TextStyle(fontSize: 13, color: colors.destructive)),
                   ),
                 ],
-              ),
+                const SizedBox(height: 20),
+
+                GestureDetector(
+                  onTap: _submitting ? null : _submit,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [primary, primary.withValues(alpha: 0.8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(color: primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: Center(
+                      child: _submitting
+                          ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                          : Text(strings.text('Create account'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: CupertinoColors.white)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                CupertinoButton(
+                  onPressed: _submitting ? null : () => Navigator.pop(context),
+                  child: Text(strings.text('Back to login'), style: TextStyle(color: primary)),
+                ),
+              ],
             ),
           ),
         ),

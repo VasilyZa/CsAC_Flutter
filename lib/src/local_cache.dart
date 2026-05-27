@@ -104,7 +104,7 @@ class CsacLocalCache {
   Future<List<Conversation>> loadConversations() async {
     final db = await _database();
     final rows = db.select('''
-      SELECT type, remote_id, name, subtitle, unread_count, search_text
+      SELECT type, remote_id, name, subtitle, unread_count, search_text, avatar
       FROM conversations
       ORDER BY display_order ASC, updated_at DESC, name COLLATE NOCASE ASC
       ''');
@@ -114,6 +114,7 @@ class CsacLocalCache {
           type: _conversationType(row['type'] as String),
           id: row['remote_id'] as int,
           name: row['name'] as String,
+          avatar: row['avatar'] as String? ?? '',
           subtitle: row['subtitle'] as String,
           unreadCount: row['unread_count'] as int,
           searchText: row['search_text'] as String,
@@ -125,7 +126,7 @@ class CsacLocalCache {
     final db = await _database();
     final rows = db.select(
       '''
-      SELECT type, remote_id, name, subtitle, unread_count, search_text
+      SELECT type, remote_id, name, subtitle, unread_count, search_text, avatar
       FROM conversations
       WHERE type = ? AND remote_id = ?
       LIMIT 1
@@ -147,15 +148,16 @@ class CsacLocalCache {
       ''');
     final insertStatement = db.prepare('''
       INSERT INTO conversations (
-        type, remote_id, name, subtitle, unread_count, search_text, updated_at,
-        display_order
+        type, remote_id, name, subtitle, unread_count, search_text, avatar,
+        updated_at, display_order
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(type, remote_id) DO UPDATE SET
         name = excluded.name,
         subtitle = excluded.subtitle,
         unread_count = excluded.unread_count,
         search_text = excluded.search_text,
+        avatar = excluded.avatar,
         updated_at = excluded.updated_at,
         display_order = excluded.display_order
       ''');
@@ -172,6 +174,7 @@ class CsacLocalCache {
           conversation.subtitle,
           conversation.unreadCount,
           conversation.searchText,
+          conversation.avatar,
           now,
           index,
         ]);
@@ -534,6 +537,12 @@ class CsacLocalCache {
       'search_text',
       "TEXT NOT NULL DEFAULT ''",
     );
+    _addColumnIfMissing(
+      db,
+      'conversations',
+      'avatar',
+      "TEXT NOT NULL DEFAULT ''",
+    );
     db.execute('''
       CREATE TABLE IF NOT EXISTS messages (
         conversation_type TEXT NOT NULL,
@@ -612,6 +621,7 @@ class CsacLocalCache {
       type: _conversationType(row['type'] as String),
       id: row['remote_id'] as int,
       name: row['name'] as String,
+      avatar: row['avatar'] as String? ?? '',
       subtitle: row['subtitle'] as String,
       unreadCount: row['unread_count'] as int,
       searchText: row['search_text'] as String,

@@ -29,6 +29,10 @@ class CsacAppState extends ChangeNotifier {
   CsacPreferences preferences = const CsacPreferences();
   Conversation? activeConversation;
   Set<String> mutedConversationKeys = const <String>{};
+
+  /// 用户已查看过的通知类型，刷新时这些计数保持为 0
+  final Set<String> _dismissedBadges = <String>{};
+
   bool bootstrapping = true;
   bool loading = false;
   bool offlineMode = false;
@@ -49,6 +53,7 @@ class CsacAppState extends ChangeNotifier {
       await cache.open();
       preferences = await CsacPreferences.load();
       mutedConversationKeys = await MutedConversationStore.load();
+      _dismissedBadges.addAll(await DismissedBadgeStore.load());
       unawaited(notifications.initialize());
       _applyPreferredServer();
       await client.loadSession();
@@ -345,20 +350,27 @@ class CsacAppState extends ChangeNotifier {
       ]);
       final base = results[0];
       final mentions = results[1];
+      // 服务器计数归零时自动清除 dismissed 标记
+      if (base.notices == 0) _dismissedBadges.remove('notices');
+      if (base.friendRequests == 0) _dismissedBadges.remove('friendRequests');
+      if (base.groupApplications == 0) _dismissedBadges.remove('groupApplications');
+      if (mentions.mentions == 0) _dismissedBadges.remove('mentions');
+      if (mentions.replies == 0) _dismissedBadges.remove('replies');
+      unawaited(DismissedBadgeStore.save(_dismissedBadges));
       notificationCounts = NotificationCounts(
-        notices: base.notices,
-        friendRequests: base.friendRequests,
-        groupApplications: base.groupApplications,
-        mentions: mentions.mentions,
-        replies: mentions.replies,
+        notices: _dismissedBadges.contains('notices') ? 0 : base.notices,
+        friendRequests: _dismissedBadges.contains('friendRequests') ? 0 : base.friendRequests,
+        groupApplications: _dismissedBadges.contains('groupApplications') ? 0 : base.groupApplications,
+        mentions: _dismissedBadges.contains('mentions') ? 0 : mentions.mentions,
+        replies: _dismissedBadges.contains('replies') ? 0 : mentions.replies,
       );
     } catch (_) {
       notificationCounts = NotificationCounts(
-        notices: notificationCounts.notices,
-        friendRequests: notificationCounts.friendRequests,
-        groupApplications: notificationCounts.groupApplications,
-        mentions: notificationCounts.mentions,
-        replies: notificationCounts.replies,
+        notices: _dismissedBadges.contains('notices') ? 0 : notificationCounts.notices,
+        friendRequests: _dismissedBadges.contains('friendRequests') ? 0 : notificationCounts.friendRequests,
+        groupApplications: _dismissedBadges.contains('groupApplications') ? 0 : notificationCounts.groupApplications,
+        mentions: _dismissedBadges.contains('mentions') ? 0 : notificationCounts.mentions,
+        replies: _dismissedBadges.contains('replies') ? 0 : notificationCounts.replies,
       );
     }
     notifyListeners();
@@ -370,8 +382,8 @@ class CsacAppState extends ChangeNotifier {
       notices: notificationCounts.notices,
       friendRequests: notificationCounts.friendRequests,
       groupApplications: notificationCounts.groupApplications,
-      mentions: mentions.mentions,
-      replies: mentions.replies,
+      mentions: _dismissedBadges.contains('mentions') ? 0 : mentions.mentions,
+      replies: _dismissedBadges.contains('replies') ? 0 : mentions.replies,
     );
     notifyListeners();
     return notificationCounts;
@@ -393,6 +405,18 @@ class CsacAppState extends ChangeNotifier {
       replies: replies ?? notificationCounts.replies,
     );
     notifyListeners();
+  }
+
+  /// 标记某类通知红点为已消除，后续定时刷新不再恢复
+  void dismissBadges(Set<String> keys) {
+    _dismissedBadges.addAll(keys);
+    unawaited(DismissedBadgeStore.save(_dismissedBadges));
+  }
+
+  /// 清除所有 dismissed 标记，下次刷新恢复服务器数据
+  void restoreAllBadges() {
+    _dismissedBadges.clear();
+    unawaited(DismissedBadgeStore.clear());
   }
 
   Future<void> markConversationUnread(Conversation conversation) async {
@@ -674,6 +698,8 @@ class CsacAppState extends ChangeNotifier {
     } finally {
       await cache.clear();
       await ConversationDraftStore.clearAll();
+      await DismissedBadgeStore.clear();
+      _dismissedBadges.clear();
       user = null;
       conversations = const <Conversation>[];
       notificationCounts = const NotificationCounts();

@@ -9,6 +9,182 @@ class AddFriendScreen extends StatefulWidget {
   State<AddFriendScreen> createState() => _AddFriendScreenState();
 }
 
+class _AddFriendScreenState extends State<AddFriendScreen> {
+  final uid = TextEditingController();
+  final message = TextEditingController(text: '请求添加你为好友');
+  UserProfile? preview;
+  bool sending = false;
+  bool searching = false;
+  String? error;
+
+  @override
+  void dispose() {
+    uid.dispose();
+    message.dispose();
+    super.dispose();
+  }
+
+  Future<void> lookup() async {
+    final target = int.tryParse(uid.text.trim()) ?? 0;
+    if (target <= 0) {
+      setState(() => error = context.strings.text('Enter a valid UID.'));
+      return;
+    }
+    setState(() {
+      searching = true;
+      error = null;
+      preview = null;
+    });
+    try {
+      final loaded = await widget.state.loadUserProfile(target);
+      if (!mounted) {
+        return;
+      }
+      setState(() => preview = loaded);
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => searching = false);
+      }
+    }
+  }
+
+  Future<void> submit() async {
+    final target = int.tryParse(uid.text.trim()) ?? 0;
+    if (target <= 0) {
+      setState(() => error = context.strings.text('Enter a valid UID.'));
+      return;
+    }
+    setState(() {
+      sending = true;
+      error = null;
+    });
+    try {
+      await widget.state.sendFriendRequest(target, message.text);
+      if (!mounted) {
+        return;
+      }
+      _showCupertinoToast(
+        context,
+        context.strings.text('Friend request sent.'),
+      );
+      Navigator.of(context).pop();
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => sending = false);
+      }
+    }
+  }
+
+  Future<void> openPreviewProfile() async {
+    final profile = preview;
+    if (profile == null) {
+      return;
+    }
+    await openUserProfile(context, widget.state, profile.uid);
+    if (mounted) {
+      await lookup();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Add friend')),
+      ),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            _CupertinoFormField(
+              controller: uid,
+              placeholder: strings.text('User UID'),
+              icon: CupertinoIcons.number,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => lookup(),
+            ),
+            const SizedBox(height: 12),
+            CupertinoButton(
+              onPressed: searching ? null : lookup,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (searching)
+                    const CupertinoActivityIndicator(radius: 9)
+                  else
+                    const Icon(CupertinoIcons.search, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.text('Lookup user')),
+                ],
+              ),
+            ),
+            if (preview != null) ...[
+              const SizedBox(height: 12),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
+                children: [
+                  _CupertinoListTile(
+                    onTap: openPreviewProfile,
+                    leading: _Avatar(
+                      url: preview!.avatar,
+                      fallback: CupertinoIcons.person_fill,
+                    ),
+                    title: preview!.displayName,
+                    subtitle: preview!.subtitle.isEmpty
+                        ? 'UID ${preview!.uid}'
+                        : preview!.subtitle,
+                    trailing: const Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: 16,
+                      color: CupertinoColors.systemGrey2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            _CupertinoFormField(
+              controller: message,
+              placeholder: strings.text('Request message'),
+              icon: CupertinoIcons.chat_bubble,
+              maxLines: 3,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              _InlineError(message: error!, onRetry: submit),
+            ],
+            const SizedBox(height: 16),
+            CupertinoButton.filled(
+              onPressed: sending ? null : submit,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (sending)
+                    const CupertinoActivityIndicator(radius: 9)
+                  else
+                    const Icon(CupertinoIcons.paperplane, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.text('Send request')),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key, required this.state});
 
@@ -71,19 +247,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   Future<void> showCreatedGroupDialog(CreatedGroup created) {
     final strings = context.strings;
-    return showDialog<void>(
+    return showCupertinoDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Group created.')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SelectableText(strings.format('Room ID: {id}', {'id': created.id})),
+            const SizedBox(height: 8),
+            Text(strings.format('Room ID: {id}', {'id': created.id})),
             if (created.inviteCode.isNotEmpty) ...[
               const SizedBox(height: 8),
-              SelectableText(
+              Text(
                 strings.format('Invite code: {code}', {
                   'code': created.inviteCode,
                 }),
@@ -92,15 +269,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           ],
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(strings.text('Close')),
           ),
-          TextButton.icon(
+          CupertinoDialogAction(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute<void>(
+                CupertinoPageRoute<void>(
                   builder: (_) => ConversationDetailScreen(
                     state: widget.state,
                     conversation: created.conversation,
@@ -108,14 +285,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 ),
               );
             },
-            icon: const Icon(Icons.info_outline),
-            label: Text(strings.text('Group details')),
+            child: Text(strings.text('Group details')),
           ),
-          FilledButton.icon(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute<void>(
+                CupertinoPageRoute<void>(
                   builder: (_) => ChatScreen(
                     state: widget.state,
                     conversation: created.conversation,
@@ -123,8 +300,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 ),
               );
             },
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: Text(strings.text('Open chat')),
+            child: Text(strings.text('Open chat')),
           ),
         ],
       ),
@@ -134,205 +310,35 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Create group'))),
-      body: SafeArea(
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Create group')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            TextField(
+            _CupertinoFormField(
               controller: roomName,
-              maxLength: 32,
+              placeholder: strings.text('Group name'),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => submit(),
-              decoration: InputDecoration(
-                labelText: strings.text('Group name'),
-                border: const OutlineInputBorder(),
-              ),
             ),
             if (error != null) _InlineError(message: error!, onRetry: submit),
             const SizedBox(height: 12),
-            FilledButton.icon(
+            CupertinoButton.filled(
               onPressed: creating ? null : submit,
-              icon: creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add),
-              label: Text(strings.text('Create group')),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AddFriendScreenState extends State<AddFriendScreen> {
-  final uid = TextEditingController();
-  final message = TextEditingController(text: '请求添加你为好友');
-  UserProfile? preview;
-  bool sending = false;
-  bool searching = false;
-  String? error;
-
-  @override
-  void dispose() {
-    uid.dispose();
-    message.dispose();
-    super.dispose();
-  }
-
-  Future<void> lookup() async {
-    final target = int.tryParse(uid.text.trim()) ?? 0;
-    if (target <= 0) {
-      setState(() => error = context.strings.text('Enter a valid UID.'));
-      return;
-    }
-    setState(() {
-      searching = true;
-      error = null;
-      preview = null;
-    });
-    try {
-      final loaded = await widget.state.loadUserProfile(target);
-      if (!mounted) {
-        return;
-      }
-      setState(() => preview = loaded);
-    } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => searching = false);
-      }
-    }
-  }
-
-  Future<void> submit() async {
-    final target = int.tryParse(uid.text.trim()) ?? 0;
-    if (target <= 0) {
-      setState(() => error = context.strings.text('Enter a valid UID.'));
-      return;
-    }
-    setState(() {
-      sending = true;
-      error = null;
-    });
-    try {
-      await widget.state.sendFriendRequest(target, message.text);
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Friend request sent.'))),
-      );
-      Navigator.of(context).pop();
-    } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => sending = false);
-      }
-    }
-  }
-
-  Future<void> openPreviewProfile() async {
-    final profile = preview;
-    if (profile == null) {
-      return;
-    }
-    await openUserProfile(context, widget.state, profile.uid);
-    if (mounted) {
-      await lookup();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.strings.text('Add friend'))),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            TextField(
-              controller: uid,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => lookup(),
-              decoration: InputDecoration(
-                labelText: context.strings.text('User UID'),
-                prefixIcon: const Icon(Icons.tag),
-                border: const OutlineInputBorder(),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (creating)
+                    const CupertinoActivityIndicator(radius: 9)
+                  else
+                    const Icon(CupertinoIcons.add, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.text('Create group')),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: searching ? null : lookup,
-              icon: searching
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.search),
-              label: Text(context.strings.text('Lookup user')),
-            ),
-            if (preview != null) ...[
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                child: ListTile(
-                  onTap: openPreviewProfile,
-                  leading: _Avatar(
-                    url: preview!.avatar,
-                    fallback: Icons.person_rounded,
-                  ),
-                  title: Text(preview!.displayName),
-                  subtitle: Text(
-                    preview!.subtitle.isEmpty
-                        ? 'UID ${preview!.uid}'
-                        : preview!.subtitle,
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: message,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: context.strings.text('Request message'),
-                prefixIcon: const Icon(Icons.message_outlined),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: sending ? null : submit,
-              icon: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(context.strings.text('Send request')),
             ),
           ],
         ),
@@ -416,8 +422,9 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Join request sent.'))),
+      _showCupertinoToast(
+        context,
+        context.strings.text('Join request sent.'),
       );
       Navigator.of(context).pop();
     } catch (err) {
@@ -456,7 +463,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
   void openGroupDetail(GroupProfile group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => ConversationDetailScreen(
           state: widget.state,
           conversation: Conversation(
@@ -472,134 +479,142 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.strings.text('Join group')),
-        actions: [
-          IconButton(
-            tooltip: context.strings.text('Refresh'),
-            onPressed: loading ? null : loadPublicGroups,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Join group')),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 0),
+          onPressed: loading ? null : loadPublicGroups,
+          child: const Icon(CupertinoIcons.refresh, size: 22),
+        ),
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: loadPublicGroups,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              TextField(
-                controller: roomId,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: context.strings.text('Room ID'),
-                  prefixIcon: const Icon(Icons.tag),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: code,
-                decoration: InputDecoration(
-                  labelText: context.strings.text('Invite code'),
-                  prefixIcon: const Icon(Icons.key_outlined),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: answer,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: context.strings.text('Answer'),
-                  prefixIcon: const Icon(Icons.question_answer_outlined),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: sending ? null : submit,
-                icon: sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.group_add),
-                label: Text(context.strings.text('Apply to join')),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                context.strings.text('Public groups'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: search,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: context.strings.text('Search public groups'),
-                  prefixIcon: const Icon(Icons.search),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (loading)
-                const LinearProgressIndicator(minHeight: 2)
-              else if (filteredPublicGroups().isEmpty)
-                _EmptyPanel(message: context.strings.text('No public groups.'))
-              else
-                for (final group in filteredPublicGroups())
-                  Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.symmetric(vertical: 5),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.secondaryContainer,
-                        child: Icon(
-                          Icons.groups_rounded,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSecondaryContainer,
-                        ),
-                      ),
-                      title: Text(group.name),
-                      subtitle: Text(
-                        [
-                          context.strings.format('Room {id}', {'id': group.id}),
-                          group.subtitle,
-                          group.description,
-                        ].where((part) => part.isNotEmpty).join(' | '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: TextButton(
-                        onPressed: sending
-                            ? null
-                            : () {
-                                useGroup(group);
-                                submit(groupId: group.id);
-                              },
-                        child: Text(context.strings.text('Join')),
-                      ),
-                      onTap: () => useGroup(group),
-                      onLongPress: () => openGroupDetail(group),
+      child: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            CupertinoSliverRefreshControl(onRefresh: loadPublicGroups),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  _CupertinoFormField(
+                    controller: roomId,
+                    placeholder: strings.text('Room ID'),
+                    icon: CupertinoIcons.number,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  _CupertinoFormField(
+                    controller: code,
+                    placeholder: strings.text('Invite code'),
+                    icon: CupertinoIcons.lock,
+                  ),
+                  const SizedBox(height: 12),
+                  _CupertinoFormField(
+                    controller: answer,
+                    placeholder: strings.text('Answer'),
+                    icon: CupertinoIcons.question_circle,
+                    maxLines: 2,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    _InlineError(message: error!, onRetry: submit),
+                  ],
+                  const SizedBox(height: 16),
+                  CupertinoButton.filled(
+                    onPressed: sending ? null : submit,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (sending)
+                          const CupertinoActivityIndicator(radius: 9)
+                        else
+                          const Icon(CupertinoIcons.group_solid, size: 18),
+                        const SizedBox(width: 8),
+                        Text(strings.text('Apply to join')),
+                      ],
                     ),
                   ),
-            ],
-          ),
+                  const SizedBox(height: 20),
+                  Text(
+                    strings.text('Public groups'),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: colors.label,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  CupertinoSearchTextField(
+                    controller: search,
+                    onChanged: (_) => setState(() {}),
+                    placeholder: strings.text('Search public groups'),
+                  ),
+                  const SizedBox(height: 8),
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: CupertinoActivityIndicator(),
+                    )
+                  else if (filteredPublicGroups().isEmpty)
+                    _EmptyPanel(
+                      message: strings.text('No public groups.'),
+                    )
+                  else
+                    _CupertinoGroupedCard(
+                      margin: EdgeInsets.zero,
+                      children: [
+                        for (final group in filteredPublicGroups())
+                          GestureDetector(
+                            onLongPress: () => openGroupDetail(group),
+                            child: _CupertinoListTile(
+                              leading: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: colors.cardBackground,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.group_solid,
+                                  size: 18,
+                                ),
+                              ),
+                              title: group.name,
+                              subtitle: [
+                                strings.format(
+                                  'Room {id}',
+                                  {'id': group.id},
+                                ),
+                                group.subtitle,
+                                group.description,
+                              ]
+                                  .where((part) => part.isNotEmpty)
+                                  .join(' | '),
+                              trailing: CupertinoButton(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                minimumSize: const Size(0, 0),
+                                onPressed: sending
+                                    ? null
+                                    : () {
+                                        useGroup(group);
+                                        submit(groupId: group.id);
+                                      },
+                                child: Text(strings.text('Join')),
+                              ),
+                              onTap: () => useGroup(group),
+                            ),
+                          ),
+                      ],
+                    ),
+                ]),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -688,7 +703,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 
   Future<void> openResult(MessageSearchResult result) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: result.conversation,
@@ -705,29 +720,19 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: TextField(
+          child: CupertinoSearchTextField(
             controller: search,
             onChanged: (_) => scheduleSearch(),
             autofocus: true,
-            decoration: InputDecoration(
-              hintText: strings.text('Search cached messages'),
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: search.text.trim().isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: strings.text('Clear'),
-                      onPressed: () {
-                        search.clear();
-                        runSearch();
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-              border: const OutlineInputBorder(),
-            ),
+            placeholder: strings.text('Search cached messages'),
+            onSuffixTap: () {
+              search.clear();
+              runSearch();
+            },
           ),
         ),
         SizedBox(
-          height: 46,
+          height: 38,
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             scrollDirection: Axis.horizontal,
@@ -760,16 +765,40 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
             ],
           ),
         ),
-        if (loading) const LinearProgressIndicator(minHeight: 2),
+        if (loading)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: CupertinoActivityIndicator(radius: 10),
+          ),
         if (error != null)
-          MaterialBanner(
-            content: Text(error!),
-            actions: [
-              TextButton(
-                onPressed: () => setState(() => error = null),
-                child: Text(strings.text('Dismiss')),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-            ],
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      error!,
+                      style: const TextStyle(
+                        color: CupertinoColors.systemRed,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    onPressed: () => setState(() => error = null),
+                    child: Text(strings.text('Dismiss')),
+                  ),
+                ],
+              ),
+            ),
           ),
         Expanded(
           child: results.isEmpty
@@ -795,11 +824,14 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
         ),
       ],
     );
-    return Scaffold(
-      appBar: widget.embedded
-          ? null
-          : AppBar(title: Text(strings.text('Search messages'))),
-      body: SafeArea(top: widget.embedded, child: body),
+    if (widget.embedded) {
+      return SafeArea(top: true, child: body);
+    }
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Search messages')),
+      ),
+      child: SafeArea(child: body),
     );
   }
 }
@@ -817,12 +849,32 @@ class _ScopeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onSelected(),
+      child: GestureDetector(
+        onTap: onSelected,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? CupertinoTheme.of(context).primaryColor
+                : colors.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              height: 1.0,
+              color: selected
+                  ? CupertinoColors.white
+                  : colors.label,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -838,45 +890,90 @@ class _SearchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isGroup = result.conversation.type == ConversationType.group;
     final message = result.message;
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      child: ListTile(
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
         onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: isGroup
-              ? colors.secondaryContainer
-              : colors.primaryContainer,
-          child: Icon(
-            isGroup ? Icons.groups_rounded : Icons.person_rounded,
-            color: isGroup
-                ? colors.onSecondaryContainer
-                : colors.onPrimaryContainer,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isGroup
+                      ? CupertinoColors.systemTeal.withValues(alpha: 0.15)
+                      : CupertinoColors.systemBlue.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(19),
+                ),
+                child: Icon(
+                  isGroup
+                      ? CupertinoIcons.group_solid
+                      : CupertinoIcons.person_fill,
+                  size: 18,
+                  color: isGroup
+                      ? CupertinoColors.systemTeal
+                      : CupertinoColors.systemBlue,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.conversation.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${message.sender}${message.time.isEmpty ? '' : ' · ${message.time}'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryLabel,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      result.snippet,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.secondaryLabel,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                message.imageUrl.isNotEmpty
+                    ? CupertinoIcons.photo
+                    : message.isEssence
+                        ? CupertinoIcons.star
+                        : CupertinoIcons.chevron_forward,
+                size: 16,
+                color: CupertinoColors.systemGrey2,
+              ),
+            ],
           ),
         ),
-        title: Text(
-          result.conversation.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${message.sender}${message.time.isEmpty ? '' : ' · ${message.time}'}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(result.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-        trailing: message.imageUrl.isNotEmpty
-            ? const Icon(Icons.image_outlined)
-            : message.isEssence
-            ? const Icon(Icons.star_outline)
-            : const Icon(Icons.chevron_right),
       ),
     );
   }

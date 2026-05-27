@@ -80,18 +80,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.text(success))));
+      _showCupertinoToast(context, context.strings.text(success));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.strings.format('Action failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          context.strings.format('Action failed: {error}', {'error': err}),
         );
       }
     } finally {
@@ -104,24 +99,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> addFriend(UserProfile target) async {
     final controller = TextEditingController(text: '请求添加你为好友');
     final strings = context.strings;
-    final message = await showDialog<String>(
+    final message = await showCupertinoDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.format('Add {name}', {'name': target.displayName})),
-        content: TextField(
-          controller: controller,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: strings.text('Request message'),
-            border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            maxLines: 3,
+            placeholder: strings.text('Request message'),
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(null),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: Text(strings.text('Send')),
           ),
@@ -141,23 +137,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> editRemark(UserProfile target) async {
     final controller = TextEditingController(text: target.remark);
     final strings = context.strings;
-    final remark = await showDialog<String>(
+    final remark = await showCupertinoDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Edit remark')),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: strings.text('Remark'),
-            border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            placeholder: strings.text('Remark'),
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(null),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: Text(strings.text('Save')),
           ),
@@ -175,25 +172,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<bool> confirm(String title, String message, String action) async {
-    final strings = context.strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.text(action)),
-          ),
-        ],
-      ),
+    return _showCupertinoConfirm(
+      context,
+      title: title,
+      message: message,
+      confirmText: context.strings.text(action),
+      isDestructive: true,
     );
-    return confirmed == true;
   }
 
   Future<void> deleteFriend(UserProfile target) async {
@@ -264,18 +249,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void copyValue(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.strings.format('{label} copied.', {'label': label}),
-        ),
-      ),
+    _showCupertinoToast(
+      context,
+      context.strings.format('{label} copied.', {'label': label}),
     );
   }
 
   void openPrivateChat(UserProfile target) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -291,7 +273,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void openCommonGroup(CommonGroup group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -309,14 +291,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (value.trim().isEmpty) {
       return const SizedBox.shrink();
     }
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: SelectableText(value),
-      trailing: IconButton(
-        tooltip: context.strings.text('Copy'),
-        onPressed: () => copyValue(title, value),
-        icon: const Icon(Icons.copy),
+    final colors = CsacColors.of(context);
+    return _CupertinoListTile(
+      leading: Icon(icon, size: 20, color: colors.secondaryLabel),
+      title: title,
+      subtitle: value,
+      trailing: GestureDetector(
+        onTap: () => copyValue(title, value),
+        child: Icon(
+          CupertinoIcons.doc_on_doc,
+          size: 18,
+          color: colors.tertiaryLabel,
+        ),
       ),
     );
   }
@@ -327,12 +313,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     required VoidCallback? onTap,
     Color? color,
   }) {
-    return ListTile(
-      enabled: onTap != null && !acting,
-      leading: Icon(icon, color: color),
-      title: Text(title, style: color == null ? null : TextStyle(color: color)),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap == null || acting ? null : onTap,
+    final enabled = onTap != null && !acting;
+    final colors = CsacColors.of(context);
+    return _CupertinoListTile(
+      leading: Icon(
+        icon,
+        size: 20,
+        color: enabled ? (color ?? colors.label) : colors.tertiaryLabel,
+      ),
+      title: title,
+      titleColor: enabled ? color : colors.tertiaryLabel,
+      onTap: enabled ? onTap : null,
     );
   }
 
@@ -351,225 +342,268 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = Theme.of(context).colorScheme;
+    final colors = CsacColors.of(context);
     final loaded = profile;
     final member = widget.member;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(strings.text('User profile')),
-        actions: [
-          IconButton(
-            tooltip: strings.text('Refresh'),
-            onPressed: loading ? null : load,
-            icon: const Icon(Icons.refresh),
+
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(border: null, backgroundColor: CsacColors.of(context).navBarBackground,
+        middle: Text(strings.text('User profile')),
+        trailing: GestureDetector(
+          onTap: loading ? null : load,
+          child: Icon(
+            CupertinoIcons.refresh,
+            size: 22,
+            color: loading
+                ? colors.tertiaryLabel
+                : CupertinoTheme.of(context).primaryColor,
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
+      child: SafeArea(
         child: loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CupertinoActivityIndicator())
             : error != null
-            ? _InlineError(message: error!, onRetry: load)
-            : loaded == null
-            ? _EmptyPanel(message: strings.text('User not found.'))
-            : RefreshIndicator(
-                onRefresh: load,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: _Avatar(
-                        url: loaded.avatar,
-                        fallback: Icons.person_rounded,
-                      ),
-                      title: Text(loaded.displayName),
-                      subtitle: Text(
-                        loaded.subtitle.isEmpty
-                            ? 'UID ${loaded.uid}'
-                            : loaded.subtitle,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 0,
-                      child: Column(
-                        children: [
-                          infoRow(
-                            Icons.tag,
-                            strings.text('UID'),
-                            '${loaded.uid}',
-                          ),
-                          infoRow(
-                            Icons.badge_outlined,
-                            strings.text('Username'),
-                            loaded.username,
-                          ),
-                          infoRow(
-                            Icons.person_outline,
-                            strings.text('Nickname'),
-                            loaded.nickname,
-                          ),
-                          infoRow(
-                            Icons.edit_note,
-                            strings.text('Remark'),
-                            loaded.remark,
-                          ),
-                          infoRow(
-                            Icons.circle_outlined,
-                            strings.text('Online'),
-                            loaded.onlineStatus,
-                          ),
-                          if (member != null)
-                            infoRow(
-                              Icons.admin_panel_settings_outlined,
-                              strings.text('Group role'),
-                              member.roleLabel,
+                ? _InlineError(message: error!, onRetry: load)
+                : loaded == null
+                    ? _EmptyPanel(message: strings.text('User not found.'))
+                    : CustomScrollView(
+                        slivers: [
+                          CupertinoSliverRefreshControl(onRefresh: load),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Header
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _Avatar(
+                                          url: loaded.avatar,
+                                          fallback: CupertinoIcons.person_solid,
+                                          size: 56,
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                loaded.displayName,
+                                                style: const TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                loaded.subtitle.isEmpty
+                                                    ? 'UID ${loaded.uid}'
+                                                    : loaded.subtitle,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: colors.secondaryLabel,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // Info section
+                                  _CupertinoGroupedCard(
+                                    children: [
+                                      infoRow(
+                                        CupertinoIcons.number,
+                                        strings.text('UID'),
+                                        '${loaded.uid}',
+                                      ),
+                                      infoRow(
+                                        CupertinoIcons.at,
+                                        strings.text('Username'),
+                                        loaded.username,
+                                      ),
+                                      infoRow(
+                                        CupertinoIcons.person,
+                                        strings.text('Nickname'),
+                                        loaded.nickname,
+                                      ),
+                                      infoRow(
+                                        CupertinoIcons.pencil,
+                                        strings.text('Remark'),
+                                        loaded.remark,
+                                      ),
+                                      infoRow(
+                                        CupertinoIcons.circle,
+                                        strings.text('Online'),
+                                        loaded.onlineStatus,
+                                      ),
+                                      if (member != null)
+                                        infoRow(
+                                          CupertinoIcons.shield,
+                                          strings.text('Group role'),
+                                          member.roleLabel,
+                                        ),
+                                    ].where((w) => w is! SizedBox).toList(),
+                                  ),
+
+                                  // Actions section
+                                  if (!isSelf) ...[
+                                    const SizedBox(height: 6),
+                                    _CupertinoGroupedCard(
+                                      children: [
+                                        if (loaded.isFriend)
+                                          actionTile(
+                                            icon: CupertinoIcons.chat_bubble,
+                                            title: strings.text('Open private chat'),
+                                            onTap: () => openPrivateChat(loaded),
+                                          ),
+                                        if (loaded.isFriend)
+                                          actionTile(
+                                            icon: CupertinoIcons.pencil,
+                                            title: strings.text('Edit remark'),
+                                            onTap: () => editRemark(loaded),
+                                          ),
+                                        if (!loaded.isFriend && loaded.canAddFriend)
+                                          actionTile(
+                                            icon: CupertinoIcons.person_add,
+                                            title: strings.text('Add friend'),
+                                            onTap: () => addFriend(loaded),
+                                          ),
+                                        if (!loaded.isFriend && !loaded.canAddFriend)
+                                          actionTile(
+                                            icon: CupertinoIcons.person_add,
+                                            title: strings.text('Cannot add friend'),
+                                            onTap: null,
+                                          ),
+                                        if (!loaded.isFriend && !loaded.canAddFriend)
+                                          actionTile(
+                                            icon: CupertinoIcons.arrow_counterclockwise,
+                                            title: strings.text('Recover friend'),
+                                            onTap: () => recoverFriend(loaded),
+                                          ),
+                                        actionTile(
+                                          icon: CupertinoIcons.person_badge_minus,
+                                          title: strings.text('Delete friend'),
+                                          color: CupertinoColors.destructiveRed,
+                                          onTap: loaded.isFriend
+                                              ? () => deleteFriend(loaded)
+                                              : null,
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.nosign,
+                                          title: strings.text('Block friend'),
+                                          color: CupertinoColors.destructiveRed,
+                                          onTap: loaded.isFriend
+                                              ? () => blockFriend(loaded)
+                                              : null,
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.flag,
+                                          title: strings.text('Report user'),
+                                          color: CupertinoColors.destructiveRed,
+                                          onTap: () => reportUser(loaded),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+
+                                  // Group member actions
+                                  if (canManageMember) ...[
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16, 20, 16, 6,
+                                      ),
+                                      child: Text(
+                                        strings.text('Group member actions'),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: colors.secondaryLabel,
+                                        ),
+                                      ),
+                                    ),
+                                    _CupertinoGroupedCard(
+                                      children: [
+                                        actionTile(
+                                          icon: CupertinoIcons.speaker_slash,
+                                          title: strings.text('Mute 10 minutes'),
+                                          onTap: () => memberAction('mute10'),
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.speaker_2,
+                                          title: strings.text('Unmute'),
+                                          onTap: () => memberAction('unmute'),
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.shield,
+                                          title: strings.text('Set admin'),
+                                          onTap: () => memberAction('admin'),
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.shield_slash,
+                                          title: strings.text('Remove admin'),
+                                          onTap: () => memberAction('removeAdmin'),
+                                        ),
+                                        actionTile(
+                                          icon: CupertinoIcons.person_badge_minus,
+                                          title: strings.text('Kick member'),
+                                          color: CupertinoColors.destructiveRed,
+                                          onTap: () => memberAction('kick'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+
+                                  // Common groups
+                                  if (commonGroups.isNotEmpty) ...[
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16, 20, 16, 6,
+                                      ),
+                                      child: Text(
+                                        strings.text('Common groups'),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: colors.secondaryLabel,
+                                        ),
+                                      ),
+                                    ),
+                                    _CupertinoGroupedCard(
+                                      children: [
+                                        for (final group in commonGroups)
+                                          _CupertinoListTile(
+                                            leading: Icon(
+                                              CupertinoIcons.group,
+                                              size: 20,
+                                              color: colors.secondaryLabel,
+                                            ),
+                                            title: group.name,
+                                            subtitle: group.subtitle.isEmpty
+                                                ? null
+                                                : group.subtitle,
+                                            onTap: () => openCommonGroup(group),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
+                          ),
                         ],
                       ),
-                    ),
-                    if (!isSelf) ...[
-                      const SizedBox(height: 12),
-                      Card(
-                        elevation: 0,
-                        child: Column(
-                          children: [
-                            if (loaded.isFriend)
-                              actionTile(
-                                icon: Icons.chat_bubble_outline,
-                                title: strings.text('Open private chat'),
-                                onTap: () => openPrivateChat(loaded),
-                              ),
-                            if (loaded.isFriend) const Divider(height: 1),
-                            if (loaded.isFriend)
-                              actionTile(
-                                icon: Icons.edit_note,
-                                title: strings.text('Edit remark'),
-                                onTap: () => editRemark(loaded),
-                              ),
-                            if (loaded.isFriend) const Divider(height: 1),
-                            if (!loaded.isFriend && loaded.canAddFriend)
-                              actionTile(
-                                icon: Icons.person_add_alt,
-                                title: strings.text('Add friend'),
-                                onTap: () => addFriend(loaded),
-                              ),
-                            if (!loaded.isFriend && !loaded.canAddFriend)
-                              actionTile(
-                                icon: Icons.person_add_disabled_outlined,
-                                title: strings.text('Cannot add friend'),
-                                onTap: null,
-                              ),
-                            if (!loaded.isFriend) const Divider(height: 1),
-                            if (!loaded.isFriend && !loaded.canAddFriend)
-                              actionTile(
-                                icon: Icons.restore,
-                                title: strings.text('Recover friend'),
-                                onTap: () => recoverFriend(loaded),
-                              ),
-                            if (!loaded.isFriend && !loaded.canAddFriend)
-                              const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.person_remove_outlined,
-                              title: strings.text('Delete friend'),
-                              color: colors.error,
-                              onTap: loaded.isFriend
-                                  ? () => deleteFriend(loaded)
-                                  : null,
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.block,
-                              title: strings.text('Block friend'),
-                              color: colors.error,
-                              onTap: loaded.isFriend
-                                  ? () => blockFriend(loaded)
-                                  : null,
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.flag_outlined,
-                              title: strings.text('Report user'),
-                              color: colors.error,
-                              onTap: () => reportUser(loaded),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (canManageMember) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        strings.text('Group member actions'),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Card(
-                        elevation: 0,
-                        child: Column(
-                          children: [
-                            actionTile(
-                              icon: Icons.volume_off_outlined,
-                              title: strings.text('Mute 10 minutes'),
-                              onTap: () => memberAction('mute10'),
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.volume_up_outlined,
-                              title: strings.text('Unmute'),
-                              onTap: () => memberAction('unmute'),
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.admin_panel_settings_outlined,
-                              title: strings.text('Set admin'),
-                              onTap: () => memberAction('admin'),
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.remove_moderator_outlined,
-                              title: strings.text('Remove admin'),
-                              onTap: () => memberAction('removeAdmin'),
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.person_remove_outlined,
-                              title: strings.text('Kick member'),
-                              color: colors.error,
-                              onTap: () => memberAction('kick'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (commonGroups.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        strings.text('Common groups'),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      for (final group in commonGroups)
-                        Card(
-                          elevation: 0,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            leading: const Icon(Icons.groups_outlined),
-                            title: Text(group.name),
-                            subtitle: group.subtitle.isEmpty
-                                ? null
-                                : Text(group.subtitle),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => openCommonGroup(group),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
-              ),
       ),
     );
   }

@@ -1,50 +1,5 @@
 part of '../../main.dart';
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.url, required this.fallback});
-
-  final String url;
-  final IconData fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    if (url.isEmpty) {
-      return CircleAvatar(child: Icon(fallback));
-    }
-    return CircleAvatar(backgroundImage: NetworkImage(url));
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.pending});
-
-  final bool pending;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(context.strings.text(pending ? 'Pending' : 'Handled')),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-}
-
-class _RoundedInkClip extends StatelessWidget {
-  const _RoundedInkClip({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      clipBehavior: Clip.antiAlias,
-      borderRadius: BorderRadius.circular(12),
-      child: child,
-    );
-  }
-}
-
 Future<void> showReportDialog({
   required BuildContext context,
   required CsacAppState state,
@@ -61,106 +16,94 @@ Future<void> showReportDialog({
   final reason = TextEditingController();
   var anonymous = true;
   var submitting = false;
-  final submitted = await showDialog<bool>(
+  final submitted = await showCupertinoDialog<bool>(
     context: context,
-    barrierDismissible: false,
     builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: reason,
-              minLines: 3,
-              maxLines: 5,
-              maxLength: 300,
-              decoration: InputDecoration(
-                labelText: strings.text('Report reason'),
-                helperText: strings.text('At least 10 characters'),
-                border: const OutlineInputBorder(),
+      builder: (context, setState) {
+        final colors = CsacColors.of(context);
+        return CupertinoAlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: reason,
+                minLines: 3,
+                maxLines: 5,
+                maxLength: 300,
+                placeholder: strings.text('Report reason'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.tertiaryBackground,
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                strings.text('At least 10 characters'),
+                style: TextStyle(fontSize: 12, color: colors.secondaryLabel),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    strings.text('Submit anonymously'),
+                    style: TextStyle(fontSize: 14, color: colors.label),
+                  ),
+                  CupertinoSwitch(
+                    value: anonymous,
+                    onChanged: submitting
+                        ? null
+                        : (value) => setState(() => anonymous = value),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: submitting ? null : () => Navigator.of(context).pop(),
+              child: Text(strings.text('Cancel')),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: anonymous,
-              title: Text(strings.text('Submit anonymously')),
-              onChanged: submitting
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: submitting
                   ? null
-                  : (value) => setState(() => anonymous = value),
+                  : () async {
+                      final text = reason.text.trim();
+                      if (text.length < 10) {
+                        _showCupertinoToast(context, strings.text('Report reason must be at least 10 characters.'));
+                        return;
+                      }
+                      setState(() => submitting = true);
+                      try {
+                        await state.client.submitReport(
+                          type: type, reason: text, anonymous: anonymous,
+                          uid: uid, rid: rid, messageId: messageId,
+                          nickname: nickname, username: username, roomName: roomName,
+                        );
+                        if (context.mounted) Navigator.of(context).pop(true);
+                      } catch (err) {
+                        if (context.mounted) {
+                          setState(() => submitting = false);
+                          _showCupertinoToast(context, strings.format('Submit failed: {error}', {'error': err}));
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const CupertinoActivityIndicator()
+                  : Text(strings.text('Submit')),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: submitting ? null : () => Navigator.of(context).pop(),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: submitting
-                ? null
-                : () async {
-                    final text = reason.text.trim();
-                    if (text.length < 10) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            strings.text(
-                              'Report reason must be at least 10 characters.',
-                            ),
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => submitting = true);
-                    try {
-                      await state.client.submitReport(
-                        type: type,
-                        reason: text,
-                        anonymous: anonymous,
-                        uid: uid,
-                        rid: rid,
-                        messageId: messageId,
-                        nickname: nickname,
-                        username: username,
-                        roomName: roomName,
-                      );
-                      if (context.mounted) {
-                        Navigator.of(context).pop(true);
-                      }
-                    } catch (err) {
-                      if (context.mounted) {
-                        setState(() => submitting = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              strings.format('Submit failed: {error}', {
-                                'error': err,
-                              }),
-                            ),
-                          ),
-                        );
-                      }
-                    }
-                  },
-            child: submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(strings.text('Submit')),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
   reason.dispose();
   if (submitted == true && context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(strings.text('Report submitted.'))));
+    _showCupertinoToast(context, strings.text('Report submitted.'));
   }
 }
 
@@ -169,102 +112,85 @@ Future<void> showBugReportDialog({
   required CsacAppState state,
 }) async {
   final strings = context.strings;
-  final title = TextEditingController();
-  final description = TextEditingController();
+  final titleCtrl = TextEditingController();
+  final descCtrl = TextEditingController();
   var submitting = false;
-  final submitted = await showDialog<bool>(
+  final submitted = await showCupertinoDialog<bool>(
     context: context,
-    barrierDismissible: false,
     builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(strings.text('Feedback Bug')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              maxLength: 60,
-              decoration: InputDecoration(
-                labelText: strings.text('Title'),
-                border: const OutlineInputBorder(),
+      builder: (context, setState) {
+        final colors = CsacColors.of(context);
+        return CupertinoAlertDialog(
+          title: Text(strings.text('Feedback Bug')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: titleCtrl,
+                maxLength: 60,
+                placeholder: strings.text('Title'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.tertiaryBackground,
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: descCtrl,
+                minLines: 4,
+                maxLines: 6,
+                maxLength: 500,
+                placeholder: strings.text('Detailed description'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.tertiaryBackground,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: submitting ? null : () => Navigator.of(context).pop(),
+              child: Text(strings.text('Cancel')),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: description,
-              minLines: 4,
-              maxLines: 6,
-              maxLength: 500,
-              decoration: InputDecoration(
-                labelText: strings.text('Detailed description'),
-                border: const OutlineInputBorder(),
-              ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final t = titleCtrl.text.trim();
+                      final d = descCtrl.text.trim();
+                      if (t.isEmpty || d.isEmpty) {
+                        _showCupertinoToast(context, strings.text('Please fill all feedback fields.'));
+                        return;
+                      }
+                      setState(() => submitting = true);
+                      try {
+                        await state.client.submitBugReport(title: t, description: d);
+                        if (context.mounted) Navigator.of(context).pop(true);
+                      } catch (err) {
+                        if (context.mounted) {
+                          setState(() => submitting = false);
+                          _showCupertinoToast(context, strings.format('Submit failed: {error}', {'error': err}));
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const CupertinoActivityIndicator()
+                  : Text(strings.text('Submit')),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: submitting ? null : () => Navigator.of(context).pop(),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: submitting
-                ? null
-                : () async {
-                    final titleText = title.text.trim();
-                    final descriptionText = description.text.trim();
-                    if (titleText.isEmpty || descriptionText.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            strings.text('Please fill all feedback fields.'),
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => submitting = true);
-                    try {
-                      await state.client.submitBugReport(
-                        title: titleText,
-                        description: descriptionText,
-                      );
-                      if (context.mounted) {
-                        Navigator.of(context).pop(true);
-                      }
-                    } catch (err) {
-                      if (context.mounted) {
-                        setState(() => submitting = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              strings.format('Submit failed: {error}', {
-                                'error': err,
-                              }),
-                            ),
-                          ),
-                        );
-                      }
-                    }
-                  },
-            child: submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(strings.text('Submit')),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
-  title.dispose();
-  description.dispose();
+  titleCtrl.dispose();
+  descCtrl.dispose();
   if (submitted == true && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(strings.text('Feedback submitted.'))),
-    );
+    _showCupertinoToast(context, strings.text('Feedback submitted.'));
   }
 }
 
@@ -276,7 +202,7 @@ Future<void> openUserProfile(
   GroupMember? member,
 }) {
   return Navigator.of(context).push(
-    MaterialPageRoute<void>(
+    CupertinoPageRoute<void>(
       builder: (_) => UserProfileScreen(
         state: state,
         uid: uid,
@@ -285,24 +211,4 @@ Future<void> openUserProfile(
       ),
     ),
   );
-}
-
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialBanner(
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: onRetry,
-          child: Text(context.strings.text('Retry')),
-        ),
-      ],
-    );
-  }
 }

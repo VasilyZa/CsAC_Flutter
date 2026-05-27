@@ -110,26 +110,27 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> addFriend(UserProfile profile) async {
     final controller = TextEditingController(text: '请求添加你为好友');
     final strings = context.strings;
-    final message = await showDialog<String>(
+    final message = await showCupertinoDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(
           strings.format('Add {name}', {'name': profile.displayName}),
         ),
-        content: TextField(
-          controller: controller,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: strings.text('Request message'),
-            border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            maxLines: 3,
+            placeholder: strings.text('Request message'),
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(null),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: Text(strings.text('Send')),
           ),
@@ -145,17 +146,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Friend request sent.'))),
-      );
+      _showCupertinoToast(context, strings.text('Friend request sent.'));
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Request failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Request failed: {error}', {'error': err}),
         );
       }
     }
@@ -165,44 +161,42 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final code = TextEditingController(text: profile.code);
     final answer = TextEditingController();
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.format('Join {name}', {'name': profile.name})),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (profile.question.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(profile.question),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(profile.question),
+                ),
               ),
-              const SizedBox(height: 12),
             ],
-            TextField(
+            const SizedBox(height: 12),
+            CupertinoTextField(
               controller: code,
-              decoration: InputDecoration(
-                labelText: strings.text('Invite code'),
-                border: const OutlineInputBorder(),
-              ),
+              placeholder: strings.text('Invite code'),
             ),
             const SizedBox(height: 12),
-            TextField(
+            CupertinoTextField(
               controller: answer,
               maxLines: 2,
-              decoration: InputDecoration(
-                labelText: strings.text('Answer'),
-                border: const OutlineInputBorder(),
-              ),
+              placeholder: strings.text('Answer'),
             ),
           ],
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(strings.text('Apply')),
           ),
@@ -225,18 +219,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Join request sent.'))),
-      );
+      _showCupertinoToast(context, strings.text('Join request sent.'));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Join failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Join failed: {error}', {'error': err}),
         );
       }
     }
@@ -245,23 +234,24 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> editRemark(UserProfile profile) async {
     final controller = TextEditingController(text: profile.remark);
     final strings = context.strings;
-    final remark = await showDialog<String>(
+    final remark = await showCupertinoDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Edit remark')),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: strings.text('Remark'),
-            border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            placeholder: strings.text('Remark'),
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(null),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: Text(strings.text('Save')),
           ),
@@ -277,18 +267,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Remark updated.'))));
+      _showCupertinoToast(context, strings.text('Remark updated.'));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Update failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Update failed: {error}', {'error': err}),
         );
       }
     }
@@ -296,28 +281,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> deleteFriend(UserProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          strings.format('Delete {name}?', {'name': profile.displayName}),
-        ),
-        content: Text(
-          strings.text('This friend will be removed from your list.'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.text('Delete')),
-          ),
-        ],
-      ),
+    final confirmed = await _showCupertinoConfirm(
+      context,
+      title: strings.format('Delete {name}?', {'name': profile.displayName}),
+      message: strings.text('This friend will be removed from your list.'),
+      confirmText: 'Delete',
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     try {
@@ -325,18 +296,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Friend deleted.'))));
+      _showCupertinoToast(context, strings.text('Friend deleted.'));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Delete failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Delete failed: {error}', {'error': err}),
         );
       }
     }
@@ -344,26 +310,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> blockFriend(UserProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          strings.format('Block {name}?', {'name': profile.displayName}),
-        ),
-        content: Text(strings.text('This friend will be blocked.')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.text('Block')),
-          ),
-        ],
-      ),
+    final confirmed = await _showCupertinoConfirm(
+      context,
+      title: strings.format('Block {name}?', {'name': profile.displayName}),
+      message: strings.text('This friend will be blocked.'),
+      confirmText: 'Block',
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     try {
@@ -371,18 +325,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Friend blocked.'))));
+      _showCupertinoToast(context, strings.text('Friend blocked.'));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Block failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Block failed: {error}', {'error': err}),
         );
       }
     }
@@ -390,26 +339,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> leaveGroup(GroupProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(strings.format('Leave {name}?', {'name': profile.name})),
-        content: Text(
-          strings.text('This group will be removed from your chats.'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.text('Leave')),
-          ),
-        ],
-      ),
+    final confirmed = await _showCupertinoConfirm(
+      context,
+      title: strings.format('Leave {name}?', {'name': profile.name}),
+      message: strings.text('This group will be removed from your chats.'),
+      confirmText: 'Leave',
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     try {
@@ -417,18 +354,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Left group.'))));
+      _showCupertinoToast(context, strings.text('Left group.'));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Leave failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Leave failed: {error}', {'error': err}),
         );
       }
     }
@@ -461,64 +393,50 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         return;
       }
       final strings = context.strings;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Member action completed.'))),
-      );
+      _showCupertinoToast(context, strings.text('Member action completed.'));
       await load();
     } catch (err) {
       if (mounted) {
         final strings = context.strings;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              strings.format('Action failed: {error}', {'error': err}),
-            ),
-          ),
+        _showCupertinoToast(
+          context,
+          strings.format('Action failed: {error}', {'error': err}),
         );
       }
     }
   }
 
   Future<void> showMemberActions(GroupMember member) async {
-    final action = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.volume_off_outlined),
-              title: Text(context.strings.text('Mute 10 minutes')),
-              onTap: () => Navigator.of(context).pop('mute10'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.volume_up_outlined),
-              title: Text(context.strings.text('Unmute')),
-              onTap: () => Navigator.of(context).pop('unmute'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: Text(context.strings.text('Set admin')),
-              onTap: () => Navigator.of(context).pop('admin'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.remove_moderator_outlined),
-              title: Text(context.strings.text('Remove admin')),
-              onTap: () => Navigator.of(context).pop('removeAdmin'),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.person_remove_outlined,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(
-                context.strings.text('Kick member'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () => Navigator.of(context).pop('kick'),
-            ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('mute10'),
+            child: Text(strings.text('Mute 10 minutes')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('unmute'),
+            child: Text(strings.text('Unmute')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('admin'),
+            child: Text(strings.text('Set admin')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('removeAdmin'),
+            child: Text(strings.text('Remove admin')),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop('kick'),
+            child: Text(strings.text('Kick member')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -529,7 +447,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> openGroupManagement(GroupProfile profile) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => GroupManagementScreen(
           state: widget.state,
           group: profile,
@@ -546,185 +464,263 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   void copyText(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.strings.format('{label} copied.', {'label': label}),
-        ),
-      ),
-    );
-  }
-
-  Widget infoRow(IconData icon, String title, String value) {
-    if (value.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: SelectableText(value),
-    );
-  }
-
-  Widget buildUserProfile(UserProfile profile) {
-    return UserProfileScreen(
-      state: widget.state,
-      uid: profile.uid,
-      key: ValueKey(profile.uid),
+    _showCupertinoToast(
+      context,
+      context.strings.format('{label} copied.', {'label': label}),
     );
   }
 
   Widget buildGroupProfile(GroupProfile profile) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     final canManageGroup = canManageCurrentGroup;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-              child: Icon(
-                Icons.groups_rounded,
-                color: Theme.of(context).colorScheme.onSecondaryContainer,
-              ),
-            ),
-            title: Text(profile.name),
-            subtitle: Text(
-              profile.subtitle.isEmpty
-                  ? strings.format('Room {id}', {'id': profile.id})
-                  : profile.subtitle,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.tag),
-                  title: Text(strings.text('Room ID')),
-                  subtitle: SelectableText('${profile.id}'),
-                  trailing: IconButton(
-                    tooltip: strings.text('Copy room ID'),
-                    onPressed: () =>
-                        copyText(strings.text('Room ID'), '${profile.id}'),
-                    icon: const Icon(Icons.copy),
-                  ),
-                ),
-                infoRow(
-                  Icons.info_outline,
-                  strings.text('Description'),
-                  profile.description,
-                ),
-                infoRow(
-                  Icons.campaign_outlined,
-                  strings.text('Notice'),
-                  profile.notice,
-                ),
-                if (profile.inviteCode.isNotEmpty)
-                  ListTile(
-                    leading: const Icon(Icons.key_outlined),
-                    title: Text(strings.text('Invite code')),
-                    subtitle: SelectableText(profile.inviteCode),
-                    trailing: IconButton(
-                      tooltip: strings.text('Copy invite code'),
-                      onPressed: () => copyText(
-                        strings.text('Invite code'),
-                        profile.inviteCode,
+                // Group header
+                _CupertinoGroupedCard(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: colors.elevatedBackground,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Icon(
+                              CupertinoIcons.group_solid,
+                              color: colors.secondaryLabel,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.name,
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.label,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  profile.subtitle.isEmpty
+                                      ? strings.format(
+                                          'Room {id}', {'id': profile.id})
+                                      : profile.subtitle,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: colors.secondaryLabel,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      icon: const Icon(Icons.copy),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Group info card
+                _CupertinoGroupedCard(
+                  children: [
+                    _CupertinoListTile(
+                      leading: Icon(CupertinoIcons.number,
+                          size: 20, color: colors.secondaryLabel),
+                      title: strings.text('Room ID'),
+                      subtitle: '${profile.id}',
+                      trailing: GestureDetector(
+                        onTap: () => copyText(
+                            strings.text('Room ID'), '${profile.id}'),
+                        child: Icon(CupertinoIcons.doc_on_doc,
+                            size: 18, color: colors.tertiaryLabel),
+                      ),
+                    ),
+                    if (profile.description.isNotEmpty)
+                      _CupertinoListTile(
+                        leading: Icon(CupertinoIcons.info,
+                            size: 20, color: colors.secondaryLabel),
+                        title: strings.text('Description'),
+                        subtitle: profile.description,
+                      ),
+                    if (profile.notice.isNotEmpty)
+                      _CupertinoListTile(
+                        leading: Icon(CupertinoIcons.speaker_2,
+                            size: 20, color: colors.secondaryLabel),
+                        title: strings.text('Notice'),
+                        subtitle: profile.notice,
+                      ),
+                    if (profile.inviteCode.isNotEmpty)
+                      _CupertinoListTile(
+                        leading: Icon(CupertinoIcons.lock,
+                            size: 20, color: colors.secondaryLabel),
+                        title: strings.text('Invite code'),
+                        subtitle: profile.inviteCode,
+                        trailing: GestureDetector(
+                          onTap: () => copyText(
+                              strings.text('Invite code'), profile.inviteCode),
+                          child: Icon(CupertinoIcons.doc_on_doc,
+                              size: 18, color: colors.tertiaryLabel),
+                        ),
+                      ),
+                    if (profile.code.isNotEmpty)
+                      _CupertinoListTile(
+                        leading: Icon(CupertinoIcons.lock_shield,
+                            size: 20, color: colors.secondaryLabel),
+                        title: strings.text('Fixed code'),
+                        subtitle: profile.code,
+                      ),
+                    if (profile.question.isNotEmpty)
+                      _CupertinoListTile(
+                        leading: Icon(CupertinoIcons.question_circle,
+                            size: 20, color: colors.secondaryLabel),
+                        title: strings.text('Question'),
+                        subtitle: profile.question,
+                      ),
+                  ],
+                ),
+                // Action buttons
+                if (canManageGroup) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton.filled(
+                        onPressed: () => openGroupManagement(profile),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(CupertinoIcons.shield, size: 18),
+                            const SizedBox(width: 6),
+                            Text(strings.text('Group management')),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                infoRow(
-                  Icons.lock_outline,
-                  strings.text('Fixed code'),
-                  profile.code,
+                ],
+                if (!profile.isInGroup) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton.filled(
+                        onPressed: () => joinGroup(profile),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(CupertinoIcons.person_add, size: 18),
+                            const SizedBox(width: 6),
+                            Text(strings.text('Apply to join')),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton(
+                        color: CupertinoColors.destructiveRed,
+                        onPressed: () => leaveGroup(profile),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(CupertinoIcons.square_arrow_left,
+                                size: 18),
+                            const SizedBox(width: 6),
+                            Text(strings.text('Leave group')),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                // Members section
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          strings.text('Members'),
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: colors.label,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${members.length}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: colors.secondaryLabel,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                infoRow(
-                  Icons.question_answer_outlined,
-                  strings.text('Question'),
-                  profile.question,
-                ),
+                const SizedBox(height: 8),
+                if (members.isEmpty)
+                  _EmptyPanel(message: strings.text('No members.'))
+                else
+                  _CupertinoGroupedCard(
+                    children: [
+                      for (final member in members)
+                        _CupertinoListTile(
+                          leading: _Avatar(
+                            url: member.avatar,
+                            fallback: CupertinoIcons.person_solid,
+                          ),
+                          title: member.name,
+                          subtitle: member.subtitle.isEmpty
+                              ? 'UID ${member.uid}'
+                              : member.subtitle,
+                          onTap: () => openUserProfile(
+                            context,
+                            widget.state,
+                            member.uid,
+                            group: profile,
+                            member: member,
+                          ),
+                          trailing: canManageGroup
+                              ? GestureDetector(
+                                  onTap: () => showMemberActions(member),
+                                  child: Icon(
+                                    CupertinoIcons.ellipsis,
+                                    size: 20,
+                                    color: colors.tertiaryLabel,
+                                  ),
+                                )
+                              : null,
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),
-          if (canManageGroup) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => openGroupManagement(profile),
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              label: Text(strings.text('Group management')),
-            ),
-          ],
-          if (!profile.isInGroup) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => joinGroup(profile),
-              icon: const Icon(Icons.group_add),
-              label: Text(strings.text('Apply to join')),
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => leaveGroup(profile),
-              icon: const Icon(Icons.logout),
-              label: Text(strings.text('Leave group')),
-            ),
-          ],
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  strings.text('Members'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text('${members.length}'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (members.isEmpty)
-            _EmptyPanel(message: strings.text('No members.'))
-          else
-            for (final member in members)
-              Card(
-                elevation: 0,
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: _RoundedInkClip(
-                  child: ListTile(
-                    leading: _Avatar(
-                      url: member.avatar,
-                      fallback: Icons.person_rounded,
-                    ),
-                    title: Text(member.name),
-                    subtitle: member.subtitle.isEmpty
-                        ? Text('UID ${member.uid}')
-                        : Text(member.subtitle),
-                    onTap: () => openUserProfile(
-                      context,
-                      widget.state,
-                      member.uid,
-                      group: profile,
-                      member: member,
-                    ),
-                    trailing: canManageGroup
-                        ? IconButton(
-                            tooltip: strings.text('Manage'),
-                            onPressed: () => showMemberActions(member),
-                            icon: const Icon(Icons.more_vert),
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -736,28 +732,34 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         uid: widget.conversation.id,
       );
     }
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
     final title = widget.conversation.type == ConversationType.group
-        ? context.strings.text('Group details')
-        : context.strings.text('User details');
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: context.strings.text('Refresh'),
-            onPressed: loading ? null : load,
-            icon: const Icon(Icons.refresh),
+        ? strings.text('Group details')
+        : strings.text('User details');
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(border: null, backgroundColor: CsacColors.of(context).navBarBackground,
+        middle: Text(title),
+        trailing: GestureDetector(
+          onTap: loading ? null : load,
+          child: Icon(
+            CupertinoIcons.refresh,
+            size: 22,
+            color: loading ? colors.tertiaryLabel : colors.primaryColor,
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
+      child: SafeArea(
         child: loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CupertinoActivityIndicator())
             : error != null
-            ? _InlineError(message: error!, onRetry: load)
-            : widget.conversation.type == ConversationType.private
-            ? buildUserProfile(user!)
-            : buildGroupProfile(group!),
+                ? _InlineError(message: error!, onRetry: load)
+                : widget.conversation.type == ConversationType.private
+                    ? UserProfileScreen(
+                        state: widget.state,
+                        uid: widget.conversation.id,
+                      )
+                    : buildGroupProfile(group!),
       ),
     );
   }
@@ -861,9 +863,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   void showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    _showCupertinoToast(context, message);
   }
 
   Future<void> runAction(
@@ -899,49 +899,39 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final description = TextEditingController(text: group.description);
     final notice = TextEditingController(text: group.notice);
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Edit group info')),
-        content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: roomName,
-                decoration: InputDecoration(
-                  labelText: strings.text('Room name'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: description,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: strings.text('Description'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notice,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: strings.text('Notice'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: roomName,
+              placeholder: strings.text('Room name'),
+            ),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: description,
+              maxLines: 2,
+              placeholder: strings.text('Description'),
+            ),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: notice,
+              maxLines: 3,
+              placeholder: strings.text('Notice'),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(strings.text('Save')),
           ),
@@ -979,66 +969,60 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final answer = TextEditingController(text: group.answer);
     var showPublic = group.showPublic;
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (context, setDialogState) => CupertinoAlertDialog(
           title: Text(strings.text('Group settings')),
-          content: SizedBox(
-            width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: joinType,
-                  decoration: InputDecoration(
-                    labelText: strings.text('Join type'),
-                    border: const OutlineInputBorder(),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: joinType,
+                placeholder: strings.text('Join type'),
+              ),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: code,
+                placeholder: strings.text('Fixed code'),
+              ),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: question,
+                maxLines: 2,
+                placeholder: strings.text('Review question'),
+              ),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: answer,
+                maxLines: 2,
+                placeholder: strings.text('Review answer'),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    strings.text('Show publicly'),
+                    style: const TextStyle(fontSize: 15),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: code,
-                  decoration: InputDecoration(
-                    labelText: strings.text('Fixed code'),
-                    border: const OutlineInputBorder(),
+                  CupertinoSwitch(
+                    value: showPublic,
+                    onChanged: (value) =>
+                        setDialogState(() => showPublic = value),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: question,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: strings.text('Review question'),
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: answer,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: strings.text('Review answer'),
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(strings.text('Show publicly')),
-                  value: showPublic,
-                  onChanged: (value) =>
-                      setDialogState(() => showPublic = value),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
           actions: [
-            TextButton(
+            CupertinoDialogAction(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(strings.text('Cancel')),
             ),
-            FilledButton(
+            CupertinoDialogAction(
+              isDefaultAction: true,
               onPressed: () => Navigator.of(context).pop(true),
               child: Text(strings.text('Save')),
             ),
@@ -1118,6 +1102,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> showMemberActions(GroupMember member) async {
+    final strings = context.strings;
     final actions = <String>[
       'mute10',
       'unmute',
@@ -1127,50 +1112,40 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       ],
       if (!member.hasOwnerRole) 'kick',
     ];
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (actions.contains('mute10'))
-              ListTile(
-                leading: const Icon(Icons.volume_off_outlined),
-                title: Text(context.strings.text('Mute 10 minutes')),
-                onTap: () => Navigator.of(context).pop('mute10'),
-              ),
-            if (actions.contains('unmute'))
-              ListTile(
-                leading: const Icon(Icons.volume_up_outlined),
-                title: Text(context.strings.text('Unmute')),
-                onTap: () => Navigator.of(context).pop('unmute'),
-              ),
-            if (actions.contains('admin'))
-              ListTile(
-                leading: const Icon(Icons.admin_panel_settings_outlined),
-                title: Text(context.strings.text('Set admin')),
-                onTap: () => Navigator.of(context).pop('admin'),
-              ),
-            if (actions.contains('removeAdmin'))
-              ListTile(
-                leading: const Icon(Icons.remove_moderator_outlined),
-                title: Text(context.strings.text('Remove admin')),
-                onTap: () => Navigator.of(context).pop('removeAdmin'),
-              ),
-            if (actions.contains('kick'))
-              ListTile(
-                leading: Icon(
-                  Icons.person_remove_outlined,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  context.strings.text('Kick member'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                onTap: () => Navigator.of(context).pop('kick'),
-              ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          if (actions.contains('mute10'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('mute10'),
+              child: Text(strings.text('Mute 10 minutes')),
+            ),
+          if (actions.contains('unmute'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('unmute'),
+              child: Text(strings.text('Unmute')),
+            ),
+          if (actions.contains('admin'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('admin'),
+              child: Text(strings.text('Set admin')),
+            ),
+          if (actions.contains('removeAdmin'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('removeAdmin'),
+              child: Text(strings.text('Remove admin')),
+            ),
+          if (actions.contains('kick'))
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(context).pop('kick'),
+              child: Text(strings.text('Kick member')),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -1180,10 +1155,13 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> resetInviteCode() async {
-    final ok = await confirm(
-      context.strings.text('Reset invite code?'),
-      context.strings.text('The old invite code will stop working.'),
-      context.strings.text('Reset'),
+    final strings = context.strings;
+    final ok = await _showCupertinoConfirm(
+      context,
+      title: strings.text('Reset invite code?'),
+      message: strings.text('The old invite code will stop working.'),
+      confirmText: 'Reset',
+      isDestructive: true,
     );
     if (!ok || !mounted) {
       return;
@@ -1195,8 +1173,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> transferGroup() async {
+    final strings = context.strings;
     final target = await chooseMember(
-      context.strings.text('Transfer owner to'),
+      strings.text('Transfer owner to'),
       members
           .where((member) => member.uid != widget.state.user?.uid)
           .where((member) => !member.hasOwnerRole)
@@ -1205,12 +1184,14 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     if (target == null || !mounted) {
       return;
     }
-    final ok = await confirm(
-      context.strings.format('Transfer group to {name}?', {
+    final ok = await _showCupertinoConfirm(
+      context,
+      title: strings.format('Transfer group to {name}?', {
         'name': target.name,
       }),
-      context.strings.text('You will lose owner permissions after transfer.'),
-      context.strings.text('Transfer'),
+      message: strings.text('You will lose owner permissions after transfer.'),
+      confirmText: 'Transfer',
+      isDestructive: true,
     );
     if (!ok || !mounted) {
       return;
@@ -1222,10 +1203,13 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> disbandGroup() async {
-    final ok = await confirm(
-      context.strings.format('Disband {name}?', {'name': group.name}),
-      context.strings.text('This group will be permanently disbanded.'),
-      context.strings.text('Disband'),
+    final strings = context.strings;
+    final ok = await _showCupertinoConfirm(
+      context,
+      title: strings.format('Disband {name}?', {'name': group.name}),
+      message: strings.text('This group will be permanently disbanded.'),
+      confirmText: 'Disband',
+      isDestructive: true,
     );
     if (!ok || !mounted) {
       return;
@@ -1243,106 +1227,77 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     String title,
     List<GroupMember> candidates,
   ) {
-    return showModalBottomSheet<GroupMember>(
+    final colors = CsacColors.of(context);
+    return showCupertinoModalPopup<GroupMember>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: candidates.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(context.strings.text('No selectable members.')),
-              )
-            : ListView(
-                shrinkWrap: true,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  for (final member in candidates)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      child: _RoundedInkClip(
-                        child: ListTile(
-                          leading: _Avatar(
-                            url: member.avatar,
-                            fallback: Icons.person_rounded,
-                          ),
-                          title: Text(member.name),
-                          subtitle: Text(
-                            member.subtitle.isEmpty
-                                ? 'UID ${member.uid}'
-                                : member.subtitle,
-                          ),
-                          onTap: () => Navigator.of(context).pop(member),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Future<bool> confirm(String title, String message, String action) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(action),
-          ),
-        ],
-      ),
-    );
-    return confirmed == true;
-  }
-
-  Widget sectionTitle(String title, [String? trailing]) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
+      builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
         ),
-        if (trailing != null) Text(trailing),
-      ],
-    );
-  }
-
-  Widget actionTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback? onTap,
-    String subtitle = '',
-    Color? color,
-  }) {
-    return ListTile(
-      enabled: !acting && onTap != null,
-      leading: Icon(icon, color: color),
-      title: Text(title, style: color == null ? null : TextStyle(color: color)),
-      subtitle: subtitle.isEmpty ? null : Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: acting ? null : onTap,
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: candidates.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    context.strings.text('No selectable members.'),
+                    style: TextStyle(color: colors.secondaryLabel),
+                  ),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: colors.label,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pop(null),
+                            child: Icon(
+                              CupertinoIcons.xmark_circle_fill,
+                              color: colors.tertiaryLabel,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final member in candidates)
+                            _CupertinoListTile(
+                              leading: _Avatar(
+                                url: member.avatar,
+                                fallback: CupertinoIcons.person_solid,
+                              ),
+                              title: member.name,
+                              subtitle: member.subtitle.isEmpty
+                                  ? 'UID ${member.uid}'
+                                  : member.subtitle,
+                              onTap: () => Navigator.of(context).pop(member),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
     );
   }
 
@@ -1360,280 +1315,423 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(strings.text('Group management')),
-        actions: [
-          IconButton(
-            tooltip: strings.text('Refresh'),
-            onPressed: loading ? null : load,
-            icon: const Icon(Icons.refresh),
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(border: null, backgroundColor: CsacColors.of(context).navBarBackground,
+        middle: Text(strings.text('Group management')),
+        trailing: GestureDetector(
+          onTap: loading ? null : load,
+          child: Icon(
+            CupertinoIcons.refresh,
+            size: 22,
+            color: loading ? colors.tertiaryLabel : colors.primaryColor,
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
+      child: SafeArea(
         child: loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CupertinoActivityIndicator())
             : error != null
-            ? _InlineError(message: error!, onRetry: load)
-            : !canManage
-            ? _EmptyPanel(message: strings.text('No management permission.'))
-            : RefreshIndicator(
-                onRefresh: load,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  children: [
-                    Card(
-                      elevation: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: colors.secondaryContainer,
-                              child: Icon(
-                                Icons.groups_rounded,
-                                color: colors.onSecondaryContainer,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
+                ? _InlineError(message: error!, onRetry: load)
+                : !canManage
+                    ? _EmptyPanel(
+                        message: strings.text('No management permission.'))
+                    : CustomScrollView(
+                        slivers: [
+                          CupertinoSliverRefreshControl(onRefresh: load),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    group.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    [
-                                      strings.format('Room {id}', {
-                                        'id': group.id,
-                                      }),
-                                      if (currentUserIsOwner)
-                                        strings.text('Owner')
-                                      else if (group.isAdmin)
-                                        strings.text('Admin'),
-                                    ].join(' | '),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 0,
-                      child: _RoundedInkClip(
-                        child: actionTile(
-                          icon: Icons.flag_outlined,
-                          title: strings.text('Report group'),
-                          color: colors.error,
-                          onTap: () => reportGroup(group),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    sectionTitle(strings.text('Group settings')),
-                    const SizedBox(height: 8),
-                    Card(
-                      elevation: 0,
-                      child: _RoundedInkClip(
-                        child: Column(
-                          children: [
-                            actionTile(
-                              icon: Icons.edit_note,
-                              title: strings.text('Edit group info'),
-                              subtitle: group.description,
-                              onTap: editInfo,
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.tune,
-                              title: strings.text('Join settings'),
-                              subtitle: group.joinType,
-                              onTap: editSettings,
-                            ),
-                            const Divider(height: 1),
-                            actionTile(
-                              icon: Icons.refresh,
-                              title: strings.text('Reset invite code'),
-                              subtitle: group.inviteCode,
-                              onTap: resetInviteCode,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    sectionTitle(
-                      strings.text('Group applications'),
-                      '${applications.where((item) => item.pending).length}',
-                    ),
-                    const SizedBox(height: 8),
-                    if (applications.isEmpty)
-                      _EmptyPanel(
-                        message: strings.text('No group applications.'),
-                      )
-                    else
-                      for (final application in applications)
-                        Card(
-                          elevation: 0,
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: _Avatar(
-                                    url: application.avatar,
-                                    fallback: Icons.person_rounded,
-                                  ),
-                                  title: Text(application.nickname),
-                                  subtitle: Text(
-                                    application.username.isEmpty
-                                        ? 'UID ${application.uid}'
-                                        : '@${application.username} | UID ${application.uid}',
-                                  ),
-                                  trailing: _StatusChip(
-                                    pending: application.pending,
-                                  ),
-                                  onTap: () => openUserProfile(
-                                    context,
-                                    widget.state,
-                                    application.uid,
-                                    group: group,
-                                  ),
-                                ),
-                                if (application.content.isNotEmpty ||
-                                    application.answer.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      application.content.isEmpty
-                                          ? application.answer
-                                          : application.content,
-                                    ),
-                                  ),
-                                if (application.pending) ...[
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
+                                  // Group header card
+                                  _CupertinoGroupedCard(
                                     children: [
-                                      TextButton(
-                                        onPressed:
-                                            actingApplicationId ==
-                                                application.id
-                                            ? null
-                                            : () => handleApplication(
-                                                application,
-                                                'refuse',
+                                      Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    colors.elevatedBackground,
+                                                borderRadius:
+                                                    BorderRadius.circular(22),
                                               ),
-                                        child: Text(strings.text('Refuse')),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      FilledButton.icon(
-                                        onPressed:
-                                            actingApplicationId ==
-                                                application.id
-                                            ? null
-                                            : () => handleApplication(
-                                                application,
-                                                'pass',
+                                              child: Icon(
+                                                CupertinoIcons.group_solid,
+                                                color: colors.secondaryLabel,
                                               ),
-                                        icon:
-                                            actingApplicationId ==
-                                                application.id
-                                            ? const SizedBox(
-                                                width: 16,
-                                                height: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    group.name,
+                                                    style: TextStyle(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: colors.label,
                                                     ),
-                                              )
-                                            : const Icon(Icons.check),
-                                        label: Text(strings.text('Pass')),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    [
+                                                      strings.format(
+                                                          'Room {id}',
+                                                          {'id': group.id}),
+                                                      if (currentUserIsOwner)
+                                                        strings.text('Owner')
+                                                      else if (group.isAdmin)
+                                                        strings.text('Admin'),
+                                                    ].join(' | '),
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color:
+                                                          colors.secondaryLabel,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 6),
+                                  // Report
+                                  _CupertinoGroupedCard(
+                                    children: [
+                                      _CupertinoListTile(
+                                        leading: Icon(CupertinoIcons.flag,
+                                            size: 20,
+                                            color:
+                                                CupertinoColors.destructiveRed),
+                                        title: strings.text('Report group'),
+                                        titleColor:
+                                            CupertinoColors.destructiveRed,
+                                        onTap: () => reportGroup(group),
+                                      ),
+                                    ],
+                                  ),
+                                  // Group settings section
+                                  const SizedBox(height: 16),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        strings.text('Group settings'),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: colors.secondaryLabel,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _CupertinoGroupedCard(
+                                    children: [
+                                      _CupertinoListTile(
+                                        leading: Icon(CupertinoIcons.pencil,
+                                            size: 20,
+                                            color: colors.secondaryLabel),
+                                        title: strings.text('Edit group info'),
+                                        subtitle: group.description,
+                                        onTap: acting ? null : editInfo,
+                                      ),
+                                      _CupertinoListTile(
+                                        leading: Icon(CupertinoIcons.slider_horizontal_3,
+                                            size: 20,
+                                            color: colors.secondaryLabel),
+                                        title: strings.text('Join settings'),
+                                        subtitle: group.joinType,
+                                        onTap: acting ? null : editSettings,
+                                      ),
+                                      _CupertinoListTile(
+                                        leading: Icon(CupertinoIcons.refresh,
+                                            size: 20,
+                                            color: colors.secondaryLabel),
+                                        title:
+                                            strings.text('Reset invite code'),
+                                        subtitle: group.inviteCode,
+                                        onTap: acting ? null : resetInviteCode,
+                                      ),
+                                    ],
+                                  ),
+                                  // Applications section
+                                  const SizedBox(height: 16),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            strings
+                                                .text('Group applications'),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: colors.secondaryLabel,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '${applications.where((item) => item.pending).length}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.secondaryLabel,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  if (applications.isEmpty)
+                                    _EmptyPanel(
+                                      message: strings
+                                          .text('No group applications.'),
+                                    )
+                                  else
+                                    _CupertinoGroupedCard(
+                                      children: [
+                                        for (final application
+                                            in applications)
+                                          _buildApplicationTile(
+                                              application, strings, colors),
+                                      ],
+                                    ),
+                                  // Members section
+                                  const SizedBox(height: 16),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            strings.text('Members'),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: colors.secondaryLabel,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '${members.length}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.secondaryLabel,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _CupertinoGroupedCard(
+                                    children: [
+                                      for (final member in members)
+                                        _CupertinoListTile(
+                                          leading: _Avatar(
+                                            url: member.avatar,
+                                            fallback:
+                                                CupertinoIcons.person_solid,
+                                          ),
+                                          title: member.name,
+                                          subtitle: member.subtitle.isEmpty
+                                              ? 'UID ${member.uid}'
+                                              : member.subtitle,
+                                          onTap: () => openUserProfile(
+                                            context,
+                                            widget.state,
+                                            member.uid,
+                                            group: group,
+                                            member: member,
+                                          ),
+                                          trailing: GestureDetector(
+                                            onTap: acting
+                                                ? null
+                                                : () =>
+                                                    showMemberActions(member),
+                                            child: Icon(
+                                              CupertinoIcons.ellipsis,
+                                              size: 20,
+                                              color: colors.tertiaryLabel,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  // Owner actions
+                                  if (currentUserIsOwner) ...[
+                                    const SizedBox(height: 16),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          strings.text('Owner actions'),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: colors.secondaryLabel,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _CupertinoGroupedCard(
+                                      children: [
+                                        _CupertinoListTile(
+                                          leading: Icon(
+                                              CupertinoIcons.arrow_right_arrow_left,
+                                              size: 20,
+                                              color: colors.secondaryLabel),
+                                          title: strings
+                                              .text('Transfer group owner'),
+                                          onTap:
+                                              acting ? null : transferGroup,
+                                        ),
+                                        _CupertinoListTile(
+                                          leading: Icon(
+                                              CupertinoIcons.trash,
+                                              size: 20,
+                                              color: CupertinoColors
+                                                  .destructiveRed),
+                                          title:
+                                              strings.text('Disband group'),
+                                          titleColor: CupertinoColors
+                                              .destructiveRed,
+                                          onTap:
+                                              acting ? null : disbandGroup,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                    const SizedBox(height: 20),
-                    sectionTitle(strings.text('Members'), '${members.length}'),
-                    const SizedBox(height: 8),
-                    for (final member in members)
-                      Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        child: _RoundedInkClip(
-                          child: ListTile(
-                            leading: _Avatar(
-                              url: member.avatar,
-                              fallback: Icons.person_rounded,
-                            ),
-                            title: Text(member.name),
-                            subtitle: member.subtitle.isEmpty
-                                ? Text('UID ${member.uid}')
-                                : Text(member.subtitle),
-                            onTap: () => openUserProfile(
-                              context,
-                              widget.state,
-                              member.uid,
-                              group: group,
-                              member: member,
-                            ),
-                            trailing: IconButton(
-                              tooltip: strings.text('Manage'),
-                              onPressed: acting
-                                  ? null
-                                  : () => showMemberActions(member),
-                              icon: const Icon(Icons.more_vert),
-                            ),
-                          ),
+                        ],
+                      ),
+      ),
+    );
+  }
+
+  Widget _buildApplicationTile(
+    GroupApplication application,
+    dynamic strings,
+    CsacColors colors,
+  ) {
+    final isActing = actingApplicationId == application.id;
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => openUserProfile(
+              context,
+              widget.state,
+              application.uid,
+              group: group,
+            ),
+            child: Row(
+              children: [
+                _Avatar(
+                  url: application.avatar,
+                  fallback: CupertinoIcons.person_solid,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        application.nickname,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: colors.label,
                         ),
                       ),
-                    if (currentUserIsOwner) ...[
-                      const SizedBox(height: 20),
-                      sectionTitle(strings.text('Owner actions')),
-                      const SizedBox(height: 8),
-                      Card(
-                        elevation: 0,
-                        child: _RoundedInkClip(
-                          child: Column(
-                            children: [
-                              actionTile(
-                                icon: Icons.swap_horiz,
-                                title: strings.text('Transfer group owner'),
-                                onTap: transferGroup,
-                              ),
-                              const Divider(height: 1),
-                              actionTile(
-                                icon: Icons.delete_forever_outlined,
-                                title: strings.text('Disband group'),
-                                color: colors.error,
-                                onTap: disbandGroup,
-                              ),
-                            ],
-                          ),
+                      Text(
+                        application.username.isEmpty
+                            ? 'UID ${application.uid}'
+                            : '@${application.username} | UID ${application.uid}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.secondaryLabel,
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
+                _StatusChip(pending: application.pending),
+              ],
+            ),
+          ),
+          if (application.content.isNotEmpty ||
+              application.answer.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                application.content.isEmpty
+                    ? application.answer
+                    : application.content,
+                style: TextStyle(fontSize: 14, color: colors.secondaryLabel),
               ),
+            ),
+          if (application.pending) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 6),
+                  onPressed: isActing
+                      ? null
+                      : () => handleApplication(application, 'refuse'),
+                  child: Text(
+                    strings.text('Refuse'),
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 6),
+                  onPressed: isActing
+                      ? null
+                      : () => handleApplication(application, 'pass'),
+                  child: isActing
+                      ? const CupertinoActivityIndicator(
+                          radius: 8,
+                          color: CupertinoColors.white,
+                        )
+                      : Text(
+                          strings.text('Pass'),
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

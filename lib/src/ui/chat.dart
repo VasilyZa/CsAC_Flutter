@@ -419,7 +419,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) {
       return;
     }
-    final caption = await showDialog<String>(
+    final caption = await showCupertinoDialog<String>(
       context: context,
       builder: (context) =>
           _ImageCaptionDialog(fileName: picked.name, bytes: bytes),
@@ -647,9 +647,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    _showCupertinoToast(context, message);
   }
 
   Future<void> toggleVoicePlayback(ChatMessage message) async {
@@ -870,9 +868,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
-      final selected = await showModalBottomSheet<List<GroupMember>>(
+      final selected = await showCupertinoModalPopup<List<GroupMember>>(
         context: context,
-        showDragHandle: true,
         builder: (context) => _MentionPickerSheet(
           members: members,
           selectedUids: mentionTargets.map((member) => member.uid).toSet(),
@@ -942,7 +939,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> openEssenceList() {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => EssenceMessagesScreen(
           state: widget.state,
           conversation: widget.conversation,
@@ -952,9 +949,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> showMessageActions(ChatMessage message, bool mine) async {
-    final action = await showModalBottomSheet<_MessageAction>(
+    final action = await showCupertinoModalPopup<_MessageAction>(
       context: context,
-      showDragHandle: true,
       builder: (context) => _MessageActionSheet(
         message: message,
         canRecall: message.canRecall || mine,
@@ -975,15 +971,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 '#${message.id} ${message.sender}\n${message.time}\n\n${message.body}',
           ),
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.strings.text('Message copied'))),
-        );
+        _showCupertinoToast(context, context.strings.text('Message copied'));
         break;
       case _MessageAction.copyImage:
         Clipboard.setData(ClipboardData(text: message.imageUrl));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.strings.text('Image link copied'))),
-        );
+        _showCupertinoToast(context, context.strings.text('Image link copied'));
         break;
       case _MessageAction.openImage:
         showImagePreview(context, message.imageUrl);
@@ -1029,7 +1021,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     Navigator.of(context)
         .push(
-          MaterialPageRoute<void>(
+          CupertinoPageRoute<void>(
             builder: (_) => ConversationDetailScreen(
               state: widget.state,
               conversation: widget.conversation,
@@ -1072,10 +1064,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.strings.text('Selected messages copied.')),
-      ),
+    _showCupertinoToast(
+      context,
+      context.strings.text('Selected messages copied.'),
     );
   }
 
@@ -1084,26 +1075,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (selected.isEmpty) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.strings.text('Delete selected local messages?')),
-        content: Text(
-          context.strings.text('Only local cached copies will be removed.'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.strings.text('Delete')),
-          ),
-        ],
-      ),
+    final confirmed = await _showCupertinoConfirm(
+      context,
+      title: context.strings.text('Delete selected local messages?'),
+      message: context.strings.text('Only local cached copies will be removed.'),
+      confirmText: context.strings.text('Delete'),
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     final ids = selected.map((message) => message.id).toSet();
@@ -1116,10 +1095,9 @@ class _ChatScreenState extends State<ChatScreen> {
         messages.removeWhere((message) => ids.contains(message.id));
         selectedMessageIds.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.strings.text('Local messages deleted.')),
-        ),
+      _showCupertinoToast(
+        context,
+        context.strings.text('Local messages deleted.'),
       );
     } catch (err) {
       if (!mounted) {
@@ -1134,9 +1112,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (selected.isEmpty) {
       return;
     }
-    final target = await showModalBottomSheet<Conversation>(
+    final target = await showCupertinoModalPopup<Conversation>(
       context: context,
-      showDragHandle: true,
       builder: (context) => _ForwardConversationSheet(
         conversations: widget.state.conversations
             .where(
@@ -1157,19 +1134,14 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       setState(() => selectedMessageIds.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Forwarded.'))),
-      );
+      _showCupertinoToast(context, context.strings.text('Forwarded.'));
     } catch (err) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.format('Forward failed: {error}', {'error': err}),
-          ),
-        ),
+      _showCupertinoToast(
+        context,
+        context.strings.format('Forward failed: {error}', {'error': err}),
       );
     }
   }
@@ -1229,12 +1201,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void scrollToMessage(int messageId) {
     final keyContext = itemKeys[messageId]?.currentContext;
     if (keyContext == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.text('Referenced message is not loaded.'),
-          ),
-        ),
+      _showCupertinoToast(
+        context,
+        context.strings.text('Referenced message is not loaded.'),
       );
       return;
     }
@@ -1249,19 +1218,20 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     final announcement = groupProfile?.notice.trim() ?? '';
     final showEmpty = !loading && messages.isEmpty && pendingSends.isEmpty;
-    return Scaffold(
-      appBar: AppBar(
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
         automaticallyImplyLeading: !widget.embedded && !selectionMode,
         leading: selectionMode
-            ? IconButton(
-                tooltip: strings.text('Cancel selection'),
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
                 onPressed: clearSelection,
-                icon: const Icon(Icons.close),
+                child: const Icon(CupertinoIcons.xmark),
               )
             : null,
-        title: Text(
+        middle: Text(
           selectionMode
               ? strings.format('{count} messages selected', {
                   'count': selectedMessageIds.length,
@@ -1270,195 +1240,243 @@ class _ChatScreenState extends State<ChatScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        actions: selectionMode
-            ? [
-                IconButton(
-                  tooltip: strings.text('Copy selected'),
-                  onPressed: copySelectedMessages,
-                  icon: const Icon(Icons.copy),
-                ),
-                IconButton(
-                  tooltip: strings.text('Forward'),
-                  onPressed: forwardSelectedMessages,
-                  icon: const Icon(Icons.forward_outlined),
-                ),
-                IconButton(
-                  tooltip: strings.text('Delete local copies'),
-                  onPressed: deleteSelectedLocalMessages,
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ]
-            : [
-                if (offline)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: Icon(Icons.cloud_off_outlined),
-                  ),
-                IconButton(
-                  tooltip: strings.text('Refresh'),
-                  onPressed: () =>
-                      reloadConversationFromNetwork(showLoading: true),
-                  icon: const Icon(Icons.refresh),
-                ),
-                if (widget.conversation.type == ConversationType.group)
-                  IconButton(
-                    tooltip: strings.text('Essence'),
-                    onPressed: openEssenceList,
-                    icon: const Icon(Icons.star_outline),
-                  ),
-                IconButton(
-                  tooltip: strings.text('Details'),
-                  onPressed: openConversationDetails,
-                  icon: const Icon(Icons.info_outline),
-                ),
-              ],
-      ),
-      body: Column(
-        children: [
-          if (error != null)
-            MaterialBanner(
-              content: Text(error!),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => error = null),
-                  child: Text(strings.text('Dismiss')),
-                ),
-              ],
-            ),
-          if (announcement.isNotEmpty)
-            _GroupAnnouncementBar(
-              announcement: announcement,
-              onTap: openConversationDetails,
-            ),
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : showEmpty
-                ? _EmptyPanel(message: strings.text('No messages.'))
-                : ListView.builder(
-                    controller: scroll,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: messages.length + pendingSends.length,
-                    itemBuilder: (context, index) {
-                      if (index >= messages.length) {
-                        final pending = pendingSends[index - messages.length];
-                        return _PendingMessageBubble(
-                          pending: pending,
-                          onRetry: () => retryPendingSend(pending.localId),
-                        );
-                      }
-                      final message = messages[index];
-                      final mine = widget.state.user?.uid == message.senderId;
-                      final selected = selectedMessageIds.contains(message.id);
-                      final replyMessage = messages
-                          .where((item) => item.id == message.replyTo)
-                          .cast<ChatMessage?>()
-                          .firstOrNull;
-                      return _MessageBubble(
-                        key: itemKeys.putIfAbsent(
-                          message.id,
-                          () => GlobalKey(),
-                        ),
-                        message: message,
-                        replyMessage: replyMessage,
-                        mine: mine,
-                        focused: widget.focusMessageId == message.id,
-                        selected: selected,
-                        selectionMode: selectionMode,
-                        onTap: selectionMode
-                            ? () => toggleMessageSelection(message)
-                            : null,
-                        onLongPress: selectionMode
-                            ? null
-                            : () => showMessageActions(message, mine),
-                        onReplyTap: message.replyTo > 0
-                            ? () => scrollToMessage(message.replyTo)
-                            : null,
-                        onImageTap: message.imageUrl.isEmpty
-                            ? null
-                            : () => showImagePreview(context, message.imageUrl),
-                        onVoiceTap: message.voiceUrl.isEmpty
-                            ? null
-                            : () => toggleVoicePlayback(message),
-                        playingVoice: playingMessageId == message.id,
-                      );
-                    },
-                  ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
+        trailing: selectionMode
+            ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (replyTarget != null || mentionTargets.isNotEmpty)
-                    _ComposeTargetsBar(
-                      replyTarget: replyTarget,
-                      mentions: mentionTargets,
-                      onClearReply: () => setState(() => replyTarget = null),
-                      onClearMentions: () =>
-                          setState(() => mentionTargets.clear()),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: copySelectedMessages,
+                    child: const Icon(CupertinoIcons.doc_on_doc, size: 20),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: forwardSelectedMessages,
+                    child: const Icon(CupertinoIcons.arrowshape_turn_up_right, size: 20),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: deleteSelectedLocalMessages,
+                    child: const Icon(CupertinoIcons.trash, size: 20),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (offline)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Icon(CupertinoIcons.wifi_slash, size: 20),
                     ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: input,
-                          minLines: 1,
-                          maxLines: 4,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => send(),
-                          decoration: InputDecoration(
-                            hintText: strings.text('Message'),
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (widget.conversation.type == ConversationType.group)
-                        IconButton.filledTonal(
-                          tooltip: strings.text('Mention'),
-                          onPressed: chooseMentionTargets,
-                          icon: const Icon(Icons.alternate_email),
-                        ),
-                      if (widget.conversation.type == ConversationType.group)
-                        const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        tooltip: recording
-                            ? strings.text('Stop recording')
-                            : strings.text('Voice'),
-                        onPressed: toggleRecording,
-                        icon: Icon(
-                          recording ? Icons.stop : Icons.mic_none_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        tooltip: strings.text('Image'),
-                        onPressed: pickingImage ? null : pickAndSendImage,
-                        icon: pickingImage
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.image_outlined),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: send,
-                        child: const Icon(Icons.send),
-                      ),
-                    ],
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: () =>
+                        reloadConversationFromNetwork(showLoading: true),
+                    child: const Icon(CupertinoIcons.refresh, size: 20),
+                  ),
+                  if (widget.conversation.type == ConversationType.group)
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      onPressed: openEssenceList,
+                      child: const Icon(CupertinoIcons.star, size: 20),
+                    ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: openConversationDetails,
+                    child: const Icon(CupertinoIcons.info, size: 20),
                   ),
                 ],
               ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            if (error != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: colors.destructive.withValues(alpha: 0.1),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        error!,
+                        style: TextStyle(color: colors.destructive, fontSize: 13),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 28,
+                      onPressed: () => setState(() => error = null),
+                      child: Text(
+                        strings.text('Dismiss'),
+                        style: TextStyle(color: colors.destructive, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (announcement.isNotEmpty)
+              _GroupAnnouncementBar(
+                announcement: announcement,
+                onTap: openConversationDetails,
+              ),
+            Expanded(
+              child: loading
+                  ? const Center(child: CupertinoActivityIndicator())
+                  : showEmpty
+                  ? _EmptyPanel(message: strings.text('No messages.'))
+                  : ListView.builder(
+                      controller: scroll,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: messages.length + pendingSends.length,
+                      itemBuilder: (context, index) {
+                        if (index >= messages.length) {
+                          final pending = pendingSends[index - messages.length];
+                          return _PendingMessageBubble(
+                            pending: pending,
+                            onRetry: () => retryPendingSend(pending.localId),
+                          );
+                        }
+                        final message = messages[index];
+                        final mine = widget.state.user?.uid == message.senderId;
+                        final selected = selectedMessageIds.contains(message.id);
+                        final replyMessage = messages
+                            .where((item) => item.id == message.replyTo)
+                            .cast<ChatMessage?>()
+                            .firstOrNull;
+                        return _MessageBubble(
+                          key: itemKeys.putIfAbsent(
+                            message.id,
+                            () => GlobalKey(),
+                          ),
+                          message: message,
+                          replyMessage: replyMessage,
+                          mine: mine,
+                          focused: widget.focusMessageId == message.id,
+                          selected: selected,
+                          selectionMode: selectionMode,
+                          onTap: selectionMode
+                              ? () => toggleMessageSelection(message)
+                              : null,
+                          onLongPress: selectionMode
+                              ? null
+                              : () => showMessageActions(message, mine),
+                          onReplyTap: message.replyTo > 0
+                              ? () => scrollToMessage(message.replyTo)
+                              : null,
+                          onImageTap: message.imageUrl.isEmpty
+                              ? null
+                              : () => showImagePreview(context, message.imageUrl),
+                          onVoiceTap: message.voiceUrl.isEmpty
+                              ? null
+                              : () => toggleVoicePlayback(message),
+                          playingVoice: playingMessageId == message.id,
+                        );
+                      },
+                    ),
             ),
-          ),
-        ],
+            ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: colors.cardBackground.withValues(alpha: 0.85),
+                    border: Border(
+                      top: BorderSide(color: colors.separator, width: 0.5),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (replyTarget != null || mentionTargets.isNotEmpty)
+                            _ComposeTargetsBar(
+                              replyTarget: replyTarget,
+                              mentions: mentionTargets,
+                              onClearReply: () => setState(() => replyTarget = null),
+                              onClearMentions: () =>
+                                  setState(() => mentionTargets.clear()),
+                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: CupertinoTextField(
+                                  controller: input,
+                                  minLines: 1,
+                                  maxLines: 4,
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => send(),
+                                  placeholder: strings.text('Message'),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.elevatedBackground,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (widget.conversation.type == ConversationType.group)
+                                CupertinoButton(
+                                  padding: EdgeInsets.zero,
+                                  minSize: 36,
+                                  onPressed: chooseMentionTargets,
+                                  child: const Icon(CupertinoIcons.at, size: 22),
+                                ),
+                              if (widget.conversation.type == ConversationType.group)
+                                const SizedBox(width: 4),
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minSize: 36,
+                                onPressed: toggleRecording,
+                                child: Icon(
+                                  recording
+                                      ? CupertinoIcons.stop_circle
+                                      : CupertinoIcons.mic,
+                                  size: 22,
+                                  color: recording ? colors.destructive : null,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minSize: 36,
+                                onPressed: pickingImage ? null : pickAndSendImage,
+                                child: pickingImage
+                                    ? const CupertinoActivityIndicator(radius: 10)
+                                    : const Icon(CupertinoIcons.photo, size: 22),
+                              ),
+                              const SizedBox(width: 4),
+                              CupertinoButton.filled(
+                                padding: const EdgeInsets.all(8),
+                                minSize: 34,
+                                borderRadius: BorderRadius.circular(17),
+                                onPressed: send,
+                                child: const Icon(
+                                  CupertinoIcons.arrow_up,
+                                  size: 18,
+                                  color: CupertinoColors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1496,20 +1514,30 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final color = mine
-        ? colors.primaryContainer
-        : colors.surfaceContainerHighest;
-    final textColor = mine ? colors.onPrimaryContainer : colors.onSurface;
+    final colors = CsacColors.of(context);
+    final bubbleColor = mine ? colors.myBubble : colors.otherBubble;
+    final textColor = mine ? colors.myBubbleText : colors.otherBubbleText;
     final secondaryTextColor = mine
-        ? colors.onPrimaryContainer.withValues(alpha: 0.72)
-        : colors.onSurfaceVariant;
+        ? CupertinoColors.white.withValues(alpha: 0.72)
+        : colors.secondaryLabel;
     final replyColor = mine
-        ? colors.primary.withValues(alpha: 0.12)
-        : colors.surfaceContainerHigh;
+        ? CupertinoColors.white.withValues(alpha: 0.15)
+        : colors.elevatedBackground;
     final align = mine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final strings = context.strings;
+    final borderRadius = mine
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(4),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+          );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
@@ -1524,10 +1552,10 @@ class _MessageBubble extends StatelessWidget {
                 if (selectionMode) ...[
                   Icon(
                     selected
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
+                        ? CupertinoIcons.checkmark_circle_fill
+                        : CupertinoIcons.circle,
                     size: 18,
-                    color: selected ? colors.primary : colors.onSurfaceVariant,
+                    color: selected ? colors.primaryColor : colors.secondaryLabel,
                   ),
                   const SizedBox(width: 6),
                 ],
@@ -1535,8 +1563,9 @@ class _MessageBubble extends StatelessWidget {
                   child: Text(
                     '${message.sender}${message.time.isEmpty ? '' : ' · ${message.time}'}',
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.onSurfaceVariant,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colors.secondaryLabel,
                     ),
                   ),
                 ),
@@ -1547,25 +1576,26 @@ class _MessageBubble extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 320),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected || focused
-                      ? colors.primary
-                      : mine
-                      ? colors.primaryContainer
-                      : colors.outlineVariant,
-                  width: selected || focused ? 2 : 1,
-                ),
+                color: bubbleColor,
+                borderRadius: borderRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: CupertinoColors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+                border: (selected || focused)
+                    ? Border.all(color: colors.primaryColor, width: 2)
+                    : null,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (message.replyTo > 0) ...[
-                    InkWell(
+                    GestureDetector(
                       onTap: onReplyTap,
-                      borderRadius: BorderRadius.circular(6),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -1587,9 +1617,10 @@ class _MessageBubble extends StatelessWidget {
                                 }),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelMedium?.copyWith(
+                          style: TextStyle(
+                            fontSize: 12,
                             color: secondaryTextColor,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1602,16 +1633,42 @@ class _MessageBubble extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         if (message.isMentioned)
-                          Chip(
-                            avatar: const Icon(Icons.alternate_email, size: 16),
-                            label: Text(strings.text('Mentioned')),
-                            visualDensity: VisualDensity.compact,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: secondaryTextColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(CupertinoIcons.at, size: 12, color: textColor),
+                                const SizedBox(width: 2),
+                                Text(
+                                  strings.text('Mentioned'),
+                                  style: TextStyle(fontSize: 11, color: textColor),
+                                ),
+                              ],
+                            ),
                           ),
                         if (message.isEssence)
-                          Chip(
-                            avatar: const Icon(Icons.star, size: 16),
-                            label: Text(strings.text('Essence')),
-                            visualDensity: VisualDensity.compact,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: secondaryTextColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(CupertinoIcons.star_fill, size: 12, color: textColor),
+                                const SizedBox(width: 2),
+                                Text(
+                                  strings.text('Essence'),
+                                  style: TextStyle(fontSize: 11, color: textColor),
+                                ),
+                              ],
+                            ),
                           ),
                       ],
                     ),
@@ -1657,10 +1714,11 @@ class _PendingMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = CsacColors.of(context);
     final strings = context.strings;
     final failed = pending.status == _PendingSendStatus.failed;
+    final bubbleColor = failed ? colors.destructive.withValues(alpha: 0.15) : colors.myBubble;
+    final textColor = failed ? colors.destructive : colors.myBubbleText;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -1668,8 +1726,9 @@ class _PendingMessageBubble extends StatelessWidget {
         children: [
           Text(
             failed ? strings.text('Send failed') : strings.text('Sending...'),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: failed ? colors.error : colors.onSurfaceVariant,
+            style: TextStyle(
+              fontSize: 11,
+              color: failed ? colors.destructive : colors.secondaryLabel,
             ),
           ),
           const SizedBox(height: 3),
@@ -1677,11 +1736,20 @@ class _PendingMessageBubble extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 320),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: failed ? colors.errorContainer : colors.primaryContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: failed ? colors.error : colors.primaryContainer,
+              color: bubbleColor,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(4),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: CupertinoColors.black.withValues(alpha: 0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1691,23 +1759,15 @@ class _PendingMessageBubble extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.image_outlined,
-                        size: 18,
-                        color: failed
-                            ? colors.onErrorContainer
-                            : colors.onPrimaryContainer,
-                      ),
+                      Icon(CupertinoIcons.photo, size: 18, color: textColor),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           pending.imageName,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: failed
-                                ? colors.onErrorContainer
-                                : colors.onPrimaryContainer,
-                            fontWeight: FontWeight.w700,
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1720,44 +1780,24 @@ class _PendingMessageBubble extends StatelessWidget {
                     durationSeconds: pending.voiceDuration,
                     playing: false,
                     onTap: null,
-                    foreground: failed
-                        ? colors.onErrorContainer
-                        : colors.onPrimaryContainer,
-                    secondary:
-                        (failed
-                                ? colors.onErrorContainer
-                                : colors.onPrimaryContainer)
-                            .withValues(alpha: 0.72),
+                    foreground: textColor,
+                    secondary: textColor.withValues(alpha: 0.72),
                   ),
                   if (pending.text.isNotEmpty) const SizedBox(height: 8),
                 ],
                 if (pending.text.isNotEmpty)
-                  Text(
-                    pending.text,
-                    style: TextStyle(
-                      color: failed
-                          ? colors.onErrorContainer
-                          : colors.onPrimaryContainer,
-                    ),
-                  ),
+                  Text(pending.text, style: TextStyle(color: textColor)),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (!failed)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colors.onPrimaryContainer,
-                        ),
-                      )
+                      const CupertinoActivityIndicator(radius: 7)
                     else
                       Icon(
-                        Icons.error_outline,
+                        CupertinoIcons.exclamationmark_circle,
                         size: 16,
-                        color: colors.onErrorContainer,
+                        color: colors.destructive,
                       ),
                     const SizedBox(width: 6),
                     Flexible(
@@ -1765,19 +1805,29 @@ class _PendingMessageBubble extends StatelessWidget {
                         failed && pending.error.isNotEmpty
                             ? compactMessage(pending.error, max: 80)
                             : strings.text('Sending...'),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: failed
-                              ? colors.onErrorContainer
-                              : colors.onPrimaryContainer,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: textColor,
                         ),
                       ),
                     ),
                     if (failed) ...[
                       const SizedBox(width: 8),
-                      TextButton.icon(
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minSize: 0,
                         onPressed: onRetry,
-                        icon: const Icon(Icons.refresh, size: 16),
-                        label: Text(strings.text('Retry send')),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(CupertinoIcons.refresh, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              strings.text('Retry send'),
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -1809,9 +1859,8 @@ class _VoiceMessageControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = formatVoiceDuration(durationSeconds);
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 132, maxWidth: 220),
         child: Padding(
@@ -1821,8 +1870,8 @@ class _VoiceMessageControl extends StatelessWidget {
             children: [
               Icon(
                 playing
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_fill_outlined,
+                    ? CupertinoIcons.pause_circle_fill
+                    : CupertinoIcons.play_circle_fill,
                 color: foreground,
                 size: 30,
               ),
@@ -1830,20 +1879,28 @@ class _VoiceMessageControl extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: playing ? null : 0,
-                    minHeight: 5,
-                    color: foreground,
-                    backgroundColor: secondary.withValues(alpha: 0.24),
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: secondary.withValues(alpha: 0.24),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: playing
+                        ? const SizedBox.expand(
+                            child: CupertinoActivityIndicator(radius: 2),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                style: TextStyle(
+                  fontSize: 12,
                   color: foreground,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1865,47 +1922,46 @@ class _GroupAnnouncementBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = CsacColors.of(context);
     final strings = context.strings;
-    return Material(
-      color: colors.secondaryContainer,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-          child: Row(
-            children: [
-              Icon(Icons.campaign_outlined, color: colors.onSecondaryContainer),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      strings.text('Group announcement'),
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: colors.onSecondaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: colors.systemOrange.withValues(alpha: 0.12),
+        padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+        child: Row(
+          children: [
+            Icon(CupertinoIcons.speaker_2, color: colors.systemOrange, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    strings.text('Group announcement'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.label,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      announcement,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSecondaryContainer,
-                      ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    announcement,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryLabel,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right, color: colors.onSecondaryContainer),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Icon(CupertinoIcons.chevron_right, color: colors.secondaryLabel, size: 16),
+          ],
         ),
       ),
     );
@@ -1938,70 +1994,122 @@ class _MessageActionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.checklist),
-            title: Text(strings.text('Select messages')),
-            subtitle: Text(strings.text('Choose multiple messages')),
-            onTap: () => Navigator.of(context).pop(_MessageAction.select),
+    return CupertinoActionSheet(
+      actions: [
+        CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(_MessageAction.select),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.checkmark_circle, size: 20),
+              const SizedBox(width: 8),
+              Text(strings.text('Select messages')),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.reply),
-            title: Text(strings.text('Reply')),
-            subtitle: Text('#${message.id} ${message.sender}'),
-            onTap: () => Navigator.of(context).pop(_MessageAction.reply),
+        ),
+        CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(_MessageAction.reply),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.reply, size: 20),
+              const SizedBox(width: 8),
+              Text(strings.text('Reply')),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.copy),
-            title: Text(strings.text('Copy text')),
-            onTap: () => Navigator.of(context).pop(_MessageAction.copyText),
+        ),
+        CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(_MessageAction.copyText),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.doc_on_doc, size: 20),
+              const SizedBox(width: 8),
+              Text(strings.text('Copy text')),
+            ],
           ),
-          if (message.imageUrl.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: Text(strings.text('Copy image link')),
-              onTap: () => Navigator.of(context).pop(_MessageAction.copyImage),
+        ),
+        if (message.imageUrl.isNotEmpty)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(_MessageAction.copyImage),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.link, size: 20),
+                const SizedBox(width: 8),
+                Text(strings.text('Copy image link')),
+              ],
             ),
-          if (message.imageUrl.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.open_in_new),
-              title: Text(strings.text('Open image')),
-              onTap: () => Navigator.of(context).pop(_MessageAction.openImage),
+          ),
+        if (message.imageUrl.isNotEmpty)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(_MessageAction.openImage),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.arrow_up_right_square, size: 20),
+                const SizedBox(width: 8),
+                Text(strings.text('Open image')),
+              ],
             ),
-          if (message.imageUrl.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: Text(strings.text('Download image')),
-              onTap: () =>
-                  Navigator.of(context).pop(_MessageAction.downloadImage),
+          ),
+        if (message.imageUrl.isNotEmpty)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(_MessageAction.downloadImage),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.cloud_download, size: 20),
+                const SizedBox(width: 8),
+                Text(strings.text('Download image')),
+              ],
             ),
-          if (canRecall)
-            ListTile(
-              leading: const Icon(Icons.undo),
-              title: Text(strings.text('Recall')),
-              onTap: () => Navigator.of(context).pop(_MessageAction.recall),
+          ),
+        if (canRecall)
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(_MessageAction.recall),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.arrow_uturn_left, size: 20),
+                const SizedBox(width: 8),
+                Text(strings.text('Recall')),
+              ],
             ),
-          if (canEssence)
-            ListTile(
-              leading: Icon(
-                message.isEssence ? Icons.star : Icons.star_outline,
-              ),
-              title: Text(
-                strings.text(
-                  message.isEssence ? 'Remove essence' : 'Set essence',
+          ),
+        if (canEssence)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(_MessageAction.essence),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  message.isEssence ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                  size: 20,
                 ),
-              ),
-              onTap: () => Navigator.of(context).pop(_MessageAction.essence),
+                const SizedBox(width: 8),
+                Text(strings.text(
+                  message.isEssence ? 'Remove essence' : 'Set essence',
+                )),
+              ],
             ),
-          ListTile(
-            leading: const Icon(Icons.flag_outlined),
-            title: Text(strings.text('Report message')),
-            onTap: () => Navigator.of(context).pop(_MessageAction.report),
           ),
-        ],
+        CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(_MessageAction.report),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.flag, size: 20),
+              const SizedBox(width: 8),
+              Text(strings.text('Report message')),
+            ],
+          ),
+        ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(context).pop(),
+        child: Text(strings.text('Cancel')),
       ),
     );
   }
@@ -2022,6 +2130,7 @@ class _ComposeTargetsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final strings = context.strings;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -2030,28 +2139,62 @@ class _ComposeTargetsBar extends StatelessWidget {
         runSpacing: 6,
         children: [
           if (replyTarget != null)
-            InputChip(
-              avatar: const Icon(Icons.reply, size: 18),
-              label: Text(
-                strings.format('Reply #{id}: {sender}', {
-                  'id': replyTarget!.id,
-                  'sender': replyTarget!.sender,
-                }),
-                overflow: TextOverflow.ellipsis,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: colors.elevatedBackground,
+                borderRadius: BorderRadius.circular(14),
               ),
-              onDeleted: onClearReply,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.reply, size: 14, color: colors.secondaryLabel),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      strings.format('Reply #{id}: {sender}', {
+                        'id': replyTarget!.id,
+                        'sender': replyTarget!.sender,
+                      }),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: colors.label),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onClearReply,
+                    child: Icon(CupertinoIcons.xmark_circle_fill, size: 16, color: colors.secondaryLabel),
+                  ),
+                ],
+              ),
             ),
           if (mentions.isNotEmpty)
-            InputChip(
-              avatar: const Icon(Icons.alternate_email, size: 18),
-              label: Text(
-                mentions.length == 1
-                    ? '@${mentions.first.name}'
-                    : strings.format('@ {count} members', {
-                        'count': mentions.length,
-                      }),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: colors.elevatedBackground,
+                borderRadius: BorderRadius.circular(14),
               ),
-              onDeleted: onClearMentions,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.at, size: 14, color: colors.secondaryLabel),
+                  const SizedBox(width: 4),
+                  Text(
+                    mentions.length == 1
+                        ? '@${mentions.first.name}'
+                        : strings.format('@ {count} members', {
+                            'count': mentions.length,
+                          }),
+                    style: TextStyle(fontSize: 12, color: colors.label),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onClearMentions,
+                    child: Icon(CupertinoIcons.xmark_circle_fill, size: 16, color: colors.secondaryLabel),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -2077,23 +2220,44 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final strings = context.strings;
-    return SafeArea(
-      child: SizedBox(
-        height: 520,
+    return Container(
+      height: 520,
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: SafeArea(
+        top: false,
         child: Column(
           children: [
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: colors.separator,
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       strings.text('Mention members'),
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: colors.label,
+                      ),
                     ),
                   ),
-                  TextButton(
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: 0,
                     onPressed: () {
                       setState(() {
                         if (selected.length == widget.members.length) {
@@ -2120,31 +2284,61 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                       itemBuilder: (context, index) {
                         final member = widget.members[index];
                         final checked = selected.contains(member.uid);
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          child: _RoundedInkClip(
-                            child: CheckboxListTile(
-                              value: checked,
-                              onChanged: (_) {
-                                setState(() {
-                                  if (checked) {
-                                    selected.remove(member.uid);
-                                  } else {
-                                    selected.add(member.uid);
-                                  }
-                                });
-                              },
-                              secondary: _Avatar(
-                                url: member.avatar,
-                                fallback: Icons.person_rounded,
-                              ),
-                              title: Text(member.name),
-                              subtitle: member.subtitle.isEmpty
-                                  ? null
-                                  : Text(member.subtitle),
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              if (checked) {
+                                selected.remove(member.uid);
+                              } else {
+                                selected.add(member.uid);
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  checked
+                                      ? CupertinoIcons.checkmark_circle_fill
+                                      : CupertinoIcons.circle,
+                                  size: 22,
+                                  color: checked
+                                      ? colors.primaryColor
+                                      : colors.secondaryLabel,
+                                ),
+                                const SizedBox(width: 12),
+                                _Avatar(
+                                  url: member.avatar,
+                                  fallback: CupertinoIcons.person_solid,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        member.name,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: colors.label,
+                                        ),
+                                      ),
+                                      if (member.subtitle.isNotEmpty)
+                                        Text(
+                                          member.subtitle,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.secondaryLabel,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -2159,14 +2353,17 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                     strings.format('{count} selected', {
                       'count': selected.length,
                     }),
+                    style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
                   ),
                   const Spacer(),
-                  TextButton(
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     onPressed: () => Navigator.of(context).pop(null),
                     child: Text(strings.text('Cancel')),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
+                  CupertinoButton.filled(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     onPressed: () {
                       Navigator.of(context).pop(
                         widget.members
@@ -2193,18 +2390,39 @@ class _ForwardConversationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final strings = context.strings;
-    return SafeArea(
-      child: SizedBox(
-        height: 520,
+    return Container(
+      height: 520,
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: SafeArea(
+        top: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 36,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.separator,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Text(
                 strings.text('Forward to'),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: colors.label,
+                ),
               ),
             ),
             Expanded(
@@ -2216,32 +2434,56 @@ class _ForwardConversationSheet extends StatelessWidget {
                       itemCount: conversations.length,
                       itemBuilder: (context, index) {
                         final conversation = conversations[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          child: _RoundedInkClip(
-                            child: ListTile(
-                              leading: Icon(
-                                conversation.type == ConversationType.group
-                                    ? Icons.groups_rounded
-                                    : Icons.person_rounded,
-                              ),
-                              title: Text(
-                                conversation.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: conversation.subtitle.isEmpty
-                                  ? null
-                                  : Text(
-                                      conversation.subtitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                              onTap: () =>
-                                  Navigator.of(context).pop(conversation),
+                        return GestureDetector(
+                          onTap: () => Navigator.of(context).pop(conversation),
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  conversation.type == ConversationType.group
+                                      ? CupertinoIcons.person_3_fill
+                                      : CupertinoIcons.person_fill,
+                                  size: 24,
+                                  color: colors.secondaryLabel,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        conversation.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: colors.label,
+                                        ),
+                                      ),
+                                      if (conversation.subtitle.isNotEmpty)
+                                        Text(
+                                          conversation.subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.secondaryLabel,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 16,
+                                  color: colors.tertiaryLabel,
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -2306,7 +2548,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
 
   Future<void> openMessage(ChatMessage message) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CupertinoPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: widget.conversation,
@@ -2318,64 +2560,107 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.strings.text('Essence messages')),
-        actions: [
-          IconButton(
-            tooltip: context.strings.text('Essence stats'),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => EssenceStatsScreen(
-                    state: widget.state,
-                    conversation: widget.conversation,
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.query_stats_outlined),
-          ),
-          IconButton(
-            tooltip: context.strings.text('Refresh'),
-            onPressed: load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Essence messages')),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (loading) const LinearProgressIndicator(minHeight: 2),
-            if (error != null) _InlineError(message: error!, onRetry: load),
-            if (!loading && messages.isEmpty)
-              _EmptyPanel(message: context.strings.text('No essence messages.'))
-            else
-              for (final message in messages)
-                Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: ListTile(
-                    onTap: () => openMessage(message),
-                    leading: const Icon(Icons.star_outline),
-                    title: Text(
-                      message.sender,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute<void>(
+                    builder: (_) => EssenceStatsScreen(
+                      state: widget.state,
+                      conversation: widget.conversation,
                     ),
-                    subtitle: Text(
-                      [
-                        if (message.time.isNotEmpty) message.time,
-                        message.body,
-                      ].join(' | '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
                   ),
-                ),
+                );
+              },
+              child: const Icon(CupertinoIcons.chart_bar, size: 20),
+            ),
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              onPressed: load,
+              child: const Icon(CupertinoIcons.refresh, size: 20),
+            ),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: CustomScrollView(
+          slivers: [
+            CupertinoSliverRefreshControl(onRefresh: load),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CupertinoActivityIndicator()),
+                    ),
+                  if (error != null) _InlineError(message: error!, onRetry: load),
+                  if (!loading && messages.isEmpty)
+                    _EmptyPanel(message: strings.text('No essence messages.'))
+                  else
+                    for (final message in messages)
+                      GestureDetector(
+                        onTap: () => openMessage(message),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colors.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(CupertinoIcons.star, size: 20, color: colors.systemOrange),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      message.sender,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                        color: colors.label,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        if (message.time.isNotEmpty) message.time,
+                                        message.body,
+                                      ].join(' | '),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: colors.secondaryLabel,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                            ],
+                          ),
+                        ),
+                      ),
+                ]),
+              ),
+            ),
           ],
         ),
       ),
@@ -2437,99 +2722,174 @@ class _EssenceStatsScreenState extends State<EssenceStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final strings = context.strings;
     final loaded = stats;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Essence stats'))),
-      body: RefreshIndicator(
-        onRefresh: load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            SegmentedButton<String>(
-              segments: [
-                for (final type in types)
-                  ButtonSegment(
-                    value: type,
-                    label: Text(strings.text('stats.$type')),
-                  ),
-              ],
-              selected: {selectedType},
-              onSelectionChanged: (value) {
-                setState(() => selectedType = value.first);
-                load();
-              },
-            ),
-            const SizedBox(height: 12),
-            if (loading) const LinearProgressIndicator(minHeight: 2),
-            if (error != null) _InlineError(message: error!, onRetry: load),
-            if (loaded != null) ...[
-              GridView.count(
-                crossAxisCount: MediaQuery.sizeOf(context).width > 520 ? 4 : 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 1.8,
-                children: [
-                  _StatTile(
-                    label: strings.text('Total'),
-                    value: '${loaded.total}',
-                  ),
-                  _StatTile(
-                    label: strings.text('Text'),
-                    value: '${loaded.textCount}',
-                  ),
-                  _StatTile(
-                    label: strings.text('Images'),
-                    value: '${loaded.imageCount}',
-                  ),
-                  _StatTile(
-                    label: strings.text('Voice'),
-                    value: '${loaded.voiceCount}',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                child: ListTile(
-                  leading: const Icon(Icons.schedule),
-                  title: Text(strings.text('Latest set time')),
-                  subtitle: Text(
-                    loaded.latestSetTime.isEmpty
-                        ? strings.text('(empty)')
-                        : loaded.latestSetTime,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                strings.text('Contribution rank'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              if (loaded.rank.isEmpty)
-                _EmptyPanel(message: strings.text('No rank data.'))
-              else
-                for (final item in loaded.rank)
-                  Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          '${item.rank == 0 ? loaded.rank.indexOf(item) + 1 : item.rank}',
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Essence stats')),
+      ),
+      child: SafeArea(
+        top: false,
+        child: CustomScrollView(
+          slivers: [
+            CupertinoSliverRefreshControl(onRefresh: load),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  CupertinoSlidingSegmentedControl<String>(
+                    groupValue: selectedType,
+                    children: {
+                      for (final type in types)
+                        type: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Text(strings.text('stats.$type'), style: const TextStyle(fontSize: 13)),
                         ),
-                      ),
-                      title: Text(item.nickname),
-                      subtitle: Text('UID ${item.uid}'),
-                      trailing: Text('${item.count}'),
-                    ),
+                    },
+                    onValueChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedType = value);
+                        load();
+                      }
+                    },
                   ),
-            ],
+                  const SizedBox(height: 12),
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CupertinoActivityIndicator()),
+                    ),
+                  if (error != null) _InlineError(message: error!, onRetry: load),
+                  if (loaded != null) ...[
+                    GridView.count(
+                      crossAxisCount: MediaQuery.sizeOf(context).width > 520 ? 4 : 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.8,
+                      children: [
+                        _StatTile(
+                          label: strings.text('Total'),
+                          value: '${loaded.total}',
+                        ),
+                        _StatTile(
+                          label: strings.text('Text'),
+                          value: '${loaded.textCount}',
+                        ),
+                        _StatTile(
+                          label: strings.text('Images'),
+                          value: '${loaded.imageCount}',
+                        ),
+                        _StatTile(
+                          label: strings.text('Voice'),
+                          value: '${loaded.voiceCount}',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colors.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.clock, size: 20, color: colors.secondaryLabel),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.text('Latest set time'),
+                                  style: TextStyle(fontSize: 15, color: colors.label),
+                                ),
+                                Text(
+                                  loaded.latestSetTime.isEmpty
+                                      ? strings.text('(empty)')
+                                      : loaded.latestSetTime,
+                                  style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      strings.text('Contribution rank'),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: colors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (loaded.rank.isEmpty)
+                      _EmptyPanel(message: strings.text('No rank data.'))
+                    else
+                      for (final item in loaded.rank)
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colors.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: colors.primaryColor.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${item.rank == 0 ? loaded.rank.indexOf(item) + 1 : item.rank}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.primaryColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.nickname,
+                                      style: TextStyle(fontSize: 15, color: colors.label),
+                                    ),
+                                    Text(
+                                      'UID ${item.uid}',
+                                      style: TextStyle(fontSize: 12, color: colors.secondaryLabel),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${item.count}',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.label,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                  ],
+                ]),
+              ),
+            ),
           ],
         ),
       ),
@@ -2545,29 +2905,33 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium,
+    final colors = CsacColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: colors.secondaryLabel),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: colors.label,
             ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -8,10 +8,9 @@ class _MessageImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return InkWell(
+    final colors = CsacColors.of(context);
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.network(
@@ -23,12 +22,15 @@ class _MessageImage extends StatelessWidget {
             return Container(
               width: 260,
               height: 120,
-              color: colors.surfaceContainerHighest,
+              decoration: BoxDecoration(
+                color: colors.elevatedBackground,
+                borderRadius: BorderRadius.circular(8),
+              ),
               alignment: Alignment.center,
               child: Icon(
-                Icons.broken_image_outlined,
+                CupertinoIcons.photo,
                 size: 42,
-                color: colors.onSurfaceVariant,
+                color: CupertinoColors.secondaryLabel,
               ),
             );
           },
@@ -40,7 +42,7 @@ class _MessageImage extends StatelessWidget {
               width: 260,
               height: 120,
               alignment: Alignment.center,
-              child: const CircularProgressIndicator(strokeWidth: 2),
+              child: const CupertinoActivityIndicator(),
             );
           },
         ),
@@ -71,52 +73,53 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = Theme.of(context).colorScheme;
-    return AlertDialog(
+    final colors = CsacColors.of(context);
+    return CupertinoAlertDialog(
       title: Text(
         strings.format('Send image: {fileName}', {'fileName': widget.fileName}),
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 260,
-            height: 180,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: colors.surfaceContainerHighest,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.memory(
-              widget.bytes,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Icon(
-                Icons.image_outlined,
-                size: 48,
-                color: colors.onSurfaceVariant,
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 260,
+              height: 180,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: colors.elevatedBackground,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Image.memory(
+                widget.bytes,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Icon(
+                  CupertinoIcons.photo,
+                  size: 48,
+                  color: CupertinoColors.secondaryLabel,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: caption,
-            maxLines: 3,
-            decoration: InputDecoration(
-              labelText: strings.text('Caption'),
-              border: const OutlineInputBorder(),
+            const SizedBox(height: 14),
+            CupertinoTextField(
+              controller: caption,
+              maxLines: 3,
+              placeholder: strings.text('Caption'),
+              padding: const EdgeInsets.all(12),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
-        TextButton(
+        CupertinoDialogAction(
           onPressed: () => Navigator.of(context).pop(null),
           child: Text(strings.text('Cancel')),
         ),
-        FilledButton.icon(
+        CupertinoDialogAction(
+          isDefaultAction: true,
           onPressed: () => Navigator.of(context).pop(caption.text),
-          icon: const Icon(Icons.send),
-          label: Text(strings.text('Send')),
+          child: Text(strings.text('Send')),
         ),
       ],
     );
@@ -125,78 +128,101 @@ class _ImageCaptionDialogState extends State<_ImageCaptionDialog> {
 
 void showImagePreview(BuildContext context, String url) {
   final strings = context.strings;
-  showDialog<void>(
-    context: context,
-    builder: (context) {
-      return Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  minScale: 0.7,
-                  maxScale: 5,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(
-                      Icons.broken_image_outlined,
-                      size: 64,
-                      color: Colors.white70,
+  Navigator.of(context).push(
+    CupertinoPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (context) {
+        return CupertinoPageScaffold(
+          backgroundColor: CupertinoColors.black,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    minScale: 0.7,
+                    maxScale: 5,
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        CupertinoIcons.photo,
+                        size: 64,
+                        color: CupertinoColors.systemGrey,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: _FrostedGlassButton(
+                    icon: CupertinoIcons.xmark,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Row(
-                  children: [
-                    IconButton.filledTonal(
-                      tooltip: strings.text('Copy link'),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: url));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(strings.text('Image link copied')),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.copy),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      tooltip: strings.text('Open'),
-                      onPressed: () => launchUrl(
-                        Uri.parse(url),
-                        mode: LaunchMode.externalApplication,
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Row(
+                    children: [
+                      _FrostedGlassButton(
+                        icon: CupertinoIcons.doc_on_doc,
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: url));
+                          _showCupertinoToast(
+                            context,
+                            strings.text('Image link copied'),
+                          );
+                        },
                       ),
-                      icon: const Icon(Icons.open_in_new),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      tooltip: strings.text('Download'),
-                      onPressed: () => downloadImage(context, url),
-                      icon: const Icon(Icons.download_outlined),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      _FrostedGlassButton(
+                        icon: CupertinoIcons.arrow_up_right_square,
+                        onPressed: () => launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _FrostedGlassButton(
+                        icon: CupertinoIcons.arrow_down_to_line,
+                        onPressed: () => downloadImage(context, url),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
+}
+
+class _FrostedGlassButton extends StatelessWidget {
+  const _FrostedGlassButton({required this.icon, required this.onPressed});
+
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: CupertinoButton(
+          padding: const EdgeInsets.all(10),
+          color: CupertinoColors.systemGrey.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(20),
+          minimumSize: const Size.square(36),
+          onPressed: onPressed,
+          child: Icon(icon, size: 20, color: CupertinoColors.white),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> downloadImage(BuildContext context, String url) async {
@@ -228,9 +254,7 @@ Future<void> downloadImage(BuildContext context, String url) async {
       );
       if (location == null) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(strings.text('Download cancelled.'))),
-          );
+          _showCupertinoToast(context, strings.text('Download cancelled.'));
         }
         return;
       }
@@ -245,21 +269,17 @@ Future<void> downloadImage(BuildContext context, String url) async {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(strings.format('Saved to {path}', {'path': path})),
-      ),
+    _showCupertinoToast(
+      context,
+      strings.format('Saved to {path}', {'path': path}),
     );
   } catch (err) {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          strings.format('Download failed: {error}', {'error': err}),
-        ),
-      ),
+    _showCupertinoToast(
+      context,
+      strings.format('Download failed: {error}', {'error': err}),
     );
   }
 }

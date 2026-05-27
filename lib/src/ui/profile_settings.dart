@@ -10,111 +10,168 @@ class ProfileScreen extends StatelessWidget {
     final user = state.user;
     final counts = state.notificationCounts;
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Me'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Me')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
             if (state.sessionExpired)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: MaterialBanner(
-                  content: Text(
-                    strings.text(
-                      'Session expired. Log in again to sync latest data.',
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemYellow.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: CupertinoColors.systemYellow.withValues(alpha: 0.4),
                     ),
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: state.logout,
-                      child: Text(strings.text('Login')),
-                    ),
-                  ],
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          strings.text(
+                            'Session expired. Log in again to sync latest data.',
+                          ),
+                          style: TextStyle(fontSize: 14, color: colors.label),
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        minSize: 0,
+                        onPressed: state.logout,
+                        child: Text(strings.text('Login')),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ListTile(
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
                   leading: _Avatar(
                     url: user?.avatar ?? '',
-                    fallback: Icons.person_rounded,
+                    fallback: CupertinoIcons.person_fill,
                   ),
-                  title: Text(user?.nickname ?? strings.text('Not logged in')),
-                  subtitle: Text(
-                    [
-                      if (user?.username.isNotEmpty == true)
-                        '@${user!.username}',
-                      if (user != null) 'UID ${user.uid}',
-                      if (user?.onlineStatus.isNotEmpty == true)
-                        user!.onlineStatus,
-                    ].join(' | '),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
+                  title: user?.nickname ?? strings.text('Not logged in'),
+                  subtitle: [
+                    if (user?.username.isNotEmpty == true)
+                      '@${user!.username}',
+                    if (user != null) 'UID ${user.uid}',
+                    if (user?.onlineStatus.isNotEmpty == true)
+                      user!.onlineStatus,
+                  ].join(' | '),
                   onTap: user == null
                       ? null
                       : () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CupertinoPageRoute<void>(
                               builder: (_) =>
                                   AccountSettingsScreen(state: state),
                             ),
                           );
                         },
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: Column(
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.bell, size: 22),
+                  title: strings.text('Unread notices'),
+                  trailing: _badgeCount(counts.notices, colors),
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.person_add, size: 22),
+                  title: strings.text('Friend requests'),
+                  trailing: _badgeCount(counts.friendRequests, colors),
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.group, size: 22),
+                  title: strings.text('Group reviews'),
+                  trailing: _badgeCount(counts.groupApplications, colors),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            CupertinoButton.filled(
+              onPressed: state.refreshHome,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.notifications_none),
-                    title: Text(strings.text('Unread notices')),
-                    trailing: Badge(label: Text('${counts.notices}')),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.person_add_alt),
-                    title: Text(strings.text('Friend requests')),
-                    trailing: Badge(label: Text('${counts.friendRequests}')),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.group_add_outlined),
-                    title: Text(strings.text('Group reviews')),
-                    trailing: Badge(label: Text('${counts.groupApplications}')),
-                  ),
+                  const Icon(CupertinoIcons.arrow_2_circlepath, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.text('Refresh all')),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: state.refreshHome,
-              icon: const Icon(Icons.sync),
-              label: Text(strings.text('Refresh all')),
-            ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
+            CupertinoButton(
+              color: colors.cardBackground,
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
+                  CupertinoPageRoute<void>(
                     builder: (_) => SettingsScreen(state: state),
                   ),
                 );
               },
-              icon: const Icon(Icons.settings_outlined),
-              label: Text(strings.text('Settings')),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.settings, size: 18, color: colors.label),
+                  const SizedBox(width: 8),
+                  Text(
+                    strings.text('Settings'),
+                    style: TextStyle(color: colors.label),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
+            CupertinoButton(
+              color: colors.cardBackground,
               onPressed: state.logout,
-              icon: const Icon(Icons.logout),
-              label: Text(strings.text('Logout')),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.square_arrow_left, size: 18, color: colors.label),
+                  const SizedBox(width: 8),
+                  Text(
+                    strings.text('Logout'),
+                    style: TextStyle(color: colors.label),
+                  ),
+                ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _badgeCount(int count, CsacColors colors) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: count > 0
+            ? CupertinoColors.systemRed
+            : colors.elevatedBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: count > 0 ? CupertinoColors.white : colors.secondaryLabel,
         ),
       ),
     );
@@ -140,27 +197,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final current = widget.state.user?.nickname ?? '';
     final controller = TextEditingController(text: current);
     final strings = context.strings;
-    final nickname = await showDialog<String>(
+    final nickname = await showCupertinoDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Change nickname')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 16,
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: strings.text('New nickname'),
-            border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 16,
+            textInputAction: TextInputAction.done,
+            placeholder: strings.text('New nickname'),
+            onSubmitted: (value) => Navigator.of(context).pop(value),
           ),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: Text(strings.text('Save')),
           ),
@@ -168,71 +226,55 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       ),
     );
     controller.dispose();
-    if (nickname == null || !mounted) {
-      return;
-    }
+    if (nickname == null || !mounted) return;
     final trimmed = nickname.trim();
     if (trimmed.isEmpty) {
-      showSnack(context.strings.text('Please enter a nickname.'));
+      _showCupertinoToast(context, context.strings.text('Please enter a nickname.'));
       return;
     }
-    if (trimmed == current.trim()) {
-      return;
-    }
+    if (trimmed == current.trim()) return;
     setState(() => updatingNickname = true);
     try {
       await widget.state.updateNickname(trimmed);
-      if (!mounted) {
-        return;
-      }
-      showSnack(context.strings.text('Nickname updated.'));
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Nickname updated.'));
       setState(() {});
     } catch (err) {
       if (mounted) {
-        showSnack(
+        _showCupertinoToast(
+          context,
           context.strings.format('Update failed: {error}', {'error': err}),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => updatingNickname = false);
-      }
+      if (mounted) setState(() => updatingNickname = false);
     }
   }
 
   Future<void> changeAvatar() async {
-    if (updatingAvatar) {
-      return;
-    }
+    if (updatingAvatar) return;
     final picked = await imagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 90,
     );
-    if (picked == null || !mounted) {
-      return;
-    }
+    if (picked == null || !mounted) return;
     final bytes = await picked.readAsBytes();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => updatingAvatar = true);
     try {
       await widget.state.updateAvatar(bytes, picked.name);
-      if (!mounted) {
-        return;
-      }
-      showSnack(context.strings.text('Avatar updated.'));
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Avatar updated.'));
       setState(() {});
     } catch (err) {
       if (mounted) {
-        showSnack(
+        _showCupertinoToast(
+          context,
           context.strings.format('Update failed: {error}', {'error': err}),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => updatingAvatar = false);
-      }
+      if (mounted) setState(() => updatingAvatar = false);
     }
   }
 
@@ -241,43 +283,34 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final newPassword = TextEditingController();
     final confirmPassword = TextEditingController();
     final strings = context.strings;
-    final result = await showDialog<_PasswordChange>(
+    final result = await showCupertinoDialog<_PasswordChange>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Change password')),
-        content: SizedBox(
-          width: 420,
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              CupertinoTextField(
                 controller: oldPassword,
                 obscureText: true,
                 textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: strings.text('Old password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('Old password'),
               ),
-              const SizedBox(height: 12),
-              TextField(
+              const SizedBox(height: 10),
+              CupertinoTextField(
                 controller: newPassword,
                 obscureText: true,
                 textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: strings.text('New password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('New password'),
               ),
-              const SizedBox(height: 12),
-              TextField(
+              const SizedBox(height: 10),
+              CupertinoTextField(
                 controller: confirmPassword,
                 obscureText: true,
                 textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  labelText: strings.text('Confirm password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('Confirm password'),
                 onSubmitted: (_) => Navigator.of(context).pop(
                   _PasswordChange(
                     oldPassword.text,
@@ -290,11 +323,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(
               _PasswordChange(
                 oldPassword.text,
@@ -310,23 +344,22 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     oldPassword.dispose();
     newPassword.dispose();
     confirmPassword.dispose();
-    if (result == null || !mounted) {
-      return;
-    }
+    if (result == null || !mounted) return;
     if (result.oldPassword.isEmpty ||
         result.newPassword.isEmpty ||
         result.confirmPassword.isEmpty) {
-      showSnack(context.strings.text('Please fill all password fields.'));
+      _showCupertinoToast(context, context.strings.text('Please fill all password fields.'));
       return;
     }
     if (result.newPassword.length < 6) {
-      showSnack(
+      _showCupertinoToast(
+        context,
         context.strings.text('New password must be at least 6 characters.'),
       );
       return;
     }
     if (result.newPassword != result.confirmPassword) {
-      showSnack(context.strings.text('Passwords do not match.'));
+      _showCupertinoToast(context, context.strings.text('Passwords do not match.'));
       return;
     }
     setState(() => updatingPassword = true);
@@ -336,155 +369,132 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         result.newPassword,
         result.confirmPassword,
       );
-      if (!mounted) {
-        return;
-      }
-      showSnack(context.strings.text('Password updated.'));
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Password updated.'));
     } catch (err) {
       if (mounted) {
-        showSnack(
+        _showCupertinoToast(
+          context,
           context.strings.format('Update failed: {error}', {'error': err}),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => updatingPassword = false);
-      }
+      if (mounted) setState(() => updatingPassword = false);
     }
   }
 
-  void showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Widget progressOrChevron(bool loading) {
+  Widget _progressOrChevron(bool loading, CsacColors colors) {
     if (!loading) {
-      return const Icon(Icons.chevron_right);
+      return Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel);
     }
-    return const SizedBox(
-      width: 20,
-      height: 20,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    );
+    return const CupertinoActivityIndicator(radius: 10);
   }
 
   @override
   Widget build(BuildContext context) {
     final user = widget.state.user;
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Account settings'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Account settings')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    _Avatar(
-                      url: user?.avatar ?? '',
-                      fallback: Icons.person_rounded,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user?.nickname ?? strings.text('Not logged in'),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            [
-                              if (user?.username.isNotEmpty == true)
-                                '@${user!.username}',
-                              if (user != null) 'UID ${user.uid}',
-                            ].join(' | '),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      _Avatar(
+                        url: user?.avatar ?? '',
+                        fallback: CupertinoIcons.person_fill,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.nickname ?? strings.text('Not logged in'),
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: colors.label,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              [
+                                if (user?.username.isNotEmpty == true)
+                                  '@${user!.username}',
+                                if (user != null) 'UID ${user.uid}',
+                              ].join(' | '),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colors.secondaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.badge_outlined),
-                      title: Text(strings.text('Change nickname')),
-                      subtitle: Text(user?.nickname ?? ''),
-                      trailing: progressOrChevron(updatingNickname),
-                      onTap: updatingNickname ? null : editNickname,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.add_a_photo_outlined),
-                      title: Text(strings.text('Change avatar')),
-                      subtitle: Text(
-                        strings.text('Choose a new profile image'),
-                      ),
-                      trailing: progressOrChevron(updatingAvatar),
-                      onTap: updatingAvatar ? null : changeAvatar,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.lock_reset_outlined),
-                      title: Text(strings.text('Change password')),
-                      subtitle: Text(
-                        strings.text('Update your login password'),
-                      ),
-                      trailing: progressOrChevron(updatingPassword),
-                      onTap: updatingPassword ? null : changePassword,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.security_outlined),
-                      title: Text(strings.text('Account security')),
-                      subtitle: Text(
-                        strings.text('Password upgrade and account deletion'),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                AccountSecurityScreen(state: widget.state),
-                          ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.bug_report_outlined),
-                      title: Text(strings.text('Feedback Bug')),
-                      subtitle: Text(strings.text('Send feedback to admins')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => showBugReportDialog(
-                        context: context,
-                        state: widget.state,
-                      ),
-                    ),
-                  ],
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.person_crop_circle, size: 22),
+                  title: strings.text('Change nickname'),
+                  subtitle: user?.nickname ?? '',
+                  trailing: _progressOrChevron(updatingNickname, colors),
+                  onTap: updatingNickname ? null : editNickname,
                 ),
-              ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.camera, size: 22),
+                  title: strings.text('Change avatar'),
+                  subtitle: strings.text('Choose a new profile image'),
+                  trailing: _progressOrChevron(updatingAvatar, colors),
+                  onTap: updatingAvatar ? null : changeAvatar,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.lock_rotation, size: 22),
+                  title: strings.text('Change password'),
+                  subtitle: strings.text('Update your login password'),
+                  trailing: _progressOrChevron(updatingPassword, colors),
+                  onTap: updatingPassword ? null : changePassword,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.shield, size: 22),
+                  title: strings.text('Account security'),
+                  subtitle: strings.text('Password upgrade and account deletion'),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) =>
+                            AccountSecurityScreen(state: widget.state),
+                      ),
+                    );
+                  },
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.ant, size: 22),
+                  title: strings.text('Feedback Bug'),
+                  subtitle: strings.text('Send feedback to admins'),
+                  onTap: () => showBugReportDialog(
+                    context: context,
+                    state: widget.state,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -518,63 +528,49 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   bool upgrading = false;
   bool deleting = false;
 
-  void showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> upgradePassword() async {
     final oldPassword = TextEditingController();
     final newPassword = TextEditingController();
     final confirmPassword = TextEditingController();
     final strings = context.strings;
-    final result = await showDialog<_PasswordChange>(
+    final result = await showCupertinoDialog<_PasswordChange>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Upgrade password')),
-        content: SizedBox(
-          width: 420,
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              CupertinoTextField(
                 controller: oldPassword,
                 obscureText: true,
                 textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: strings.text('Old password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('Old password'),
               ),
-              const SizedBox(height: 12),
-              TextField(
+              const SizedBox(height: 10),
+              CupertinoTextField(
                 controller: newPassword,
                 obscureText: true,
                 textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: strings.text('New password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('New password'),
               ),
-              const SizedBox(height: 12),
-              TextField(
+              const SizedBox(height: 10),
+              CupertinoTextField(
                 controller: confirmPassword,
                 obscureText: true,
-                decoration: InputDecoration(
-                  labelText: strings.text('Confirm password'),
-                  border: const OutlineInputBorder(),
-                ),
+                placeholder: strings.text('Confirm password'),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(
               _PasswordChange(
                 oldPassword.text,
@@ -590,21 +586,20 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     oldPassword.dispose();
     newPassword.dispose();
     confirmPassword.dispose();
-    if (result == null || !mounted) {
-      return;
-    }
+    if (result == null || !mounted) return;
     if (result.newPassword.isEmpty || result.confirmPassword.isEmpty) {
-      showSnack(context.strings.text('Please fill all password fields.'));
+      _showCupertinoToast(context, context.strings.text('Please fill all password fields.'));
       return;
     }
     if (result.newPassword.length < 6) {
-      showSnack(
+      _showCupertinoToast(
+        context,
         context.strings.text('New password must be at least 6 characters.'),
       );
       return;
     }
     if (result.newPassword != result.confirmPassword) {
-      showSnack(context.strings.text('Passwords do not match.'));
+      _showCupertinoToast(context, context.strings.text('Passwords do not match.'));
       return;
     }
     setState(() => upgrading = true);
@@ -615,70 +610,57 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
         result.confirmPassword,
       );
       if (mounted) {
-        showSnack(context.strings.text('Password upgraded.'));
+        _showCupertinoToast(context, context.strings.text('Password upgraded.'));
       }
     } catch (err) {
       if (mounted) {
-        showSnack(
+        _showCupertinoToast(
+          context,
           context.strings.format('Update failed: {error}', {'error': err}),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => upgrading = false);
-      }
+      if (mounted) setState(() => upgrading = false);
     }
   }
 
   Future<void> deleteAccount() async {
     final strings = context.strings;
-    final first = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(strings.text('Delete account?')),
-        content: Text(strings.text('Account deletion cannot be recovered.')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.text('Continue')),
-          ),
-        ],
-      ),
+    final first = await _showCupertinoConfirm(
+      context,
+      title: strings.text('Delete account?'),
+      message: strings.text('Account deletion cannot be recovered.'),
+      confirmText: 'Continue',
+      isDestructive: true,
     );
-    if (first != true || !mounted) {
-      return;
-    }
+    if (!first || !mounted) return;
     final confirm = TextEditingController();
-    final second = await showDialog<bool>(
+    final second = await showCupertinoDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(strings.text('Confirm account deletion')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(strings.text('Type DELETE to confirm permanent deletion.')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirm,
-              decoration: InputDecoration(
-                labelText: strings.text('Confirmation text'),
-                border: const OutlineInputBorder(),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(strings.text('Type DELETE to confirm permanent deletion.')),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: confirm,
+                placeholder: strings.text('Confirmation text'),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(strings.text('Cancel')),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () =>
                 Navigator.of(context).pop(confirm.text == 'DELETE'),
             child: Text(strings.text('Delete account')),
@@ -689,21 +671,20 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     confirm.dispose();
     if (second != true || !mounted) {
       if (second == false && mounted) {
-        showSnack(context.strings.text('Confirmation text did not match.'));
+        _showCupertinoToast(context, context.strings.text('Confirmation text did not match.'));
       }
       return;
     }
     setState(() => deleting = true);
     try {
       await widget.state.deleteAccount();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (err) {
       if (mounted) {
         setState(() => deleting = false);
-        showSnack(
+        _showCupertinoToast(
+          context,
           context.strings.format('Delete failed: {error}', {'error': err}),
         );
       }
@@ -713,60 +694,40 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Account security'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Account security')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.password_outlined),
-                      title: Text(strings.text('Upgrade password')),
-                      subtitle: Text(
-                        strings.text('Use the newer password API'),
-                      ),
-                      trailing: upgrading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_right),
-                      onTap: upgrading || deleting ? null : upgradePassword,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: Icon(
-                        Icons.delete_forever_outlined,
-                        color: colors.error,
-                      ),
-                      title: Text(
-                        strings.text('Delete account'),
-                        style: TextStyle(color: colors.error),
-                      ),
-                      subtitle: Text(
-                        strings.text(
-                          'Permanently delete this account and local data',
-                        ),
-                      ),
-                      trailing: deleting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_right),
-                      onTap: upgrading || deleting ? null : deleteAccount,
-                    ),
-                  ],
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.lock, size: 22),
+                  title: strings.text('Upgrade password'),
+                  subtitle: strings.text('Use the newer password API'),
+                  trailing: upgrading
+                      ? const CupertinoActivityIndicator(radius: 10)
+                      : Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                  onTap: upgrading || deleting ? null : upgradePassword,
                 ),
-              ),
+                _CupertinoListTile(
+                  leading: Icon(CupertinoIcons.delete, size: 22, color: CupertinoColors.systemRed),
+                  title: strings.text('Delete account'),
+                  titleColor: CupertinoColors.systemRed,
+                  subtitle: strings.text(
+                    'Permanently delete this account and local data',
+                  ),
+                  trailing: deleting
+                      ? const CupertinoActivityIndicator(radius: 10)
+                      : Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                  onTap: upgrading || deleting ? null : deleteAccount,
+                ),
+              ],
             ),
           ],
         ),
@@ -790,7 +751,7 @@ class _ThemeColorDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = CsacColors.of(context);
     return Container(
       width: 28,
       height: 28,
@@ -798,18 +759,17 @@ class _ThemeColorDot extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         border: Border.all(
-          color: selected ? scheme.primary : scheme.outlineVariant,
+          color: selected ? colors.primaryColor : colors.separator,
           width: selected ? 3 : 1,
         ),
       ),
       child: selected
           ? Icon(
-              Icons.check,
-              size: 16,
-              color:
-                  ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-                  ? Colors.white
-                  : Colors.black,
+              CupertinoIcons.checkmark,
+              size: 14,
+              color: _estimateBrightness(color) == Brightness.dark
+                  ? CupertinoColors.white
+                  : CupertinoColors.black,
             )
           : null,
     );
@@ -829,15 +789,11 @@ class _ThemeColorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: context.strings.text(option.label),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: _ThemeColorDot(color: option.color, selected: selected),
-        ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _ThemeColorDot(color: option.color, selected: selected),
       ),
     );
   }
@@ -845,9 +801,14 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.0.0-29';
-const _csacAppBuild = '29';
+const _csacAppVersion = '1.1.0-1';
+const _csacAppBuild = '1';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
+
+Brightness _estimateBrightness(Color color) {
+  final relativeLuminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+  return relativeLuminance > 0.5 ? Brightness.light : Brightness.dark;
+}
 
 class AppInfoScreen extends StatelessWidget {
   const AppInfoScreen({super.key});
@@ -855,9 +816,7 @@ class AppInfoScreen extends StatelessWidget {
   Future<void> copySourceUrl(BuildContext context) async {
     await Clipboard.setData(const ClipboardData(text: _csacSourceUrl));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Source link copied.'))),
-      );
+      _showCupertinoToast(context, context.strings.text('Source link copied.'));
     }
   }
 
@@ -869,134 +828,110 @@ class AppInfoScreen extends StatelessWidget {
     }
   }
 
-  Widget infoTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String value,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: SelectableText(value),
-      trailing: trailing,
-      onTap: onTap,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('App information'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('App information')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: colors.primaryColor.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.chat_bubble_2,
+                          color: colors.primaryColor,
+                          size: 22,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _csacAppName,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            strings.text('Third-party CsAC client'),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _csacAppName,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: colors.label,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              strings.text('Third-party CsAC client'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colors.secondaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    infoTile(
-                      context,
-                      icon: Icons.apps_outlined,
-                      title: strings.text('App name'),
-                      value: _csacAppName,
-                    ),
-                    const Divider(height: 1),
-                    infoTile(
-                      context,
-                      icon: Icons.account_tree_outlined,
-                      title: strings.text('Branch'),
-                      value: _csacAppBranch,
-                    ),
-                    const Divider(height: 1),
-                    infoTile(
-                      context,
-                      icon: Icons.numbers_outlined,
-                      title: strings.text('Version'),
-                      value: _csacAppVersion,
-                    ),
-                    const Divider(height: 1),
-                    infoTile(
-                      context,
-                      icon: Icons.build_outlined,
-                      title: strings.text('Build number'),
-                      value: _csacAppBuild,
-                    ),
-                  ],
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.app, size: 22),
+                  title: strings.text('App name'),
+                  subtitle: _csacAppName,
                 ),
-              ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.arrow_branch, size: 22),
+                  title: strings.text('Branch'),
+                  subtitle: _csacAppBranch,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.number, size: 22),
+                  title: strings.text('Version'),
+                  subtitle: _csacAppVersion,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.hammer, size: 22),
+                  title: strings.text('Build number'),
+                  subtitle: _csacAppBuild,
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    infoTile(
-                      context,
-                      icon: Icons.code,
-                      title: strings.text('Source code'),
-                      value: _csacSourceUrl,
-                      trailing: const Icon(Icons.open_in_new),
-                      onTap: () => openSourceUrl(context),
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.copy),
-                      title: Text(strings.text('Copy source link')),
-                      onTap: () => copySourceUrl(context),
-                    ),
-                  ],
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.chevron_left_slash_chevron_right, size: 22),
+                  title: strings.text('Source code'),
+                  subtitle: _csacSourceUrl,
+                  trailing: Icon(CupertinoIcons.arrow_up_right_square, size: 18, color: colors.tertiaryLabel),
+                  onTap: () => openSourceUrl(context),
                 ),
-              ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.doc_on_clipboard, size: 22),
+                  title: strings.text('Copy source link'),
+                  onTap: () => copySourceUrl(context),
+                ),
+              ],
             ),
           ],
         ),
@@ -1015,6 +950,7 @@ class OpenSourceLicensesScreen extends StatefulWidget {
 
 class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
   late final Future<List<_LicenseNotice>> licenses = loadLicenses();
+  final Set<int> _expandedIndices = {};
 
   Future<List<_LicenseNotice>> loadLicenses() async {
     final licensesByPackage = <String, Set<String>>{};
@@ -1027,9 +963,7 @@ class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
           .map((paragraph) => paragraph.text.trimRight())
           .where((text) => text.trim().isNotEmpty)
           .join('\n\n');
-      if (body.trim().isEmpty) {
-        continue;
-      }
+      if (body.trim().isEmpty) continue;
       final packageNames = packages.isEmpty
           ? const <String>{'Unknown package'}
           : packages;
@@ -1052,18 +986,19 @@ class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
       ClipboardData(text: '${license.title}\n\n${license.body}'),
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('License copied.'))),
-      );
+      _showCupertinoToast(context, context.strings.text('License copied.'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Open-source licenses'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Open-source licenses')),
+      ),
+      child: SafeArea(
         child: FutureBuilder<List<_LicenseNotice>>(
           future: licenses,
           builder: (context, snapshot) {
@@ -1072,9 +1007,12 @@ class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(),
+                    const CupertinoActivityIndicator(radius: 14),
                     const SizedBox(height: 16),
-                    Text(strings.text('Loading licenses...')),
+                    Text(
+                      strings.text('Loading licenses...'),
+                      style: TextStyle(color: colors.secondaryLabel),
+                    ),
                   ],
                 ),
               );
@@ -1089,53 +1027,132 @@ class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
             if (items.isEmpty) {
               return _EmptyPanel(message: strings.text('No licenses found.'));
             }
-            return ListView(
+            return ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-                  child: Text(
-                    strings.format('{count} license notices', {
-                      'count': items.length,
-                    }),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                for (final license in items)
-                  Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: _RoundedInkClip(
-                      child: ExpansionTile(
-                        title: Text(license.title),
-                        subtitle: Text(
-                          strings.format('{count} packages', {
-                            'count': license.packages.length,
-                          }),
-                        ),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          16,
-                          0,
-                          16,
-                          16,
-                        ),
-                        children: [
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: () => copyLicense(license),
-                              icon: const Icon(Icons.copy),
-                              label: Text(strings.text('Copy')),
-                            ),
-                          ),
-                          SelectableText(license.body),
-                        ],
+              itemCount: items.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                    child: Text(
+                      strings.format('{count} license notices', {
+                        'count': items.length,
+                      }),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colors.secondaryLabel,
                       ),
                     ),
+                  );
+                }
+                final licenseIndex = index - 1;
+                final license = items[licenseIndex];
+                final isExpanded = _expandedIndices.contains(licenseIndex);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: colors.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            setState(() {
+                              if (isExpanded) {
+                                _expandedIndices.remove(licenseIndex);
+                              } else {
+                                _expandedIndices.add(licenseIndex);
+                              }
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        license.title,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: colors.label,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        strings.format('{count} packages', {
+                                          'count': license.packages.length,
+                                        }),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: colors.secondaryLabel,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  isExpanded
+                                      ? CupertinoIcons.chevron_up
+                                      : CupertinoIcons.chevron_down,
+                                  size: 16,
+                                  color: colors.tertiaryLabel,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (isExpanded) ...[
+                          Container(
+                            height: 0.5,
+                            color: colors.separator,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minSize: 0,
+                                onPressed: () => copyLicense(license),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(CupertinoIcons.doc_on_clipboard, size: 14),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      strings.text('Copy'),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                            child: Text(
+                              license.body,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colors.secondaryLabel,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-              ],
+                );
+              },
             );
           },
         ),
@@ -1233,89 +1250,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => refreshing = true);
     try {
       await widget.state.refreshHome();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Refreshed.'))),
-      );
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Refreshed.'));
     } catch (err) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.format('Refresh failed: {error}', {'error': err}),
-          ),
-        ),
+      if (!mounted) return;
+      _showCupertinoToast(
+        context,
+        context.strings.format('Refresh failed: {error}', {'error': err}),
       );
     } finally {
-      if (mounted) {
-        setState(() => refreshing = false);
-      }
+      if (mounted) setState(() => refreshing = false);
     }
   }
 
   Future<void> clearCache() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.strings.text('Clear local cache?')),
-        content: Text(
-          context.strings.text(
-            'Cached conversations and message history on this device will be removed. Your login session will be kept.',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.strings.text('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.strings.text('Clear')),
-          ),
-        ],
+    final strings = context.strings;
+    final confirmed = await _showCupertinoConfirm(
+      context,
+      title: strings.text('Clear local cache?'),
+      message: strings.text(
+        'Cached conversations and message history on this device will be removed. Your login session will be kept.',
       ),
+      confirmText: 'Clear',
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
-      return;
-    }
+    if (!confirmed || !mounted) return;
     setState(() => clearing = true);
     try {
       await widget.state.clearLocalCache();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Local cache cleared.'))),
-      );
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Local cache cleared.'));
     } catch (err) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.format('Clear cache failed: {error}', {
-              'error': err,
-            }),
-          ),
-        ),
+      if (!mounted) return;
+      _showCupertinoToast(
+        context,
+        context.strings.format('Clear cache failed: {error}', {'error': err}),
       );
     } finally {
-      if (mounted) {
-        setState(() => clearing = false);
-      }
+      if (mounted) setState(() => clearing = false);
     }
   }
 
   Future<void> logoutToLogin() async {
     await widget.state.logout();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -1323,46 +1301,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => savingServer = true);
     try {
       final changed = await widget.state.updateServerUrl(serverUrl.text);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       serverUrl.text = widget.state.preferences.serverUrl;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.text(
-              changed
-                  ? 'Server address saved. Please log in again.'
-                  : 'Server address is unchanged.',
-            ),
-          ),
+      _showCupertinoToast(
+        context,
+        context.strings.text(
+          changed
+              ? 'Server address saved. Please log in again.'
+              : 'Server address is unchanged.',
         ),
       );
       setState(() {});
     } on FormatException {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.strings.text('Invalid server address.')),
-        ),
-      );
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Invalid server address.'));
     } catch (err) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.strings.format('Save failed: {error}', {'error': err}),
-          ),
-        ),
+      if (!mounted) return;
+      _showCupertinoToast(
+        context,
+        context.strings.format('Save failed: {error}', {'error': err}),
       );
     } finally {
-      if (mounted) {
-        setState(() => savingServer = false);
-      }
+      if (mounted) setState(() => savingServer = false);
     }
   }
 
@@ -1371,64 +1331,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseTheme() async {
-    final selected = await showModalBottomSheet<ThemeMode>(
+    final strings = context.strings;
+    final selected = await showCupertinoModalPopup<ThemeMode>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.system
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('System')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.system),
-              ),
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.light
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Light')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.light),
-              ),
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.dark
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Dark')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.dark),
-              ),
-            ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('Theme')),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(ThemeMode.system),
+            child: Text(strings.text('System')),
           ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(ThemeMode.light),
+            child: Text(strings.text('Light')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(ThemeMode.dark),
+            child: Text(strings.text('Dark')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
     if (selected != null) {
       await widget.state.updateThemeMode(selected);
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     }
   }
 
   Future<void> chooseThemeColor() async {
-    final selected = await showModalBottomSheet<int>(
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final selected = await showCupertinoModalPopup<int>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      builder: (context) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: SafeArea(
+          top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: colors.separator,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Text(
-                context.strings.text('Theme color'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                strings.text('Theme color'),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: colors.label,
+                ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -1453,45 +1421,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (selected != null) {
       await widget.state.updateThemeColor(selected);
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     }
   }
 
   Future<void> chooseLanguage() async {
-    final selected = await showModalBottomSheet<CsacLanguage>(
+    final strings = context.strings;
+    final selected = await showCupertinoModalPopup<CsacLanguage>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: widget.state.preferences.language == CsacLanguage.en
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: const Text('English'),
-                onTap: () => Navigator.of(context).pop(CsacLanguage.en),
-              ),
-              ListTile(
-                leading: widget.state.preferences.language == CsacLanguage.zh
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: const Text('中文'),
-                onTap: () => Navigator.of(context).pop(CsacLanguage.zh),
-              ),
-            ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('Language')),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(CsacLanguage.en),
+            child: const Text('English'),
           ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(CsacLanguage.zh),
+            child: const Text('中文'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
     if (selected != null) {
       await widget.state.updateLanguage(selected);
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     }
   }
 
@@ -1499,252 +1457,241 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final user = widget.state.user;
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Settings'))),
-      body: SafeArea(
+    final colors = CsacColors.of(context);
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Settings')),
+      ),
+      child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ListTile(
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
                   leading: _Avatar(
                     url: user?.avatar ?? '',
-                    fallback: Icons.person_rounded,
+                    fallback: CupertinoIcons.person_fill,
                   ),
-                  title: Text(user?.nickname ?? strings.text('Not logged in')),
-                  subtitle: Text(
-                    [
-                      if (user?.username.isNotEmpty == true)
-                        '@${user!.username}',
-                      if (user != null) 'UID ${user.uid}',
-                    ].join(' | '),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
+                  title: user?.nickname ?? strings.text('Not logged in'),
+                  subtitle: [
+                    if (user?.username.isNotEmpty == true)
+                      '@${user!.username}',
+                    if (user != null) 'UID ${user.uid}',
+                  ].join(' | '),
                   onTap: user == null
                       ? null
                       : () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CupertinoPageRoute<void>(
                               builder: (_) =>
                                   AccountSettingsScreen(state: widget.state),
                             ),
                           );
                         },
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.info_outline),
-                      title: Text(strings.text('App information')),
-                      subtitle: const Text(
-                        '$_csacAppName $_csacAppVersion | $_csacAppBranch',
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.info, size: 22),
+                  title: strings.text('App information'),
+                  subtitle: '$_csacAppName $_csacAppVersion | $_csacAppBranch',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) => const AppInfoScreen(),
                       ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const AppInfoScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.article_outlined),
-                      title: Text(strings.text('Open-source licenses')),
-                      subtitle: Text(
-                        strings.text('View licenses for included libraries'),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const OpenSourceLicensesScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.dark_mode_outlined),
-                      title: Text(strings.text('Theme')),
-                      subtitle: Text(themeLabel),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: chooseTheme,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.palette_outlined),
-                      title: Text(strings.text('Theme color')),
-                      subtitle: Text(themeColorLabel),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ThemeColorDot(
-                            color: Color(
-                              widget.state.preferences.themeColorValue,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                      onTap: chooseThemeColor,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.translate),
-                      title: Text(strings.text('Language')),
-                      subtitle: Text(languageLabel),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: chooseLanguage,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.sync),
-                      title: Text(strings.text('Refresh app data')),
-                      subtitle: Text(
-                        strings.text('Reload conversations and counters'),
-                      ),
-                      trailing: refreshing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_right),
-                      onTap: refreshing ? null : refreshAll,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.cleaning_services_outlined),
-                      title: Text(strings.text('Clear local cache')),
-                      subtitle: Text(
-                        strings.text(
-                          'Remove cached conversations and message history',
-                        ),
-                      ),
-                      trailing: clearing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_right),
-                      onTap: clearing ? null : clearCache,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ExpansionTile(
-                  initiallyExpanded: developerOptionsExpanded,
-                  onExpansionChanged: (value) {
-                    setState(() => developerOptionsExpanded = value);
+                    );
                   },
-                  leading: const Icon(Icons.developer_mode_outlined),
-                  title: Text(strings.text('Developer options')),
-                  subtitle: Text(
-                    strings.format('Current server: {server}', {
-                      'server':
-                          widget.state.preferences.serverUrl.trim().isEmpty
-                          ? strings.text('Default server')
-                          : widget.state.preferences.serverUrl.trim(),
-                    }),
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  children: [
-                    TextField(
-                      controller: serverUrl,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) {
-                        if (!savingServer) {
-                          saveServerUrl();
-                        }
-                      },
-                      decoration: InputDecoration(
-                        labelText: strings.text('CsAC server address'),
-                        hintText: '192.168.1.10:8080',
-                        helperText: strings.text(
-                          'Leave empty to use the default server.',
-                        ),
-                        border: const OutlineInputBorder(),
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.doc_text, size: 22),
+                  title: strings.text('Open-source licenses'),
+                  subtitle: strings.text('View licenses for included libraries'),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) => const OpenSourceLicensesScreen(),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      spacing: 12,
-                      overflowSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: savingServer ? null : resetServerUrl,
-                          icon: const Icon(Icons.restart_alt),
-                          label: Text(strings.text('Reset to default')),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.moon, size: 22),
+                  title: strings.text('Theme'),
+                  subtitle: themeLabel,
+                  onTap: chooseTheme,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.paintbrush, size: 22),
+                  title: strings.text('Theme color'),
+                  subtitle: themeColorLabel,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ThemeColorDot(
+                        color: Color(
+                          widget.state.preferences.themeColorValue,
                         ),
-                        FilledButton.icon(
-                          onPressed: savingServer ? null : saveServerUrl,
-                          icon: savingServer
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.save_outlined),
-                          label: Text(strings.text('Apply server')),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                    ],
+                  ),
+                  onTap: chooseThemeColor,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.globe, size: 22),
+                  title: strings.text('Language'),
+                  subtitle: languageLabel,
+                  onTap: chooseLanguage,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.arrow_2_circlepath, size: 22),
+                  title: strings.text('Refresh app data'),
+                  subtitle: strings.text('Reload conversations and counters'),
+                  trailing: refreshing
+                      ? const CupertinoActivityIndicator(radius: 10)
+                      : Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                  onTap: refreshing ? null : refreshAll,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.trash, size: 22),
+                  title: strings.text('Clear local cache'),
+                  subtitle: strings.text(
+                    'Remove cached conversations and message history',
+                  ),
+                  trailing: clearing
+                      ? const CupertinoActivityIndicator(radius: 10)
+                      : Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+                  onTap: clearing ? null : clearCache,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    setState(() => developerOptionsExpanded = !developerOptionsExpanded);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.wrench, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                strings.text('Developer options'),
+                                style: TextStyle(fontSize: 16, color: colors.label),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                strings.format('Current server: {server}', {
+                                  'server':
+                                      widget.state.preferences.serverUrl.trim().isEmpty
+                                      ? strings.text('Default server')
+                                      : widget.state.preferences.serverUrl.trim(),
+                                }),
+                                style: TextStyle(fontSize: 14, color: colors.secondaryLabel),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          developerOptionsExpanded
+                              ? CupertinoIcons.chevron_up
+                              : CupertinoIcons.chevron_down,
+                          size: 16,
+                          color: colors.tertiaryLabel,
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                if (developerOptionsExpanded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      children: [
+                        _CupertinoFormField(
+                          controller: serverUrl,
+                          placeholder: '192.168.1.10:8080',
+                          keyboardType: TextInputType.url,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) {
+                            if (!savingServer) saveServerUrl();
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          strings.text('Leave empty to use the default server.'),
+                          style: TextStyle(fontSize: 13, color: colors.tertiaryLabel),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            CupertinoButton(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              onPressed: savingServer ? null : resetServerUrl,
+                              child: Text(
+                                strings.text('Reset to default'),
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CupertinoButton.filled(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              onPressed: savingServer ? null : saveServerUrl,
+                              child: savingServer
+                                  ? const CupertinoActivityIndicator(radius: 9, color: CupertinoColors.white)
+                                  : Text(
+                                      strings.text('Apply server'),
+                                      style: const TextStyle(fontSize: 15),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: Text(strings.text('Logout')),
-                  subtitle: Text(
-                    strings.text('Clear session and return to login'),
-                  ),
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.square_arrow_left, size: 22),
+                  title: strings.text('Logout'),
+                  subtitle: strings.text('Clear session and return to login'),
                   onTap: logoutToLogin,
                 ),
-              ),
+              ],
             ),
           ],
         ),
