@@ -359,6 +359,40 @@ class CsacLocalCache {
     ];
   }
 
+  Future<List<ChatMessage>> searchConversationMessages(
+    Conversation conversation,
+    String query, {
+    int limit = 120,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty) {
+      return const <ChatMessage>[];
+    }
+    final like = '%${_escapeLike(text)}%';
+    final db = await _database();
+    final rows = db.select(
+      r'''
+      SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
+        voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
+        is_read, reply_to
+      FROM messages
+      WHERE conversation_type = ?
+        AND conversation_id = ?
+        AND (body LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\')
+      ORDER BY id ASC
+      LIMIT ?
+      ''',
+      [
+        _conversationTypeName(conversation.type),
+        conversation.id,
+        like,
+        like,
+        limit,
+      ],
+    );
+    return <ChatMessage>[for (final row in rows) _messageFromRow(row)];
+  }
+
   Future<void> saveMessages(
     Conversation conversation,
     List<ChatMessage> messages,

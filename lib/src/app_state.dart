@@ -29,6 +29,7 @@ class CsacAppState extends ChangeNotifier {
   CsacPreferences preferences = const CsacPreferences();
   Conversation? activeConversation;
   Set<String> mutedConversationKeys = const <String>{};
+  Set<String> pinnedConversationKeys = const <String>{};
 
   /// 用户已查看过的通知类型，刷新时这些计数保持为 0
   final Set<String> _dismissedBadges = <String>{};
@@ -53,6 +54,7 @@ class CsacAppState extends ChangeNotifier {
       await cache.open();
       preferences = await CsacPreferences.load();
       mutedConversationKeys = await MutedConversationStore.load();
+      pinnedConversationKeys = await PinnedConversationStore.load();
       _dismissedBadges.addAll(await DismissedBadgeStore.load());
       unawaited(notifications.initialize());
       _applyPreferredServer();
@@ -268,6 +270,45 @@ class CsacAppState extends ChangeNotifier {
 
   bool isConversationMuted(Conversation conversation) {
     return mutedConversationKeys.contains(_conversationKey(conversation));
+  }
+
+  bool isConversationPinned(Conversation conversation) {
+    return pinnedConversationKeys.contains(_conversationKey(conversation));
+  }
+
+  List<Conversation> sortedConversations(Iterable<Conversation> source) {
+    final items = source.toList();
+    final order = <String, int>{
+      for (var i = 0; i < conversations.length; i++)
+        _conversationKey(conversations[i]): i,
+    };
+    items.sort((a, b) {
+      final aPinned = isConversationPinned(a);
+      final bPinned = isConversationPinned(b);
+      if (aPinned != bPinned) {
+        return aPinned ? -1 : 1;
+      }
+      return (order[_conversationKey(a)] ?? 0).compareTo(
+        order[_conversationKey(b)] ?? 0,
+      );
+    });
+    return items;
+  }
+
+  Future<void> setConversationPinned(
+    Conversation conversation,
+    bool pinned,
+  ) async {
+    final updated = pinnedConversationKeys.toSet();
+    final key = _conversationKey(conversation);
+    if (pinned) {
+      updated.add(key);
+    } else {
+      updated.remove(key);
+    }
+    pinnedConversationKeys = updated;
+    await PinnedConversationStore.save(updated);
+    notifyListeners();
   }
 
   Future<void> setConversationMuted(
@@ -532,6 +573,13 @@ class CsacAppState extends ChangeNotifier {
     SearchScope scope,
   ) {
     return cache.searchMessages(query, scope);
+  }
+
+  Future<List<ChatMessage>> searchConversationMessages(
+    Conversation conversation,
+    String query,
+  ) {
+    return cache.searchConversationMessages(conversation, query);
   }
 
   Future<List<GroupMember>> loadGroupMembers(int roomId) {

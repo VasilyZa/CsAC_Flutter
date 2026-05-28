@@ -34,7 +34,9 @@ class _MainShellState extends State<MainShell> {
   int totalUnreadChats() {
     return widget.state.conversations.fold<int>(
       0,
-      (total, conversation) => total + conversation.unreadCount,
+      (total, conversation) => widget.state.isConversationMuted(conversation)
+          ? total
+          : total + conversation.unreadCount,
     );
   }
 
@@ -276,10 +278,7 @@ class _AnimatedNarrowPageSwitcher extends StatelessWidget {
           ),
         );
       },
-      child: KeyedSubtree(
-        key: ValueKey<int>(index),
-        child: child,
-      ),
+      child: KeyedSubtree(key: ValueKey<int>(index), child: child),
     );
   }
 }
@@ -473,10 +472,7 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               context.strings.text('Select a conversation'),
-              style: TextStyle(
-                fontSize: 17,
-                color: colors.secondaryLabel,
-              ),
+              style: TextStyle(fontSize: 17, color: colors.secondaryLabel),
             ),
           ],
         ),
@@ -528,12 +524,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   List<Conversation> get _filtered {
     final query = search.text.trim().toLowerCase();
-    if (query.isEmpty) return widget.state.conversations;
-    return widget.state.conversations.where((c) {
-      final target =
-          '${c.name} ${c.subtitle} ${c.searchText}'.toLowerCase();
-      return target.contains(query);
-    }).toList();
+    if (query.isEmpty) {
+      return widget.state.sortedConversations(widget.state.conversations);
+    }
+    return widget.state.sortedConversations(
+      widget.state.conversations.where((c) {
+        final target = '${c.name} ${c.subtitle} ${c.searchText}'.toLowerCase();
+        return target.contains(query);
+      }),
+    );
   }
 
   @override
@@ -543,8 +542,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final conversations = _filtered;
 
     // Bottom padding: floating tab bar (56) + safe area bottom + 12 gap ≈ 80
-    final bottomPadding =
-        MediaQuery.of(context).padding.bottom + 56 + 12 + 12;
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 56 + 12 + 12;
 
     final content = CustomScrollView(
       slivers: [
@@ -670,9 +668,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (widget.state.conversations.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _EmptyPanel(
-              message: strings.text('No conversations yet.'),
-            ),
+            child: _EmptyPanel(message: strings.text('No conversations yet.')),
           )
         else if (conversations.isEmpty)
           SliverFillRemaining(
@@ -702,10 +698,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: colors.systemBackground,
-      child: SafeArea(
-        bottom: false,
-        child: content,
-      ),
+      child: SafeArea(bottom: false, child: content),
     );
   }
 
@@ -720,7 +713,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
         _ConversationTile(
           conversation: conversation,
           muted: widget.state.isConversationMuted(conversation),
-          selected: widget.selectedConversation?.type == conversation.type &&
+          pinned: widget.state.isConversationPinned(conversation),
+          selected:
+              widget.selectedConversation?.type == conversation.type &&
               widget.selectedConversation?.id == conversation.id,
           onLongPress: () => _showConversationActions(conversation),
           onTap: () async {
@@ -730,10 +725,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             }
             await Navigator.of(context).push(
               CupertinoPageRoute<void>(
-                builder: (_) => ChatScreen(
-                  state: widget.state,
-                  conversation: conversation,
-                ),
+                builder: (_) =>
+                    ChatScreen(state: widget.state, conversation: conversation),
               ),
             );
             if (mounted) refresh();
@@ -756,17 +749,31 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> _showConversationActions(Conversation conversation) async {
     final strings = context.strings;
     final muted = widget.state.isConversationMuted(conversation);
+    final pinned = widget.state.isConversationPinned(conversation);
 
     final action = await showCupertinoModalPopup<_ConversationAction>(
       context: context,
       builder: (context) => _ConversationActionSheet(
         conversation: conversation,
         muted: muted,
+        pinned: pinned,
       ),
     );
     if (action == null || !mounted) return;
     try {
       switch (action) {
+        case _ConversationAction.togglePin:
+          final nowPinned = !widget.state.isConversationPinned(conversation);
+          await widget.state.setConversationPinned(conversation, nowPinned);
+          if (mounted) {
+            _showCupertinoToast(
+              context,
+              strings.text(
+                nowPinned ? 'Conversation pinned.' : 'Conversation unpinned.',
+              ),
+            );
+          }
+          break;
         case _ConversationAction.markRead:
           await widget.state.markConversationRead(conversation);
           if (mounted) {
@@ -831,6 +838,7 @@ class _ConversationTile extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     required this.muted,
+    required this.pinned,
     this.selected = false,
   });
 
@@ -838,6 +846,7 @@ class _ConversationTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final bool muted;
+  final bool pinned;
   final bool selected;
 
   @override
@@ -887,9 +896,7 @@ class _ConversationTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     conversation.subtitle.isEmpty
-                        ? strings.text(
-                            isGroup ? 'Group chat' : 'Private chat',
-                          )
+                        ? strings.text(isGroup ? 'Group chat' : 'Private chat')
                         : conversation.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -902,18 +909,31 @@ class _ConversationTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            // Right side: unread badge OR muted icon
+            // Right side: pinned/muted state and unread badge.
+            if (pinned) ...[
+              Icon(
+                CupertinoIcons.pin_fill,
+                size: 14,
+                color: colors.tertiaryLabel,
+              ),
+              if (muted || conversation.unreadCount > 0)
+                const SizedBox(width: 6),
+            ],
             if (muted)
               Icon(
                 CupertinoIcons.bell_slash_fill,
                 size: 15,
                 color: colors.tertiaryLabel,
-              )
-            else if (conversation.unreadCount > 0)
+              ),
+            if ((pinned || muted) && conversation.unreadCount > 0)
+              const SizedBox(width: 6),
+            if (conversation.unreadCount > 0)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: CupertinoColors.systemRed,
+                  color: muted
+                      ? colors.secondaryFill
+                      : CupertinoColors.systemRed,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 constraints: const BoxConstraints(minWidth: 20),
@@ -921,8 +941,10 @@ class _ConversationTile extends StatelessWidget {
                   conversation.unreadCount > 99
                       ? '99+'
                       : '${conversation.unreadCount}',
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
+                  style: TextStyle(
+                    color: muted
+                        ? colors.secondaryLabel
+                        : CupertinoColors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -940,16 +962,24 @@ class _ConversationTile extends StatelessWidget {
 // Conversation action sheet
 // ============================================================================
 
-enum _ConversationAction { markRead, markUnread, clearCache, toggleMute }
+enum _ConversationAction {
+  togglePin,
+  markRead,
+  markUnread,
+  clearCache,
+  toggleMute,
+}
 
 class _ConversationActionSheet extends StatelessWidget {
   const _ConversationActionSheet({
     required this.conversation,
     required this.muted,
+    required this.pinned,
   });
 
   final Conversation conversation;
   final bool muted;
+  final bool pinned;
 
   @override
   Widget build(BuildContext context) {
@@ -960,6 +990,25 @@ class _ConversationActionSheet extends StatelessWidget {
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       actions: [
+        CupertinoActionSheetAction(
+          onPressed: () =>
+              Navigator.of(context).pop(_ConversationAction.togglePin),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                pinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                strings.text(
+                  pinned ? 'Unpin conversation' : 'Pin conversation',
+                ),
+              ),
+            ],
+          ),
+        ),
         CupertinoActionSheetAction(
           onPressed: () =>
               Navigator.of(context).pop(_ConversationAction.toggleMute),
@@ -973,9 +1022,7 @@ class _ConversationActionSheet extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 strings.text(
-                  muted
-                      ? 'Disable do not disturb'
-                      : 'Enable do not disturb',
+                  muted ? 'Disable do not disturb' : 'Enable do not disturb',
                 ),
               ),
             ],

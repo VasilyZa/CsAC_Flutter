@@ -196,6 +196,22 @@ class MutedConversationStore {
   }
 }
 
+class PinnedConversationStore {
+  const PinnedConversationStore._();
+
+  static const _key = 'csac.pinned_conversations';
+
+  static Future<Set<String>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_key) ?? const <String>[]).toSet();
+  }
+
+  static Future<void> save(Set<String> keys) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, keys.toList()..sort());
+  }
+}
+
 class DismissedBadgeStore {
   const DismissedBadgeStore._();
 

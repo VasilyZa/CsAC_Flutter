@@ -89,16 +89,19 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final input = TextEditingController();
+  final chatSearch = TextEditingController();
   final scroll = ScrollController();
   final imagePicker = ImagePicker();
   final audioRecorder = AudioRecorder();
   final audioPlayer = AudioPlayer();
   StreamSubscription<Object?>? audioErrorSubscription;
+  Timer? chatSearchTimer;
   final itemKeys = <int, GlobalKey>{};
   final messages = <ChatMessage>[];
   final pendingSends = <_PendingSend>[];
   final mentionTargets = <GroupMember>[];
   final selectedMessageIds = <int>{};
+  final chatSearchResultIds = <int>[];
   Timer? timer;
   Timer? draftTimer;
   GroupProfile? groupProfile;
@@ -106,12 +109,15 @@ class _ChatScreenState extends State<ChatScreen> {
   int nextPendingId = -1;
   int initialUnreadCount = 0;
   int refreshTicks = 0;
+  int chatSearchIndex = -1;
   DateTime? recordingStartedAt;
   String? recordingPath;
   int? playingMessageId;
   bool loading = true;
   bool refreshing = false;
   bool pickingImage = false;
+  bool searchMode = false;
+  bool chatSearching = false;
   bool recording = false;
   bool applyingDraft = false;
   bool applyingMentionText = false;
@@ -163,6 +169,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     timer?.cancel();
     draftTimer?.cancel();
+    chatSearchTimer?.cancel();
     audioErrorSubscription?.cancel();
     audioPlayer.dispose();
     audioRecorder.dispose();
@@ -171,6 +178,7 @@ class _ChatScreenState extends State<ChatScreen> {
       widget.state.setActiveConversation(null);
     }
     input.dispose();
+    chatSearch.dispose();
     scroll.dispose();
     super.dispose();
   }
@@ -215,6 +223,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   bool get canJumpToFirstUnread => firstUnreadMessageId != null;
+
+  int? get currentSearchMessageId {
+    if (chatSearchIndex < 0 || chatSearchIndex >= chatSearchResultIds.length) {
+      return null;
+    }
+    return chatSearchResultIds[chatSearchIndex];
+  }
 
   Future<void> loadDraft() async {
     final draft = await ConversationDraftStore.load(widget.conversation);
@@ -744,6 +759,103 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void retryPendingSend(int localId) {
     unawaited(performPendingSend(localId));
+  }
+
+  void openChatSearch() {
+    setState(() => searchMode = true);
+  }
+
+  void closeChatSearch() {
+    chatSearchTimer?.cancel();
+    chatSearch.clear();
+    setState(() {
+      searchMode = false;
+      chatSearching = false;
+      chatSearchResultIds.clear();
+      chatSearchIndex = -1;
+    });
+  }
+
+  void scheduleChatSearch(String value) {
+    chatSearchTimer?.cancel();
+    chatSearchTimer = Timer(const Duration(milliseconds: 220), () {
+      unawaited(runChatSearch(value));
+    });
+  }
+
+  Future<void> runChatSearch(String value) async {
+    final query = value.trim();
+    if (query.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        chatSearching = false;
+        chatSearchResultIds.clear();
+        chatSearchIndex = -1;
+      });
+      return;
+    }
+    setState(() => chatSearching = true);
+    final loaded = await widget.state.searchConversationMessages(
+      widget.conversation,
+      query,
+    );
+    if (!mounted || chatSearch.text.trim() != query) {
+      return;
+    }
+    setState(() {
+      chatSearchResultIds
+        ..clear()
+        ..addAll(loaded.map((message) => message.id));
+      chatSearchIndex = chatSearchResultIds.isEmpty ? -1 : 0;
+      chatSearching = false;
+    });
+    final id = currentSearchMessageId;
+    if (id != null) {
+      await ensureMessagesAround(id);
+      scrollToMessage(id);
+    }
+  }
+
+  Future<void> ensureMessagesAround(int messageId) async {
+    if (messages.any((message) => message.id == messageId)) {
+      return;
+    }
+    try {
+      final loaded = await widget.state.loadCachedMessagesAround(
+        widget.conversation,
+        messageId,
+      );
+      if (!mounted || loaded.isEmpty) {
+        return;
+      }
+      final merged = mergeChatMessages(messages, loaded);
+      setState(() {
+        messages
+          ..clear()
+          ..addAll(merged);
+      });
+    } catch (_) {
+      // Search navigation should stay responsive even if a cache window fails.
+    }
+  }
+
+  Future<void> moveChatSearch(int delta) async {
+    if (chatSearchResultIds.isEmpty) {
+      return;
+    }
+    final next = (chatSearchIndex + delta).clamp(
+      0,
+      chatSearchResultIds.length - 1,
+    );
+    if (next == chatSearchIndex) {
+      return;
+    }
+    setState(() => chatSearchIndex = next);
+    final id = currentSearchMessageId;
+    if (id != null) {
+      await ensureMessagesAround(id);
+      scrollToMessage(id);
+    }
   }
 
   void showSnack(String message) {
@@ -1444,6 +1556,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: openChatSearch,
+                    child: const Icon(CupertinoIcons.search, size: 20),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     onPressed: () =>
                         reloadConversationFromNetwork(showLoading: true),
                     child: const Icon(CupertinoIcons.refresh, size: 20),
@@ -1504,6 +1621,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 announcement: announcement,
                 onTap: openConversationDetails,
               ),
+            if (searchMode)
+              _ChatSearchBar(
+                controller: chatSearch,
+                searching: chatSearching,
+                current: chatSearchIndex < 0 ? 0 : chatSearchIndex + 1,
+                total: chatSearchResultIds.length,
+                onChanged: scheduleChatSearch,
+                onPrevious: () => moveChatSearch(-1),
+                onNext: () => moveChatSearch(1),
+                onClose: closeChatSearch,
+              ),
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -1563,6 +1691,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                     widget.conversation.type ==
                                     ConversationType.private,
                                 focused: widget.focusMessageId == message.id,
+                                searchFocused:
+                                    currentSearchMessageId == message.id,
+                                searchQuery: searchMode ? chatSearch.text : '',
                                 selected: selected,
                                 selectionMode: selectionMode,
                                 onTap: selectionMode
@@ -1571,6 +1702,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onLongPress: selectionMode
                                     ? null
                                     : () => showMessageActions(message, mine),
+                                onSwipeReply: selectionMode
+                                    ? null
+                                    : () => setReplyTarget(message),
                                 onReplyTap: message.replyTo > 0
                                     ? () => scrollToMessage(message.replyTo)
                                     : null,
@@ -1725,13 +1859,16 @@ class _MessageBubble extends StatelessWidget {
     this.selectionMode = false,
     this.onTap,
     this.onLongPress,
+    this.onSwipeReply,
     this.onReplyTap,
     this.onImageTap,
     this.onVoiceTap,
     this.playingVoice = false,
     this.showReadStatus = false,
     this.displayTime = '',
+    this.searchQuery = '',
     this.compactLayout = false,
+    this.searchFocused = false,
     this.showSenderLine = true,
   });
 
@@ -1743,13 +1880,16 @@ class _MessageBubble extends StatelessWidget {
   final bool selectionMode;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onSwipeReply;
   final VoidCallback? onReplyTap;
   final VoidCallback? onImageTap;
   final VoidCallback? onVoiceTap;
   final bool playingVoice;
   final bool showReadStatus;
   final String displayTime;
+  final String searchQuery;
   final bool compactLayout;
+  final bool searchFocused;
   final bool showSenderLine;
 
   @override
@@ -1786,213 +1926,384 @@ class _MessageBubble extends StatelessWidget {
         : const EdgeInsets.symmetric(horizontal: 13, vertical: 9);
     return Padding(
       padding: EdgeInsets.symmetric(vertical: verticalPadding),
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Column(
-          crossAxisAlignment: align,
-          children: [
-            if (showSenderLine || selectionMode)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (selectionMode) ...[
-                    Icon(
-                      selected
-                          ? CupertinoIcons.checkmark_circle_fill
-                          : CupertinoIcons.circle,
-                      size: 18,
-                      color: selected
-                          ? colors.primaryColor
-                          : colors.secondaryLabel,
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  if (showSenderLine)
-                    Flexible(
-                      child: Text(
-                        '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.secondaryLabel,
-                        ),
+      child: Dismissible(
+        key: ValueKey('swipe-reply-${message.id}'),
+        direction: selectionMode
+            ? DismissDirection.none
+            : mine
+            ? DismissDirection.endToStart
+            : DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          onSwipeReply?.call();
+          return false;
+        },
+        background: _SwipeReplyBackground(mine: mine),
+        secondaryBackground: _SwipeReplyBackground(mine: mine),
+        child: GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Column(
+            crossAxisAlignment: align,
+            children: [
+              if (showSenderLine || selectionMode)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (selectionMode) ...[
+                      Icon(
+                        selected
+                            ? CupertinoIcons.checkmark_circle_fill
+                            : CupertinoIcons.circle,
+                        size: 18,
+                        color: selected
+                            ? colors.primaryColor
+                            : colors.secondaryLabel,
                       ),
-                    ),
-                ],
-              ),
-            if (showSenderLine || selectionMode)
-              SizedBox(height: compactLayout ? 2 : 3),
-            Container(
-              constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-              padding: bubblePadding,
-              decoration: BoxDecoration(
-                color: bubbleColor,
-                borderRadius: borderRadius,
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withValues(alpha: 0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-                border: (selected || focused)
-                    ? Border.all(color: colors.primaryColor, width: 2)
-                    : null,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (message.replyTo > 0) ...[
-                    GestureDetector(
-                      onTap: onReplyTap,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: replyColor,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (showSenderLine)
+                      Flexible(
                         child: Text(
-                          replyMessage == null
-                              ? strings.format('Reply #{id}', {
-                                  'id': message.replyTo,
-                                })
-                              : strings.format('Reply {sender}: {message}', {
-                                  'sender': replyMessage!.sender,
-                                  'message': compactMessage(replyMessage!.body),
-                                }),
-                          maxLines: 2,
+                          '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
-                            color: secondaryTextColor,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            color: colors.secondaryLabel,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
                   ],
-                  if (message.isMentioned || message.isEssence) ...[
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        if (message.isMentioned)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: secondaryTextColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  CupertinoIcons.at,
-                                  size: 12,
-                                  color: textColor,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  strings.text('Mentioned'),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
+                ),
+              if (showSenderLine || selectionMode)
+                SizedBox(height: compactLayout ? 2 : 3),
+              Container(
+                constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                padding: bubblePadding,
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: borderRadius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: CupertinoColors.black.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                  border: (selected || focused || searchFocused)
+                      ? Border.all(color: colors.primaryColor, width: 2)
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (message.replyTo > 0) ...[
+                      GestureDetector(
+                        onTap: onReplyTap,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: replyColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            replyMessage == null
+                                ? strings.format('Reply #{id}', {
+                                    'id': message.replyTo,
+                                  })
+                                : strings.format('Reply {sender}: {message}', {
+                                    'sender': replyMessage!.sender,
+                                    'message': compactMessage(
+                                      replyMessage!.body,
+                                    ),
+                                  }),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: secondaryTextColor,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        if (message.isEssence)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: secondaryTextColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  CupertinoIcons.star_fill,
-                                  size: 12,
-                                  color: textColor,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  strings.text('Essence'),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  if (message.imageUrl.isNotEmpty) ...[
-                    _MessageImage(url: message.imageUrl, onTap: onImageTap),
-                    if (message.body.isNotEmpty &&
-                        !message.body.startsWith('[image]'))
-                      const SizedBox(height: 8),
-                  ],
-                  if (message.voiceUrl.isNotEmpty) ...[
-                    _VoiceMessageControl(
-                      durationSeconds: message.voiceDuration,
-                      playing: playingVoice,
-                      onTap: onVoiceTap,
-                      foreground: textColor,
-                      secondary: secondaryTextColor,
-                    ),
-                    if (message.body.isNotEmpty &&
-                        !message.body.startsWith('[voice]'))
-                      const SizedBox(height: 8),
-                  ],
-                  if (message.body.isNotEmpty &&
-                      !message.body.startsWith('[image]') &&
-                      !message.body.startsWith('[voice]'))
-                    Text(
-                      message.body,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 15.5,
-                        height: 1.28,
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            if (showReadStatus) ...[
-              const SizedBox(height: 3),
-              Text(
-                message.isRead
-                    ? context.strings.text('Read')
-                    : context.strings.text('Unread'),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: message.isRead
-                      ? colors.primaryColor
-                      : colors.tertiaryLabel,
+                      const SizedBox(height: 6),
+                    ],
+                    if (message.isMentioned || message.isEssence) ...[
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (message.isMentioned)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: secondaryTextColor.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.at,
+                                    size: 12,
+                                    color: textColor,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    strings.text('Mentioned'),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (message.isEssence)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: secondaryTextColor.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.star_fill,
+                                    size: 12,
+                                    color: textColor,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    strings.text('Essence'),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    if (message.imageUrl.isNotEmpty) ...[
+                      _MessageImage(url: message.imageUrl, onTap: onImageTap),
+                      if (message.body.isNotEmpty &&
+                          !message.body.startsWith('[image]'))
+                        const SizedBox(height: 8),
+                    ],
+                    if (message.voiceUrl.isNotEmpty) ...[
+                      _VoiceMessageControl(
+                        durationSeconds: message.voiceDuration,
+                        playing: playingVoice,
+                        onTap: onVoiceTap,
+                        foreground: textColor,
+                        secondary: secondaryTextColor,
+                      ),
+                      if (message.body.isNotEmpty &&
+                          !message.body.startsWith('[voice]'))
+                        const SizedBox(height: 8),
+                    ],
+                    if (message.body.isNotEmpty &&
+                        !message.body.startsWith('[image]') &&
+                        !message.body.startsWith('[voice]'))
+                      _HighlightedMessageText(
+                        text: message.body,
+                        query: searchQuery,
+                        color: textColor,
+                        highlightColor: mine
+                            ? CupertinoColors.white.withValues(alpha: 0.22)
+                            : colors.primaryColor.withValues(alpha: 0.18),
+                      ),
+                  ],
                 ),
               ),
+              if (showReadStatus) ...[
+                const SizedBox(height: 3),
+                Text(
+                  message.isRead
+                      ? context.strings.text('Read')
+                      : context.strings.text('Unread'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: message.isRead
+                        ? colors.primaryColor
+                        : colors.tertiaryLabel,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _SwipeReplyBackground extends StatelessWidget {
+  const _SwipeReplyBackground({required this.mine});
+
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Icon(
+          CupertinoIcons.reply,
+          size: 22,
+          color: colors.primaryColor.withValues(alpha: 0.8),
+        ),
+      ),
+    );
+  }
+}
+
+class _HighlightedMessageText extends StatelessWidget {
+  const _HighlightedMessageText({
+    required this.text,
+    required this.query,
+    required this.color,
+    required this.highlightColor,
+  });
+
+  final String text;
+  final String query;
+  final Color color;
+  final Color highlightColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final baseStyle = TextStyle(color: color, fontSize: 15.5, height: 1.28);
+    if (normalizedQuery.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+    final lower = text.toLowerCase();
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    while (cursor < text.length) {
+      final index = lower.indexOf(normalizedQuery, cursor);
+      if (index < 0) {
+        spans.add(TextSpan(text: text.substring(cursor)));
+        break;
+      }
+      if (index > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, index)));
+      }
+      final end = index + normalizedQuery.length;
+      spans.add(
+        TextSpan(
+          text: text.substring(index, end),
+          style: TextStyle(
+            backgroundColor: highlightColor,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      cursor = end;
+    }
+    return Text.rich(TextSpan(style: baseStyle, children: spans));
+  }
+}
+
+class _ChatSearchBar extends StatelessWidget {
+  const _ChatSearchBar({
+    required this.controller,
+    required this.searching,
+    required this.current,
+    required this.total,
+    required this.onChanged,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onClose,
+  });
+
+  final TextEditingController controller;
+  final bool searching;
+  final int current;
+  final int total;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: colors.cardBackground.withValues(alpha: 0.92),
+        border: Border(bottom: BorderSide(color: colors.separator, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: CupertinoSearchTextField(
+              controller: controller,
+              autofocus: true,
+              placeholder: strings.text('Search in chat'),
+              onChanged: onChanged,
+              onSubmitted: (_) => onNext(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 54,
+            child: Center(
+              child: searching
+                  ? const CupertinoActivityIndicator(radius: 8)
+                  : Text(
+                      total == 0 ? '0/0' : '$current/$total',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryLabel,
+                      ),
+                    ),
+            ),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: 30,
+            onPressed: total > 0 && current > 1 ? onPrevious : null,
+            child: const Icon(CupertinoIcons.chevron_up, size: 18),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: 30,
+            onPressed: total > 0 && current < total ? onNext : null,
+            child: const Icon(CupertinoIcons.chevron_down, size: 18),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: 30,
+            onPressed: onClose,
+            child: const Icon(CupertinoIcons.xmark_circle_fill, size: 19),
+          ),
+        ],
       ),
     );
   }
