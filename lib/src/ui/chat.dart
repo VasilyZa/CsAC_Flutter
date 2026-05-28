@@ -1466,7 +1466,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
       ),
       child: SafeArea(
-        top: false,
         child: Column(
           children: [
             if (error != null)
@@ -3037,7 +3036,6 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
         ),
       ),
       child: SafeArea(
-        top: false,
         child: CustomScrollView(
           slivers: [
             CupertinoSliverRefreshControl(onRefresh: load),
@@ -3186,7 +3184,6 @@ class _EssenceStatsScreenState extends State<EssenceStatsScreen> {
         middle: Text(strings.text('Essence stats')),
       ),
       child: SafeArea(
-        top: false,
         child: CustomScrollView(
           slivers: [
             CupertinoSliverRefreshControl(onRefresh: load),
