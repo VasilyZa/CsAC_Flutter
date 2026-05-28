@@ -1948,218 +1948,222 @@ class _MessageBubble extends StatelessWidget {
         },
         background: _SwipeReplyBackground(mine: mine),
         secondaryBackground: _SwipeReplyBackground(mine: mine),
-        child: GestureDetector(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Column(
-            crossAxisAlignment: align,
-            children: [
-              if (showSenderLine || selectionMode)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (selectionMode) ...[
-                      Icon(
-                        selected
-                            ? CupertinoIcons.checkmark_circle_fill
-                            : CupertinoIcons.circle,
-                        size: 18,
-                        color: selected
-                            ? colors.primaryColor
-                            : colors.secondaryLabel,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    if (showSenderLine)
-                      Flexible(
-                        child: Text(
-                          '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colors.secondaryLabel,
-                          ),
+        child: SizedBox(
+          width: double.infinity,
+          child: GestureDetector(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Column(
+              crossAxisAlignment: align,
+              children: [
+                if (showSenderLine || selectionMode)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (selectionMode) ...[
+                        Icon(
+                          selected
+                              ? CupertinoIcons.checkmark_circle_fill
+                              : CupertinoIcons.circle,
+                          size: 18,
+                          color: selected
+                              ? colors.primaryColor
+                              : colors.secondaryLabel,
                         ),
-                      ),
-                  ],
-                ),
-              if (showSenderLine || selectionMode)
-                SizedBox(height: compactLayout ? 2 : 3),
-              Container(
-                constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                padding: bubblePadding,
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  borderRadius: borderRadius,
-                  boxShadow: [
-                    BoxShadow(
-                      color: CupertinoColors.black.withValues(alpha: 0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                  border: (selected || focused || searchFocused)
-                      ? Border.all(color: colors.primaryColor, width: 2)
-                      : null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (message.replyTo > 0) ...[
-                      GestureDetector(
-                        onTap: onReplyTap,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: replyColor,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (showSenderLine)
+                        Flexible(
                           child: Text(
-                            replyMessage == null
-                                ? strings.format('Reply #{id}', {
-                                    'id': message.replyTo,
-                                  })
-                                : strings.format('Reply {sender}: {message}', {
-                                    'sender': replyMessage!.sender,
-                                    'message': compactMessage(
-                                      replyMessage!.body,
-                                    ),
-                                  }),
-                            maxLines: 2,
+                            '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12,
-                              color: secondaryTextColor,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                              color: colors.secondaryLabel,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
                     ],
-                    if (message.isMentioned || message.isEssence) ...[
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          if (message.isMentioned)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: secondaryTextColor.withValues(
-                                  alpha: 0.15,
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.at,
-                                    size: 12,
-                                    color: textColor,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    strings.text('Mentioned'),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ],
+                  ),
+                if (showSenderLine || selectionMode)
+                  SizedBox(height: compactLayout ? 2 : 3),
+                Container(
+                  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                  padding: bubblePadding,
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: borderRadius,
+                    boxShadow: [
+                      BoxShadow(
+                        color: CupertinoColors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                    border: (selected || focused || searchFocused)
+                        ? Border.all(color: colors.primaryColor, width: 2)
+                        : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (message.replyTo > 0) ...[
+                        GestureDetector(
+                          onTap: onReplyTap,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: replyColor,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              replyMessage == null
+                                  ? strings.format('Reply #{id}', {
+                                      'id': message.replyTo,
+                                    })
+                                  : strings
+                                        .format('Reply {sender}: {message}', {
+                                          'sender': replyMessage!.sender,
+                                          'message': compactMessage(
+                                            replyMessage!.body,
+                                          ),
+                                        }),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: secondaryTextColor,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          if (message.isEssence)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: secondaryTextColor.withValues(
-                                  alpha: 0.15,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      if (message.isMentioned || message.isEssence) ...[
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (message.isMentioned)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
                                 ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.star_fill,
-                                    size: 12,
-                                    color: textColor,
+                                decoration: BoxDecoration(
+                                  color: secondaryTextColor.withValues(
+                                    alpha: 0.15,
                                   ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    strings.text('Essence'),
-                                    style: TextStyle(
-                                      fontSize: 11,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.at,
+                                      size: 12,
                                       color: textColor,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      strings.text('Mentioned'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    if (message.imageUrl.isNotEmpty) ...[
-                      _MessageImage(url: message.imageUrl, onTap: onImageTap),
+                            if (message.isEssence)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: secondaryTextColor.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.star_fill,
+                                      size: 12,
+                                      color: textColor,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      strings.text('Essence'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      if (message.imageUrl.isNotEmpty) ...[
+                        _MessageImage(url: message.imageUrl, onTap: onImageTap),
+                        if (message.body.isNotEmpty &&
+                            !message.body.startsWith('[image]'))
+                          const SizedBox(height: 8),
+                      ],
+                      if (message.voiceUrl.isNotEmpty) ...[
+                        _VoiceMessageControl(
+                          durationSeconds: message.voiceDuration,
+                          playing: playingVoice,
+                          onTap: onVoiceTap,
+                          foreground: textColor,
+                          secondary: secondaryTextColor,
+                        ),
+                        if (message.body.isNotEmpty &&
+                            !message.body.startsWith('[voice]'))
+                          const SizedBox(height: 8),
+                      ],
                       if (message.body.isNotEmpty &&
-                          !message.body.startsWith('[image]'))
-                        const SizedBox(height: 8),
-                    ],
-                    if (message.voiceUrl.isNotEmpty) ...[
-                      _VoiceMessageControl(
-                        durationSeconds: message.voiceDuration,
-                        playing: playingVoice,
-                        onTap: onVoiceTap,
-                        foreground: textColor,
-                        secondary: secondaryTextColor,
-                      ),
-                      if (message.body.isNotEmpty &&
+                          !message.body.startsWith('[image]') &&
                           !message.body.startsWith('[voice]'))
-                        const SizedBox(height: 8),
+                        _HighlightedMessageText(
+                          text: message.body,
+                          query: searchQuery,
+                          color: textColor,
+                          highlightColor: mine
+                              ? CupertinoColors.white.withValues(alpha: 0.22)
+                              : colors.primaryColor.withValues(alpha: 0.18),
+                        ),
                     ],
-                    if (message.body.isNotEmpty &&
-                        !message.body.startsWith('[image]') &&
-                        !message.body.startsWith('[voice]'))
-                      _HighlightedMessageText(
-                        text: message.body,
-                        query: searchQuery,
-                        color: textColor,
-                        highlightColor: mine
-                            ? CupertinoColors.white.withValues(alpha: 0.22)
-                            : colors.primaryColor.withValues(alpha: 0.18),
-                      ),
-                  ],
-                ),
-              ),
-              if (showReadStatus) ...[
-                const SizedBox(height: 3),
-                Text(
-                  message.isRead
-                      ? context.strings.text('Read')
-                      : context.strings.text('Unread'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: message.isRead
-                        ? colors.primaryColor
-                        : colors.tertiaryLabel,
                   ),
                 ),
+                if (showReadStatus) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    message.isRead
+                        ? context.strings.text('Read')
+                        : context.strings.text('Unread'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: message.isRead
+                          ? colors.primaryColor
+                          : colors.tertiaryLabel,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
