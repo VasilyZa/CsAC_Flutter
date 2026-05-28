@@ -153,20 +153,20 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> updateThemeMode(ThemeMode mode) async {
     preferences = preferences.copyWith(themeMode: mode);
-    await preferences.save();
     notifyListeners();
+    await preferences.save();
   }
 
   Future<void> updateThemeColor(int colorValue) async {
     preferences = preferences.copyWith(themeColorValue: colorValue);
-    await preferences.save();
     notifyListeners();
+    await preferences.save();
   }
 
   Future<void> updateLanguage(CsacLanguage language) async {
     preferences = preferences.copyWith(language: language);
-    await preferences.save();
     notifyListeners();
+    await preferences.save();
   }
 
   Future<bool> updateServerUrl(String value) async {

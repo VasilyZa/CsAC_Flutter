@@ -2,6 +2,8 @@ part of '../../main.dart';
 
 enum _PendingSendStatus { sending, failed }
 
+enum _ComposeMenuAction { image, voice, mention }
+
 class _VoiceFileType {
   const _VoiceFileType(this.extension, this.mimeType);
 
@@ -102,6 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
   GroupProfile? groupProfile;
   ChatMessage? replyTarget;
   int nextPendingId = -1;
+  int initialUnreadCount = 0;
   int refreshTicks = 0;
   DateTime? recordingStartedAt;
   String? recordingPath;
@@ -112,6 +115,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool recording = false;
   bool applyingDraft = false;
   bool offline = false;
+  bool showJumpToBottom = false;
   String? error;
 
   bool get selectionMode => selectedMessageIds.isNotEmpty;
@@ -125,9 +129,11 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    initialUnreadCount = widget.conversation.unreadCount;
     widget.state.setActiveConversation(widget.conversation);
     widget.state.markConversationRead(widget.conversation);
     input.addListener(scheduleDraftSave);
+    scroll.addListener(handleScrollChanged);
     loadDraft();
     loadGroupAnnouncement();
     loadInitial();
@@ -164,6 +170,41 @@ class _ChatScreenState extends State<ChatScreen> {
     scroll.dispose();
     super.dispose();
   }
+
+  void handleScrollChanged() {
+    if (!scroll.hasClients) {
+      return;
+    }
+    final shouldShow = scroll.position.maxScrollExtent - scroll.position.pixels > 280;
+    if (shouldShow != showJumpToBottom && mounted) {
+      setState(() => showJumpToBottom = shouldShow);
+    }
+  }
+
+  int? get firstUnreadMessageId {
+    if (widget.conversation.type != ConversationType.private ||
+        messages.isEmpty) {
+      return null;
+    }
+    final myUid = widget.state.user?.uid;
+    final explicitUnread = messages
+        .where((message) => message.senderId != myUid && !message.isRead)
+        .firstOrNull;
+    if (explicitUnread != null) {
+      return explicitUnread.id;
+    }
+    if (initialUnreadCount <= 0) {
+      return null;
+    }
+    final incoming = messages.where((message) => message.senderId != myUid).toList();
+    if (incoming.isEmpty) {
+      return null;
+    }
+    final index = (incoming.length - initialUnreadCount).clamp(0, incoming.length - 1);
+    return incoming[index].id;
+  }
+
+  bool get canJumpToFirstUnread => firstUnreadMessageId != null;
 
   Future<void> loadDraft() async {
     final draft = await ConversationDraftStore.load(widget.conversation);
@@ -1215,14 +1256,67 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void jumpToFirstUnread() {
+    final id = firstUnreadMessageId;
+    if (id == null) {
+      return;
+    }
+    scrollToMessage(id);
+  }
+
+  Future<void> showComposeMenu() async {
+    final strings = context.strings;
+    final action = await _showAdaptiveActionSheet<_ComposeMenuAction>(
+      context,
+      title: strings.text('More actions'),
+      actions: [
+        _AdaptiveSheetAction(
+          value: _ComposeMenuAction.image,
+          label: strings.text('Send image'),
+          icon: CupertinoIcons.photo,
+        ),
+        _AdaptiveSheetAction(
+          value: _ComposeMenuAction.voice,
+          label: recording ? strings.text('Stop recording') : strings.text('Voice message'),
+          icon: recording ? CupertinoIcons.stop_circle : CupertinoIcons.mic,
+        ),
+        if (widget.conversation.type == ConversationType.group)
+          const _AdaptiveSheetAction(
+            value: _ComposeMenuAction.mention,
+            label: '@',
+            icon: CupertinoIcons.at,
+          ),
+      ],
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _ComposeMenuAction.image:
+        await pickAndSendImage();
+        break;
+      case _ComposeMenuAction.voice:
+        await toggleRecording();
+        break;
+      case _ComposeMenuAction.mention:
+        await chooseMentionTargets();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final announcement = groupProfile?.notice.trim() ?? '';
     final showEmpty = !loading && messages.isEmpty && pendingSends.isEmpty;
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 600;
     return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
       navigationBar: CupertinoNavigationBar(
+        backgroundColor: colors.navBarBackground,
+        border: null,
         automaticallyImplyLeading: !widget.embedded && !selectionMode,
         leading: selectionMode
             ? CupertinoButton(
@@ -1324,59 +1418,98 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: openConversationDetails,
               ),
             Expanded(
-              child: loading
-                  ? const Center(child: CupertinoActivityIndicator())
-                  : showEmpty
-                  ? _EmptyPanel(message: strings.text('No messages.'))
-                  : ListView.builder(
-                      controller: scroll,
-                      padding: const EdgeInsets.all(12),
-                      itemCount: messages.length + pendingSends.length,
-                      itemBuilder: (context, index) {
-                        if (index >= messages.length) {
-                          final pending = pendingSends[index - messages.length];
-                          return _PendingMessageBubble(
-                            pending: pending,
-                            onRetry: () => retryPendingSend(pending.localId),
-                          );
-                        }
-                        final message = messages[index];
-                        final mine = widget.state.user?.uid == message.senderId;
-                        final selected = selectedMessageIds.contains(message.id);
-                        final replyMessage = messages
-                            .where((item) => item.id == message.replyTo)
-                            .cast<ChatMessage?>()
-                            .firstOrNull;
-                        return _MessageBubble(
-                          key: itemKeys.putIfAbsent(
-                            message.id,
-                            () => GlobalKey(),
+              child: Stack(
+                children: [
+                  loading
+                      ? const Center(child: CupertinoActivityIndicator())
+                      : showEmpty
+                      ? _EmptyPanel(message: strings.text('No messages.'))
+                      : ListView.builder(
+                          controller: scroll,
+                          padding: EdgeInsets.fromLTRB(
+                            compact ? 10 : 28,
+                            compact ? 10 : 18,
+                            compact ? 10 : 28,
+                            compact ? 72 : 84,
                           ),
-                          message: message,
-                          replyMessage: replyMessage,
-                          mine: mine,
-                          focused: widget.focusMessageId == message.id,
-                          selected: selected,
-                          selectionMode: selectionMode,
-                          onTap: selectionMode
-                              ? () => toggleMessageSelection(message)
-                              : null,
-                          onLongPress: selectionMode
-                              ? null
-                              : () => showMessageActions(message, mine),
-                          onReplyTap: message.replyTo > 0
-                              ? () => scrollToMessage(message.replyTo)
-                              : null,
-                          onImageTap: message.imageUrl.isEmpty
-                              ? null
-                              : () => showImagePreview(context, message.imageUrl),
-                          onVoiceTap: message.voiceUrl.isEmpty
-                              ? null
-                              : () => toggleVoicePlayback(message),
-                          playingVoice: playingMessageId == message.id,
-                        );
-                      },
+                          itemCount: messages.length + pendingSends.length,
+                          itemBuilder: (context, index) {
+                            if (index >= messages.length) {
+                              final pending = pendingSends[index - messages.length];
+                              return _PendingMessageBubble(
+                                pending: pending,
+                                onRetry: () => retryPendingSend(pending.localId),
+                              );
+                            }
+                            final message = messages[index];
+                            final mine = widget.state.user?.uid == message.senderId;
+                            final selected = selectedMessageIds.contains(message.id);
+                            final replyMessage = messages
+                                .where((item) => item.id == message.replyTo)
+                                .cast<ChatMessage?>()
+                                .firstOrNull;
+                            return _MessageBubble(
+                              key: itemKeys.putIfAbsent(
+                                message.id,
+                                () => GlobalKey(),
+                              ),
+                              message: message,
+                              replyMessage: replyMessage,
+                              mine: mine,
+                              showReadStatus: widget.conversation.type == ConversationType.private,
+                              focused: widget.focusMessageId == message.id,
+                              selected: selected,
+                              selectionMode: selectionMode,
+                              onTap: selectionMode
+                                  ? () => toggleMessageSelection(message)
+                                  : null,
+                              onLongPress: selectionMode
+                                  ? null
+                                  : () => showMessageActions(message, mine),
+                              onReplyTap: message.replyTo > 0
+                                  ? () => scrollToMessage(message.replyTo)
+                                  : null,
+                              onImageTap: message.imageUrl.isEmpty
+                                  ? null
+                                  : () => showImagePreview(context, message.imageUrl),
+                              onVoiceTap: message.voiceUrl.isEmpty
+                                  ? null
+                                  : () => toggleVoicePlayback(message),
+                              playingVoice: playingMessageId == message.id,
+                            );
+                          },
+                        ),
+                  Positioned(
+                    top: 56,
+                    right: compact ? 12 : 28,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: canJumpToFirstUnread
+                          ? _FloatingChatButton(
+                              key: const ValueKey('firstUnread'),
+                              icon: CupertinoIcons.arrow_down_to_line,
+                              label: strings.text('Unread'),
+                              onPressed: jumpToFirstUnread,
+                            )
+                          : const SizedBox.shrink(),
                     ),
+                  ),
+                  Positioned(
+                    right: compact ? 12 : 28,
+                    bottom: 12,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: showJumpToBottom
+                          ? _FloatingChatButton(
+                              key: const ValueKey('bottom'),
+                              icon: CupertinoIcons.chevron_down,
+                              onPressed: scrollToEnd,
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
+              ),
             ),
             ClipRect(
               child: BackdropFilter(
@@ -1388,10 +1521,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       top: BorderSide(color: colors.separator, width: 0.5),
                     ),
                   ),
-                  child: SafeArea(
+                   child: SafeArea(
                     top: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 10 : 18,
+                        8,
+                        compact ? 10 : 18,
+                        compact ? 10 : 14,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1405,6 +1543,13 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           Row(
                             children: [
+                              _ComposeIconButton(
+                                icon: recording ? CupertinoIcons.stop_circle_fill : CupertinoIcons.plus,
+                                color: recording ? colors.destructive : null,
+                                busy: pickingImage,
+                                onPressed: showComposeMenu,
+                              ),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: CupertinoTextField(
                                   controller: input,
@@ -1419,42 +1564,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: colors.elevatedBackground,
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(
+                                      color: colors.separator.withValues(alpha: 0.35),
+                                      width: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              if (widget.conversation.type == ConversationType.group)
-                                CupertinoButton(
-                                  padding: EdgeInsets.zero,
-                                  minSize: 36,
-                                  onPressed: chooseMentionTargets,
-                                  child: const Icon(CupertinoIcons.at, size: 22),
-                                ),
-                              if (widget.conversation.type == ConversationType.group)
-                                const SizedBox(width: 4),
-                              CupertinoButton(
-                                padding: EdgeInsets.zero,
-                                minSize: 36,
-                                onPressed: toggleRecording,
-                                child: Icon(
-                                  recording
-                                      ? CupertinoIcons.stop_circle
-                                      : CupertinoIcons.mic,
-                                  size: 22,
-                                  color: recording ? colors.destructive : null,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              CupertinoButton(
-                                padding: EdgeInsets.zero,
-                                minSize: 36,
-                                onPressed: pickingImage ? null : pickAndSendImage,
-                                child: pickingImage
-                                    ? const CupertinoActivityIndicator(radius: 10)
-                                    : const Icon(CupertinoIcons.photo, size: 22),
-                              ),
-                              const SizedBox(width: 4),
                               CupertinoButton.filled(
                                 padding: const EdgeInsets.all(8),
                                 minSize: 34,
@@ -1497,6 +1615,7 @@ class _MessageBubble extends StatelessWidget {
     this.onImageTap,
     this.onVoiceTap,
     this.playingVoice = false,
+    this.showReadStatus = false,
   });
 
   final ChatMessage message;
@@ -1511,10 +1630,13 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback? onImageTap;
   final VoidCallback? onVoiceTap;
   final bool playingVoice;
+  final bool showReadStatus;
 
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final maxBubbleWidth = width < 600 ? width * 0.76 : 440.0;
     final bubbleColor = mine ? colors.myBubble : colors.otherBubble;
     final textColor = mine ? colors.myBubbleText : colors.otherBubbleText;
     final secondaryTextColor = mine
@@ -1539,7 +1661,7 @@ class _MessageBubble extends StatelessWidget {
             bottomRight: Radius.circular(18),
           );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: width < 600 ? 3 : 5),
       child: GestureDetector(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -1573,16 +1695,16 @@ class _MessageBubble extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             Container(
-              constraints: const BoxConstraints(maxWidth: 320),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
               decoration: BoxDecoration(
                 color: bubbleColor,
                 borderRadius: borderRadius,
                 boxShadow: [
                   BoxShadow(
                     color: CupertinoColors.black.withValues(alpha: 0.06),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ],
                 border: (selected || focused)
@@ -1695,11 +1817,119 @@ class _MessageBubble extends StatelessWidget {
                   if (message.body.isNotEmpty &&
                       !message.body.startsWith('[image]') &&
                       !message.body.startsWith('[voice]'))
-                    Text(message.body, style: TextStyle(color: textColor)),
+                    Text(message.body, style: TextStyle(color: textColor, fontSize: 15.5, height: 1.28)),
                 ],
               ),
             ),
+            if (showReadStatus) ...[
+              const SizedBox(height: 3),
+              Text(
+                message.isRead ? context.strings.text('Read') : context.strings.text('Unread'),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: message.isRead ? colors.primaryColor : colors.tertiaryLabel,
+                ),
+              ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposeIconButton extends StatelessWidget {
+  const _ComposeIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.color,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minSize: 36,
+      onPressed: onPressed,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: colors.secondaryFill,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: busy
+            ? const CupertinoActivityIndicator(radius: 9)
+            : Icon(icon, size: 19, color: color ?? colors.primaryColor),
+      ),
+    );
+  }
+}
+
+class _FloatingChatButton extends StatelessWidget {
+  const _FloatingChatButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.label,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minSize: 0,
+          onPressed: onPressed,
+          child: Container(
+            height: 36,
+            padding: EdgeInsets.symmetric(horizontal: label == null ? 10 : 12),
+            decoration: BoxDecoration(
+              color: colors.floatingTabBarBackground,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.separator.withValues(alpha: 0.35), width: 0.5),
+              boxShadow: [
+                BoxShadow(
+                  color: CupertinoColors.black.withValues(alpha: colors.isDark ? 0.28 : 0.10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: colors.primaryColor),
+                if (label != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    label!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.primaryColor,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1717,6 +1947,7 @@ class _PendingMessageBubble extends StatelessWidget {
     final colors = CsacColors.of(context);
     final strings = context.strings;
     final failed = pending.status == _PendingSendStatus.failed;
+    final width = MediaQuery.sizeOf(context).width;
     final bubbleColor = failed ? colors.destructive.withValues(alpha: 0.15) : colors.myBubble;
     final textColor = failed ? colors.destructive : colors.myBubbleText;
     return Padding(
@@ -1733,7 +1964,7 @@ class _PendingMessageBubble extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Container(
-            constraints: const BoxConstraints(maxWidth: 320),
+            constraints: BoxConstraints(maxWidth: width < 600 ? width * 0.76 : 440),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: bubbleColor,

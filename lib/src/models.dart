@@ -390,6 +390,7 @@ class ChatMessage {
     this.isRecalled = false,
     this.isEssence = false,
     this.isMentioned = false,
+    this.isRead = false,
     this.replyTo = 0,
   });
 
@@ -405,6 +406,7 @@ class ChatMessage {
   final bool isRecalled;
   final bool isEssence;
   final bool isMentioned;
+  final bool isRead;
   final int replyTo;
 
   ChatMessage copyWith({
@@ -420,6 +422,7 @@ class ChatMessage {
     bool? isRecalled,
     bool? isEssence,
     bool? isMentioned,
+    bool? isRead,
     int? replyTo,
   }) {
     return ChatMessage(
@@ -435,6 +438,7 @@ class ChatMessage {
       isRecalled: isRecalled ?? this.isRecalled,
       isEssence: isEssence ?? this.isEssence,
       isMentioned: isMentioned ?? this.isMentioned,
+      isRead: isRead ?? this.isRead,
       replyTo: replyTo ?? this.replyTo,
     );
   }
@@ -510,6 +514,7 @@ class ChatMessage {
       isRecalled: isRecalled,
       isEssence: asBool(json['is_essence']),
       isMentioned: asBool(json['is_mentioned']),
+      isRead: asBool(json['is_read']),
       replyTo: firstInt(json, const ['reply_to', 'reply_msg_id']),
     );
   }

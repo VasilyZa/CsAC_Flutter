@@ -113,6 +113,33 @@ class CsacColors {
           : const Color(0xE6FFFFFF);
 }
 
+const double _csacPageHorizontalPadding = 16;
+const double _csacGroupedCornerRadius = 18;
+const double _csacControlCornerRadius = 16;
+const double _csacListMinHeight = 52;
+
+class _AdaptivePageFrame extends StatelessWidget {
+  const _AdaptivePageFrame({required this.child, this.maxWidth = 720});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 700) {
+      return child;
+    }
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // 通用组件
 // ============================================================================
@@ -170,7 +197,7 @@ class _CupertinoGroupedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
     return Padding(
-      padding: margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: margin ?? const EdgeInsets.symmetric(horizontal: _csacPageHorizontalPadding, vertical: 7),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -189,9 +216,12 @@ class _CupertinoGroupedCard extends StatelessWidget {
               ),
             ),
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
             child: Container(
-              color: colors.cardBackground,
+              decoration: BoxDecoration(
+                color: colors.cardBackground,
+                border: Border.all(color: colors.separator.withValues(alpha: 0.30), width: 0.5),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: _withSeparators(children, colors.separator),
@@ -219,8 +249,8 @@ class _CupertinoGroupedCard extends StatelessWidget {
       if (i < items.length - 1) {
         result.add(Container(
           height: 0.5,
-          margin: const EdgeInsets.only(left: 56),
-          color: color,
+          margin: const EdgeInsets.only(left: 60),
+          color: color.withValues(alpha: 0.55),
         ));
       }
     }
@@ -257,8 +287,8 @@ class _CupertinoListTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        constraints: const BoxConstraints(minHeight: _csacListMinHeight),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             if (leading != null) ...[
@@ -274,6 +304,7 @@ class _CupertinoListTile extends StatelessWidget {
                     title,
                     style: TextStyle(
                       fontSize: 16,
+                      height: 1.18,
                       color: titleColor ?? colors.label,
                       fontWeight: titleWeight,
                     ),
@@ -287,6 +318,7 @@ class _CupertinoListTile extends StatelessWidget {
                         subtitle!,
                         style: TextStyle(
                           fontSize: 13,
+                          height: 1.22,
                           color: colors.secondaryLabel,
                         ),
                         maxLines: 2,
@@ -362,7 +394,7 @@ class _CupertinoFormField extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(icon != null ? 8 : 14, 13, 14, 13),
       decoration: BoxDecoration(
         color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_csacControlCornerRadius),
       ),
       style: TextStyle(fontSize: 16, color: colors.label),
       placeholderStyle: TextStyle(fontSize: 16, color: colors.tertiaryLabel),
@@ -438,6 +470,138 @@ Future<bool> _showCupertinoConfirm(
     ),
   );
   return result == true;
+}
+
+class _AdaptiveSheetAction<T> {
+  const _AdaptiveSheetAction({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.destructive = false,
+  });
+
+  final T value;
+  final String label;
+  final IconData? icon;
+  final bool destructive;
+}
+
+Future<T?> _showAdaptiveActionSheet<T>(
+  BuildContext context, {
+  required String title,
+  required List<_AdaptiveSheetAction<T>> actions,
+}) {
+  final wide = MediaQuery.sizeOf(context).width >= 700;
+  final strings = context.strings;
+  if (!wide) {
+    return showCupertinoModalPopup<T>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(title),
+        actions: [
+          for (final action in actions)
+            CupertinoActionSheetAction(
+              isDestructiveAction: action.destructive,
+              onPressed: () => Navigator.of(context).pop(action.value),
+              child: Text(action.label),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
+        ),
+      ),
+    );
+  }
+  return showCupertinoDialog<T>(
+    context: context,
+    builder: (context) => _AdaptiveDesktopActionPanel<T>(
+      title: title,
+      actions: actions,
+    ),
+  );
+}
+
+class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
+  const _AdaptiveDesktopActionPanel({required this.title, required this.actions});
+
+  final String title;
+  final List<_AdaptiveSheetAction<T>> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            width: 360,
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            decoration: BoxDecoration(
+              color: colors.navBarBackground,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colors.separator.withValues(alpha: 0.35), width: 0.5),
+              boxShadow: [
+                BoxShadow(
+                  color: CupertinoColors.black.withValues(alpha: colors.isDark ? 0.36 : 0.12),
+                  blurRadius: 36,
+                  offset: const Offset(0, 18),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  child: Text(
+                    title,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.label),
+                  ),
+                ),
+                for (final action in actions)
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: 0,
+                    onPressed: () => Navigator.of(context).pop(action.value),
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      margin: const EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(
+                        color: colors.cardBackground.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          if (action.icon != null) ...[
+                            Icon(action.icon, size: 19, color: action.destructive ? colors.destructive : colors.primaryColor),
+                            const SizedBox(width: 10),
+                          ],
+                          Expanded(
+                            child: Text(
+                              action.label,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: action.destructive ? colors.destructive : colors.label,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// 徽章图标

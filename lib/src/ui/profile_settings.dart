@@ -5,20 +5,31 @@ class ProfileScreen extends StatelessWidget {
 
   final CsacAppState state;
 
+  Future<void> _logout(BuildContext context) async {
+    await state.logout();
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = state.user;
     final counts = state.notificationCounts;
     final strings = context.strings;
     final colors = CsacColors.of(context);
     return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
       navigationBar: CupertinoNavigationBar(
         middle: Text(strings.text('Me')),
+        backgroundColor: colors.navBarBackground,
+        border: null,
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+        child: _AdaptivePageFrame(
+          maxWidth: 680,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            children: [
             if (state.sessionExpired)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -26,7 +37,7 @@ class ProfileScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: CupertinoColors.systemYellow.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(_csacControlCornerRadius),
                     border: Border.all(
                       color: CupertinoColors.systemYellow.withValues(alpha: 0.4),
                     ),
@@ -44,42 +55,14 @@ class ProfileScreen extends StatelessWidget {
                       CupertinoButton(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         minSize: 0,
-                        onPressed: state.logout,
+                        onPressed: () => _logout(context),
                         child: Text(strings.text('Login')),
                       ),
                     ],
                   ),
                 ),
               ),
-            _CupertinoGroupedCard(
-              margin: EdgeInsets.zero,
-              children: [
-                _CupertinoListTile(
-                  leading: _Avatar(
-                    url: user?.avatar ?? '',
-                    fallback: CupertinoIcons.person_fill,
-                  ),
-                  title: user?.nickname ?? strings.text('Not logged in'),
-                  subtitle: [
-                    if (user?.username.isNotEmpty == true)
-                      '@${user!.username}',
-                    if (user != null) 'UID ${user.uid}',
-                    if (user?.onlineStatus.isNotEmpty == true)
-                      user!.onlineStatus,
-                  ].join(' | '),
-                  onTap: user == null
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            CupertinoPageRoute<void>(
-                              builder: (_) =>
-                                  AccountSettingsScreen(state: state),
-                            ),
-                          );
-                        },
-                ),
-              ],
-            ),
+            _ProfileHeroCard(state: state),
             const SizedBox(height: 12),
             _CupertinoGroupedCard(
               margin: EdgeInsets.zero,
@@ -102,56 +85,36 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            CupertinoButton.filled(
-              onPressed: state.refreshHome,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(CupertinoIcons.arrow_2_circlepath, size: 18),
-                  const SizedBox(width: 8),
-                  Text(strings.text('Refresh all')),
-                ],
-              ),
+            const SizedBox(height: 12),
+            _CupertinoGroupedCard(
+              margin: EdgeInsets.zero,
+              children: [
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.arrow_2_circlepath, size: 22),
+                  title: strings.text('Refresh all'),
+                  onTap: state.refreshHome,
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.settings, size: 22),
+                  title: strings.text('Settings'),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) => SettingsScreen(state: state),
+                      ),
+                    );
+                  },
+                ),
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.square_arrow_left, size: 22),
+                  title: strings.text('Logout'),
+                  titleColor: colors.destructive,
+                  onTap: () => _logout(context),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            CupertinoButton(
-              color: colors.cardBackground,
-              onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute<void>(
-                    builder: (_) => SettingsScreen(state: state),
-                  ),
-                );
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(CupertinoIcons.settings, size: 18, color: colors.label),
-                  const SizedBox(width: 8),
-                  Text(
-                    strings.text('Settings'),
-                    style: TextStyle(color: colors.label),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            CupertinoButton(
-              color: colors.cardBackground,
-              onPressed: state.logout,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(CupertinoIcons.square_arrow_left, size: 18, color: colors.label),
-                  const SizedBox(width: 8),
-                  Text(
-                    strings.text('Logout'),
-                    style: TextStyle(color: colors.label),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -172,6 +135,82 @@ class ProfileScreen extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: count > 0 ? CupertinoColors.white : colors.secondaryLabel,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeroCard extends StatelessWidget {
+  const _ProfileHeroCard({required this.state});
+
+  final CsacAppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = state.user;
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: user == null
+          ? null
+          : () {
+              Navigator.of(context).push(
+                CupertinoPageRoute<void>(
+                  builder: (_) => AccountSettingsScreen(state: state),
+                ),
+              );
+            },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: colors.separator.withValues(alpha: 0.28), width: 0.5),
+          boxShadow: [
+            BoxShadow(
+              color: CupertinoColors.black.withValues(alpha: colors.isDark ? 0.18 : 0.06),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _Avatar(
+              url: user?.avatar ?? '',
+              fallback: CupertinoIcons.person_fill,
+              size: 64,
+              name: user?.nickname ?? user?.username ?? '',
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.nickname ?? strings.text('Not logged in'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: colors.label, height: 1.1),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    [
+                      if (user?.username.isNotEmpty == true) '@${user!.username}',
+                      if (user != null) 'UID ${user.uid}',
+                      if (user?.onlineStatus.isNotEmpty == true) user!.onlineStatus,
+                    ].join(' | '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: colors.secondaryLabel, height: 1.25),
+                  ),
+                ],
+              ),
+            ),
+            if (user != null) Icon(CupertinoIcons.chevron_right, size: 16, color: colors.tertiaryLabel),
+          ],
         ),
       ),
     );
@@ -400,9 +439,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         middle: Text(strings.text('Account settings')),
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+        child: _AdaptivePageFrame(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
             _CupertinoGroupedCard(
               margin: EdgeInsets.zero,
               children: [
@@ -496,7 +536,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -700,9 +741,10 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
         middle: Text(strings.text('Account security')),
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+        child: _AdaptivePageFrame(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
             _CupertinoGroupedCard(
               margin: EdgeInsets.zero,
               children: [
@@ -729,7 +771,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -801,8 +844,8 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.1.0-1';
-const _csacAppBuild = '1';
+const _csacAppVersion = '1.1.2-33';
+const _csacAppBuild = '33';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
 Brightness _estimateBrightness(Color color) {
@@ -837,9 +880,10 @@ class AppInfoScreen extends StatelessWidget {
         middle: Text(strings.text('App information')),
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+        child: _AdaptivePageFrame(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
             _CupertinoGroupedCard(
               margin: EdgeInsets.zero,
               children: [
@@ -933,7 +977,8 @@ class AppInfoScreen extends StatelessWidget {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1294,7 +1339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> logoutToLogin() async {
     await widget.state.logout();
     if (!mounted) return;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
   }
 
   Future<void> saveServerUrl() async {
@@ -1332,29 +1377,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> chooseTheme() async {
     final strings = context.strings;
-    final selected = await showCupertinoModalPopup<ThemeMode>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('Theme')),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(ThemeMode.system),
-            child: Text(strings.text('System')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(ThemeMode.light),
-            child: Text(strings.text('Light')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(ThemeMode.dark),
-            child: Text(strings.text('Dark')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
-        ),
-      ),
+    final selected = await _showAdaptiveActionSheet<ThemeMode>(
+      context,
+      title: strings.text('Theme'),
+      actions: [
+        _AdaptiveSheetAction(value: ThemeMode.system, label: strings.text('System'), icon: CupertinoIcons.device_phone_portrait),
+        _AdaptiveSheetAction(value: ThemeMode.light, label: strings.text('Light'), icon: CupertinoIcons.sun_max),
+        _AdaptiveSheetAction(value: ThemeMode.dark, label: strings.text('Dark'), icon: CupertinoIcons.moon),
+      ],
     );
     if (selected != null) {
       await widget.state.updateThemeMode(selected);
@@ -1365,13 +1395,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> chooseThemeColor() async {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    final selected = await showCupertinoModalPopup<int>(
-      context: context,
-      builder: (context) => Container(
+    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final content = Container(
+        width: wide ? 380 : null,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
         decoration: BoxDecoration(
-          color: colors.cardBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          color: wide ? colors.navBarBackground : colors.cardBackground,
+          borderRadius: BorderRadius.circular(wide ? 24 : 16),
         ),
         child: SafeArea(
           top: false,
@@ -1417,8 +1447,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
+    final selected = wide
+        ? await showCupertinoDialog<int>(
+            context: context,
+            builder: (context) => Center(child: content),
+          )
+        : await showCupertinoModalPopup<int>(
+            context: context,
+            builder: (context) => content,
+          );
     if (selected != null) {
       await widget.state.updateThemeColor(selected);
       if (mounted) setState(() {});
@@ -1427,25 +1465,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> chooseLanguage() async {
     final strings = context.strings;
-    final selected = await showCupertinoModalPopup<CsacLanguage>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('Language')),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(CsacLanguage.en),
-            child: const Text('English'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(CsacLanguage.zh),
-            child: const Text('中文'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
-        ),
-      ),
+    final selected = await _showAdaptiveActionSheet<CsacLanguage>(
+      context,
+      title: strings.text('Language'),
+      actions: const [
+        _AdaptiveSheetAction(value: CsacLanguage.en, label: 'English', icon: CupertinoIcons.textformat),
+        _AdaptiveSheetAction(value: CsacLanguage.zh, label: '中文', icon: CupertinoIcons.textformat),
+      ],
     );
     if (selected != null) {
       await widget.state.updateLanguage(selected);
@@ -1463,9 +1489,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         middle: Text(strings.text('Settings')),
       ),
       child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+        child: _AdaptivePageFrame(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
             _CupertinoGroupedCard(
               margin: EdgeInsets.zero,
               children: [
@@ -1693,7 +1720,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -15,6 +15,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int index = 0;
+  int previousIndex = 0;
   int lastUnreadChats = 0;
   Conversation? selectedConversation;
   Timer? timer;
@@ -115,7 +116,15 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _onTabTap(int value) {
-    setState(() => index = value);
+    if (value == index) {
+      if (value == 0) widget.state.loadConversations();
+      if (value == 2) widget.state.refreshNotificationCounts();
+      return;
+    }
+    setState(() {
+      previousIndex = index;
+      index = value;
+    });
     if (value == 0) widget.state.loadConversations();
     if (value == 2) widget.state.refreshNotificationCounts();
   }
@@ -210,9 +219,10 @@ class _MainShellState extends State<MainShell> {
       child: Stack(
         children: [
           // Page content — bottom padding accounts for tab bar + safe area
-          IndexedStack(
+          _AnimatedNarrowPageSwitcher(
             index: index,
-            children: pages,
+            previousIndex: previousIndex,
+            child: pages[index],
           ),
           // Floating tab bar overlaid at bottom
           Positioned(
@@ -226,6 +236,49 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedNarrowPageSwitcher extends StatelessWidget {
+  const _AnimatedNarrowPageSwitcher({
+    required this.index,
+    required this.previousIndex,
+    required this.child,
+  });
+
+  final int index;
+  final int previousIndex;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final forward = index >= previousIndex;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final incoming = child.key == ValueKey<int>(index);
+        final beginOffset = incoming
+            ? Offset(forward ? 0.10 : -0.10, 0)
+            : Offset(forward ? -0.06 : 0.06, 0);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: beginOffset,
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<int>(index),
+        child: child,
       ),
     );
   }

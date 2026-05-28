@@ -15,6 +15,7 @@ on:
           - linux-executable
           - linux-appimage
           - android-apk
+          - ios-unsigned-ipa
       upload_release:
         description: Upload built artifacts to GitHub Release
         required: true
@@ -328,6 +329,44 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk.sha1
           if-no-files-found: error
 
+  ios:
+    name: iOS unsigned IPA
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'ios-unsigned-ipa' }}
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Check Flutter
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ios/ipa/Payload build/artifacts
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          (cd build/ios/ipa && zip -qry "../../artifacts/${APP_NAME}-ios-unsigned.ipa" Payload)
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-ios-unsigned-ipa
+          path: build/artifacts/${{ env.APP_NAME }}-ios-unsigned.ipa
+          if-no-files-found: error
+
   release:
     name: Release
     if: ${{ always() && inputs.upload_release && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
@@ -335,6 +374,7 @@ jobs:
       - windows
       - linux
       - android
+      - ios
     runs-on: ubuntu-latest
 
     steps:

@@ -207,7 +207,7 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
-        reply_to
+        is_read, reply_to
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ?
       ORDER BY id DESC
@@ -234,7 +234,7 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
-        reply_to
+        is_read, reply_to
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ? AND id <= ?
       ORDER BY id DESC
@@ -246,7 +246,7 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
-        reply_to
+        is_read, reply_to
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ? AND id > ?
       ORDER BY id ASC
@@ -321,6 +321,7 @@ class CsacLocalCache {
         c.type,
         c.remote_id,
         c.name,
+        c.avatar,
         c.subtitle,
         c.unread_count,
         c.search_text,
@@ -330,10 +331,13 @@ class CsacLocalCache {
         m.body,
         m.time,
         m.image_url,
+        m.voice_url,
+        m.voice_duration,
         m.can_recall,
         m.is_recalled,
         m.is_essence,
         m.is_mentioned,
+        m.is_read,
         m.reply_to
       FROM messages m
       JOIN conversations c
@@ -366,9 +370,9 @@ class CsacLocalCache {
       INSERT INTO messages (
         conversation_type, conversation_id, id, sender_id, sender, body, time,
         image_url, voice_url, voice_duration, can_recall, is_recalled,
-        is_essence, is_mentioned, reply_to
+        is_essence, is_mentioned, is_read, reply_to
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(conversation_type, conversation_id, id) DO UPDATE SET
         sender_id = excluded.sender_id,
         sender = excluded.sender,
@@ -381,6 +385,7 @@ class CsacLocalCache {
         is_recalled = excluded.is_recalled,
         is_essence = excluded.is_essence,
         is_mentioned = excluded.is_mentioned,
+        is_read = excluded.is_read,
         reply_to = excluded.reply_to
       ''');
     try {
@@ -406,6 +411,7 @@ class CsacLocalCache {
           message.isRecalled ? 1 : 0,
           message.isEssence ? 1 : 0,
           message.isMentioned ? 1 : 0,
+          message.isRead ? 1 : 0,
           message.replyTo,
         ]);
       }
@@ -559,6 +565,7 @@ class CsacLocalCache {
         is_recalled INTEGER NOT NULL DEFAULT 0,
         is_essence INTEGER NOT NULL DEFAULT 0,
         is_mentioned INTEGER NOT NULL DEFAULT 0,
+        is_read INTEGER NOT NULL DEFAULT 0,
         reply_to INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (conversation_type, conversation_id, id)
       )
@@ -594,6 +601,12 @@ class CsacLocalCache {
       db,
       'messages',
       'is_recalled',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'is_read',
       'INTEGER NOT NULL DEFAULT 0',
     );
     _addColumnIfMissing(
@@ -648,6 +661,7 @@ class CsacLocalCache {
       isRecalled: (row['is_recalled'] as int) != 0,
       isEssence: (row['is_essence'] as int) != 0,
       isMentioned: (row['is_mentioned'] as int) != 0,
+      isRead: (row['is_read'] as int? ?? 0) != 0,
       replyTo: row['reply_to'] as int,
     );
   }

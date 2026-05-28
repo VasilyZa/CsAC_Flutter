@@ -91,10 +91,13 @@ class _CsacMobileAppState extends State<CsacMobileApp> {
             Color(state.preferences.themeColorValue),
           ),
           home: state.bootstrapping
-              ? SplashScreen(status: state.restoreStatus)
+              ? SplashScreen(
+                  key: const ValueKey('splash'),
+                  status: state.restoreStatus,
+                )
               : state.user == null
-              ? LoginScreen(state: state)
-              : MainShell(state: state),
+              ? LoginScreen(key: const ValueKey('login'), state: state)
+              : MainShell(key: const ValueKey('main'), state: state),
         );
       },
     );
