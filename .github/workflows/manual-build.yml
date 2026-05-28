@@ -338,12 +338,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Install aria2
+        run: brew install aria2
+
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          arch="$(uname -m)"
+          if [[ "$arch" == "arm64" ]]; then
+            flutter_url="https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_${FLUTTER_VERSION}-stable.zip"
+          else
+            flutter_url="https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_${FLUTTER_VERSION}-stable.zip"
+          fi
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-macos.zip" \
+            "$flutter_url"
+          unzip -q "$RUNNER_TEMP/downloads/flutter-macos.zip" -d "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
 
       - name: Check Flutter
         run: flutter --version
