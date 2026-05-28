@@ -568,8 +568,10 @@ class _ChatScreenState extends State<ChatScreen> {
         showSnack(permissionMessage);
         return;
       }
-      var encoder = Platform.isLinux ? AudioEncoder.wav : AudioEncoder.aacLc;
-      var extension = Platform.isLinux ? 'wav' : 'm4a';
+      var encoder = (Platform.isLinux || Platform.isWindows)
+          ? AudioEncoder.wav
+          : AudioEncoder.aacLc;
+      var extension = encoder == AudioEncoder.wav ? 'wav' : 'm4a';
       if (!await audioRecorder.isEncoderSupported(encoder)) {
         encoder = AudioEncoder.wav;
         extension = 'wav';
@@ -764,12 +766,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       await audioPlayer.stop();
-      final source = Platform.isAndroid
-          ? await androidVoiceSource(message.voiceUrl)
-          : UrlSource(
-              message.voiceUrl,
-              mimeType: voiceMimeType(message.voiceUrl),
-            );
+      final source = await localVoiceSource(message.voiceUrl);
       await audioPlayer.play(source);
       if (!mounted) {
         return;
@@ -789,7 +786,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<Source> androidVoiceSource(String url) async {
+  Future<Source> localVoiceSource(String url) async {
     final response = await widget.state.client.downloadAsset(
       url,
       accept: 'audio/*, application/octet-stream, */*',
