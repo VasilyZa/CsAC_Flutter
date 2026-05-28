@@ -25,6 +25,8 @@ class CsacPreferences {
   static const _chatShowSenderNameKey = 'csac.chat.show_sender_name';
   static const _chatTapToDismissKeyboardKey =
       'csac.chat.tap_to_dismiss_keyboard';
+  static const _chatBackgroundColorKey = 'csac.chat.background_color';
+  static const _chatBackgroundImagePathKey = 'csac.chat.background_image_path';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -61,6 +63,8 @@ class CsacPreferences {
         showSenderName: prefs.getBool(_chatShowSenderNameKey) ?? true,
         tapToDismissKeyboard:
             prefs.getBool(_chatTapToDismissKeyboardKey) ?? true,
+        backgroundColorValue: prefs.getInt(_chatBackgroundColorKey) ?? 0,
+        backgroundImagePath: prefs.getString(_chatBackgroundImagePathKey) ?? '',
       ),
     );
   }
@@ -77,6 +81,19 @@ class CsacPreferences {
       _chatTapToDismissKeyboardKey,
       chat.tapToDismissKeyboard,
     );
+    if (chat.backgroundColorValue == 0) {
+      await prefs.remove(_chatBackgroundColorKey);
+    } else {
+      await prefs.setInt(_chatBackgroundColorKey, chat.backgroundColorValue);
+    }
+    if (chat.backgroundImagePath.trim().isEmpty) {
+      await prefs.remove(_chatBackgroundImagePathKey);
+    } else {
+      await prefs.setString(
+        _chatBackgroundImagePathKey,
+        chat.backgroundImagePath.trim(),
+      );
+    }
     if (serverUrl.trim().isEmpty) {
       await prefs.remove(_serverUrlKey);
     } else {
@@ -117,24 +134,32 @@ class CsacChatPreferences {
     this.compactBubbles = false,
     this.showSenderName = true,
     this.tapToDismissKeyboard = true,
+    this.backgroundColorValue = 0,
+    this.backgroundImagePath = '',
   });
 
   final bool showSeconds;
   final bool compactBubbles;
   final bool showSenderName;
   final bool tapToDismissKeyboard;
+  final int backgroundColorValue;
+  final String backgroundImagePath;
 
   CsacChatPreferences copyWith({
     bool? showSeconds,
     bool? compactBubbles,
     bool? showSenderName,
     bool? tapToDismissKeyboard,
+    int? backgroundColorValue,
+    String? backgroundImagePath,
   }) {
     return CsacChatPreferences(
       showSeconds: showSeconds ?? this.showSeconds,
       compactBubbles: compactBubbles ?? this.compactBubbles,
       showSenderName: showSenderName ?? this.showSenderName,
       tapToDismissKeyboard: tapToDismissKeyboard ?? this.tapToDismissKeyboard,
+      backgroundColorValue: backgroundColorValue ?? this.backgroundColorValue,
+      backgroundImagePath: backgroundImagePath ?? this.backgroundImagePath,
     );
   }
 }

@@ -922,8 +922,8 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.1.9-40';
-const _csacAppBuild = '40';
+const _csacAppVersion = '1.1.10-41';
+const _csacAppBuild = '41';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
 Brightness _estimateBrightness(Color color) {
@@ -1900,20 +1900,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class ChatOptionsScreen extends StatelessWidget {
+class ChatOptionsScreen extends StatefulWidget {
   const ChatOptionsScreen({super.key, required this.state});
 
   final CsacAppState state;
 
+  @override
+  State<ChatOptionsScreen> createState() => _ChatOptionsScreenState();
+}
+
+class _ChatOptionsScreenState extends State<ChatOptionsScreen> {
+  final imagePicker = ImagePicker();
+
   Future<void> update(CsacChatPreferences chat) {
-    return state.updateChatPreferences(chat);
+    return widget.state.updateChatPreferences(chat);
+  }
+
+  Future<void> chooseBackgroundColor() async {
+    final strings = context.strings;
+    final selected = await _showAdaptiveActionSheet<int>(
+      context,
+      title: strings.text('Chat background'),
+      actions: const [
+        _AdaptiveSheetAction(
+          value: 0,
+          label: 'Default background',
+          icon: CupertinoIcons.circle,
+        ),
+        _AdaptiveSheetAction(
+          value: 0xffeef4f2,
+          label: 'Mist green',
+          icon: CupertinoIcons.circle_fill,
+        ),
+        _AdaptiveSheetAction(
+          value: 0xffeef2f7,
+          label: 'Cloud blue',
+          icon: CupertinoIcons.circle_fill,
+        ),
+        _AdaptiveSheetAction(
+          value: 0xfff5f0eb,
+          label: 'Warm sand',
+          icon: CupertinoIcons.circle_fill,
+        ),
+        _AdaptiveSheetAction(
+          value: 0xfff3eef5,
+          label: 'Soft violet',
+          icon: CupertinoIcons.circle_fill,
+        ),
+      ],
+    );
+    if (selected == null) return;
+    await update(
+      widget.state.preferences.chat.copyWith(
+        backgroundColorValue: selected,
+        backgroundImagePath: '',
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> chooseBackgroundImage() async {
+    final strings = context.strings;
+    final picked = await imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+    );
+    if (picked == null) return;
+    try {
+      await widget.state.updateChatBackgroundImage(
+        await picked.readAsBytes(),
+        picked.name,
+      );
+      if (!mounted) return;
+      setState(() {});
+      _showCupertinoToast(context, strings.text('Chat background updated.'));
+    } catch (err) {
+      if (!mounted) return;
+      _showCupertinoToast(
+        context,
+        strings.format('Update failed: {error}', {'error': err}),
+      );
+    }
+  }
+
+  String backgroundLabel(CsacChatPreferences chat) {
+    final strings = context.strings;
+    if (chat.backgroundImagePath.trim().isNotEmpty) {
+      return strings.text('Custom image');
+    }
+    if (chat.backgroundColorValue != 0) {
+      return strings.text('Solid color');
+    }
+    return strings.text('Default background');
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    final chat = state.preferences.chat;
+    final chat = widget.state.preferences.chat;
     return CupertinoPageScaffold(
       backgroundColor: colors.systemBackground,
       navigationBar: CupertinoNavigationBar(
@@ -1958,6 +2043,23 @@ class ChatOptionsScreen extends StatelessWidget {
                     value: chat.showSenderName,
                     onChanged: (value) =>
                         update(chat.copyWith(showSenderName: value)),
+                  ),
+                  _CupertinoListTile(
+                    leading: const Icon(CupertinoIcons.photo, size: 22),
+                    title: strings.text('Chat background'),
+                    subtitle: backgroundLabel(chat),
+                    onTap: chooseBackgroundColor,
+                  ),
+                  _CupertinoListTile(
+                    leading: const Icon(
+                      CupertinoIcons.photo_on_rectangle,
+                      size: 22,
+                    ),
+                    title: strings.text('Use image background'),
+                    subtitle: strings.text(
+                      'Choose a local image for chat pages',
+                    ),
+                    onTap: chooseBackgroundImage,
                   ),
                 ],
               ),

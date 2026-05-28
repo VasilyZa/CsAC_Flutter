@@ -1407,7 +1407,6 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final keyContext = itemKeys[focusId]?.currentContext;
       if (keyContext == null) {
-        scrollToEnd();
         return;
       }
       revealMessage(keyContext, duration: const Duration(milliseconds: 280));
@@ -1500,8 +1499,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 600;
     final chatPrefs = widget.state.preferences.chat;
+    final backgroundImagePath = chatPrefs.backgroundImagePath.trim();
+    final backgroundColor = chatPrefs.backgroundColorValue == 0
+        ? colors.systemBackground
+        : Color(chatPrefs.backgroundColorValue);
     return CupertinoPageScaffold(
-      backgroundColor: colors.systemBackground,
+      backgroundColor: backgroundColor,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: colors.navBarBackground,
         border: null,
@@ -1640,6 +1643,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     : null,
                 child: Stack(
                   children: [
+                    Positioned.fill(
+                      child: _ChatBackground(
+                        color: backgroundColor,
+                        imagePath: backgroundImagePath,
+                      ),
+                    ),
                     loading
                         ? const Center(child: CupertinoActivityIndicator())
                         : showEmpty
@@ -2153,6 +2162,37 @@ class _MessageBubble extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatBackground extends StatelessWidget {
+  const _ChatBackground({required this.color, required this.imagePath});
+
+  final Color color;
+  final String imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final imageFile = imagePath.isEmpty ? null : File(imagePath);
+    final hasImage = imageFile?.existsSync() == true;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        image: hasImage
+            ? DecorationImage(
+                image: FileImage(imageFile!),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  colors.systemBackground.withValues(
+                    alpha: colors.isDark ? 0.42 : 0.18,
+                  ),
+                  BlendMode.srcOver,
+                ),
+              )
+            : null,
       ),
     );
   }

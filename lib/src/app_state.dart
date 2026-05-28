@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'api_client.dart';
 import 'l10n.dart';
@@ -173,6 +176,34 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> updateChatPreferences(CsacChatPreferences chat) async {
     preferences = preferences.copyWith(chat: chat);
+    notifyListeners();
+    await preferences.save();
+  }
+
+  Future<void> updateChatBackgroundImage(
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    final directory = await getApplicationSupportDirectory();
+    final backgroundsDir = Directory(p.join(directory.path, 'backgrounds'));
+    if (!backgroundsDir.existsSync()) {
+      backgroundsDir.createSync(recursive: true);
+    }
+    final extension = p.extension(fileName).toLowerCase();
+    final safeExtension = extension.isEmpty ? '.jpg' : extension;
+    final file = File(
+      p.join(
+        backgroundsDir.path,
+        'chat_background_${DateTime.now().millisecondsSinceEpoch}$safeExtension',
+      ),
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    preferences = preferences.copyWith(
+      chat: preferences.chat.copyWith(
+        backgroundImagePath: file.path,
+        backgroundColorValue: 0,
+      ),
+    );
     notifyListeners();
     await preferences.save();
   }
