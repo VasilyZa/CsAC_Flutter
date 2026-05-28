@@ -412,14 +412,9 @@ jobs:
         run: |
           mkdir -p release-upload
           while IFS= read -r -d '' artifact_dir; do
-            artifact_name="$(basename "$artifact_dir")"
-            file_count="$(find "$artifact_dir" -type f | wc -l)"
-            if [[ "$file_count" -eq 1 ]]; then
-              file_path="$(find "$artifact_dir" -type f -print -quit)"
+            while IFS= read -r -d '' file_path; do
               cp "$file_path" "release-upload/$(basename "$file_path")"
-            else
-              (cd release-assets && zip -r "../release-upload/${artifact_name}.zip" "$artifact_name")
-            fi
+            done < <(find "$artifact_dir" -type f -print0)
           done < <(find release-assets -mindepth 1 -maxdepth 1 -type d -print0)
 
       - name: Upload release assets
