@@ -383,6 +383,7 @@ class ChatMessage {
     required this.sender,
     required this.body,
     this.time = '',
+    this.rawTime = '',
     this.imageUrl = '',
     this.voiceUrl = '',
     this.voiceDuration = 0,
@@ -399,6 +400,7 @@ class ChatMessage {
   final String sender;
   final String body;
   final String time;
+  final String rawTime;
   final String imageUrl;
   final String voiceUrl;
   final int voiceDuration;
@@ -415,6 +417,7 @@ class ChatMessage {
     String? sender,
     String? body,
     String? time,
+    String? rawTime,
     String? imageUrl,
     String? voiceUrl,
     int? voiceDuration,
@@ -431,6 +434,7 @@ class ChatMessage {
       sender: sender ?? this.sender,
       body: body ?? this.body,
       time: time ?? this.time,
+      rawTime: rawTime ?? this.rawTime,
       imageUrl: imageUrl ?? this.imageUrl,
       voiceUrl: voiceUrl ?? this.voiceUrl,
       voiceDuration: voiceDuration ?? this.voiceDuration,
@@ -492,6 +496,12 @@ class ChatMessage {
         body = '[empty]';
       }
     }
+    final rawTime = firstString(json, const [
+      'created_at',
+      'add_time',
+      'create_time',
+      'time',
+    ]);
     return ChatMessage(
       id: id,
       senderId: senderId,
@@ -499,14 +509,8 @@ class ChatMessage {
           ? 'UID $senderId'
           : firstString(json, const ['nickname', 'sender_name']),
       body: body,
-      time: humanReadableTimestamp(
-        firstString(json, const [
-          'add_time',
-          'created_at',
-          'create_time',
-          'time',
-        ]),
-      ),
+      time: humanReadableTimestamp(rawTime),
+      rawTime: rawTime,
       imageUrl: image,
       voiceUrl: voice,
       voiceDuration: firstInt(json, const ['duration', 'voice_duration']),
@@ -1093,7 +1097,7 @@ bool looksLikeVoicePath(String value) {
       uri?.hasScheme == true;
 }
 
-String humanReadableTimestamp(String raw) {
+String humanReadableTimestamp(String raw, {bool showSeconds = false}) {
   final value = raw.trim();
   if (value.isEmpty) {
     return '';
@@ -1120,7 +1124,9 @@ String humanReadableTimestamp(String raw) {
       local.year == yesterday.year &&
       local.month == yesterday.month &&
       local.day == yesterday.day;
-  final clock = '${_twoDigits(local.hour)}:${_twoDigits(local.minute)}';
+  final clock = showSeconds
+      ? '${_twoDigits(local.hour)}:${_twoDigits(local.minute)}:${_twoDigits(local.second)}'
+      : '${_twoDigits(local.hour)}:${_twoDigits(local.minute)}';
   if (sameDay) {
     return clock;
   }

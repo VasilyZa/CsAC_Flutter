@@ -13,29 +13,38 @@ class CsacPreferences {
     this.themeColorValue = defaultThemeColorValue,
     this.language = CsacLanguage.zh,
     this.serverUrl = '',
+    this.chat = const CsacChatPreferences(),
   });
 
   static const _themeKey = 'csac.theme_mode';
   static const _themeColorKey = 'csac.theme_color';
   static const _languageKey = 'csac.language';
   static const _serverUrlKey = 'csac.server_url';
+  static const _chatShowSecondsKey = 'csac.chat.show_seconds';
+  static const _chatCompactBubblesKey = 'csac.chat.compact_bubbles';
+  static const _chatShowSenderNameKey = 'csac.chat.show_sender_name';
+  static const _chatTapToDismissKeyboardKey =
+      'csac.chat.tap_to_dismiss_keyboard';
 
   final ThemeMode themeMode;
   final int themeColorValue;
   final CsacLanguage language;
   final String serverUrl;
+  final CsacChatPreferences chat;
 
   CsacPreferences copyWith({
     ThemeMode? themeMode,
     int? themeColorValue,
     CsacLanguage? language,
     String? serverUrl,
+    CsacChatPreferences? chat,
   }) {
     return CsacPreferences(
       themeMode: themeMode ?? this.themeMode,
       themeColorValue: themeColorValue ?? this.themeColorValue,
       language: language ?? this.language,
       serverUrl: serverUrl ?? this.serverUrl,
+      chat: chat ?? this.chat,
     );
   }
 
@@ -46,6 +55,13 @@ class CsacPreferences {
       themeColorValue: _themeColorFromPrefs(prefs),
       language: _languageFromName(prefs.getString(_languageKey)),
       serverUrl: (prefs.getString(_serverUrlKey) ?? '').trim(),
+      chat: CsacChatPreferences(
+        showSeconds: prefs.getBool(_chatShowSecondsKey) ?? false,
+        compactBubbles: prefs.getBool(_chatCompactBubblesKey) ?? false,
+        showSenderName: prefs.getBool(_chatShowSenderNameKey) ?? true,
+        tapToDismissKeyboard:
+            prefs.getBool(_chatTapToDismissKeyboardKey) ?? true,
+      ),
     );
   }
 
@@ -54,6 +70,13 @@ class CsacPreferences {
     await prefs.setString(_themeKey, themeMode.name);
     await prefs.setInt(_themeColorKey, themeColorValue);
     await prefs.setString(_languageKey, language.name);
+    await prefs.setBool(_chatShowSecondsKey, chat.showSeconds);
+    await prefs.setBool(_chatCompactBubblesKey, chat.compactBubbles);
+    await prefs.setBool(_chatShowSenderNameKey, chat.showSenderName);
+    await prefs.setBool(
+      _chatTapToDismissKeyboardKey,
+      chat.tapToDismissKeyboard,
+    );
     if (serverUrl.trim().isEmpty) {
       await prefs.remove(_serverUrlKey);
     } else {
@@ -85,6 +108,34 @@ class CsacPreferences {
       }
     }
     return CsacLanguage.zh;
+  }
+}
+
+class CsacChatPreferences {
+  const CsacChatPreferences({
+    this.showSeconds = false,
+    this.compactBubbles = false,
+    this.showSenderName = true,
+    this.tapToDismissKeyboard = true,
+  });
+
+  final bool showSeconds;
+  final bool compactBubbles;
+  final bool showSenderName;
+  final bool tapToDismissKeyboard;
+
+  CsacChatPreferences copyWith({
+    bool? showSeconds,
+    bool? compactBubbles,
+    bool? showSenderName,
+    bool? tapToDismissKeyboard,
+  }) {
+    return CsacChatPreferences(
+      showSeconds: showSeconds ?? this.showSeconds,
+      compactBubbles: compactBubbles ?? this.compactBubbles,
+      showSenderName: showSenderName ?? this.showSenderName,
+      tapToDismissKeyboard: tapToDismissKeyboard ?? this.tapToDismissKeyboard,
+    );
   }
 }
 

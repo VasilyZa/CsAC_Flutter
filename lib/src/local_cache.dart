@@ -205,7 +205,7 @@ class CsacLocalCache {
     final db = await _database();
     final rows = db.select(
       '''
-      SELECT id, sender_id, sender, body, time, image_url, voice_url,
+      SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
         is_read, reply_to
       FROM messages
@@ -232,7 +232,7 @@ class CsacLocalCache {
     final type = _conversationTypeName(conversation.type);
     final beforeRows = db.select(
       '''
-      SELECT id, sender_id, sender, body, time, image_url, voice_url,
+      SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
         is_read, reply_to
       FROM messages
@@ -244,7 +244,7 @@ class CsacLocalCache {
     );
     final afterRows = db.select(
       '''
-      SELECT id, sender_id, sender, body, time, image_url, voice_url,
+      SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, can_recall, is_recalled, is_essence, is_mentioned,
         is_read, reply_to
       FROM messages
@@ -330,6 +330,7 @@ class CsacLocalCache {
         m.sender,
         m.body,
         m.time,
+        m.raw_time,
         m.image_url,
         m.voice_url,
         m.voice_duration,
@@ -368,16 +369,17 @@ class CsacLocalCache {
     final db = await _database();
     final statement = db.prepare('''
       INSERT INTO messages (
-        conversation_type, conversation_id, id, sender_id, sender, body, time,
+        conversation_type, conversation_id, id, sender_id, sender, body, time, raw_time,
         image_url, voice_url, voice_duration, can_recall, is_recalled,
         is_essence, is_mentioned, is_read, reply_to
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(conversation_type, conversation_id, id) DO UPDATE SET
         sender_id = excluded.sender_id,
         sender = excluded.sender,
         body = excluded.body,
         time = excluded.time,
+        raw_time = excluded.raw_time,
         image_url = excluded.image_url,
         voice_url = excluded.voice_url,
         voice_duration = excluded.voice_duration,
@@ -404,6 +406,7 @@ class CsacLocalCache {
           message.sender,
           message.body,
           message.time,
+          message.rawTime,
           message.imageUrl,
           message.voiceUrl,
           message.voiceDuration,
@@ -558,6 +561,7 @@ class CsacLocalCache {
         sender TEXT NOT NULL DEFAULT '',
         body TEXT NOT NULL DEFAULT '',
         time TEXT NOT NULL DEFAULT '',
+        raw_time TEXT NOT NULL DEFAULT '',
         image_url TEXT NOT NULL DEFAULT '',
         voice_url TEXT NOT NULL DEFAULT '',
         voice_duration INTEGER NOT NULL DEFAULT 0,
@@ -579,6 +583,8 @@ class CsacLocalCache {
         PRIMARY KEY (conversation_type, conversation_id, id)
       )
       ''');
+    _addColumnIfMissing(db, 'messages', 'raw_time', "TEXT NOT NULL DEFAULT ''");
+    _backfillRawMessageTime(db);
     _addColumnIfMissing(
       db,
       'messages',
@@ -654,6 +660,7 @@ class CsacLocalCache {
       sender: row['sender'] as String,
       body: body,
       time: row['time'] as String,
+      rawTime: row['raw_time'] as String? ?? row['time'] as String,
       imageUrl: imageUrl,
       voiceUrl: row['voice_url'] as String,
       voiceDuration: row['voice_duration'] as int,
@@ -715,5 +722,11 @@ class CsacLocalCache {
     if (!exists) {
       db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     }
+  }
+
+  void _backfillRawMessageTime(Database db) {
+    db.execute(
+      "UPDATE messages SET raw_time = time WHERE raw_time = '' AND time <> ''",
+    );
   }
 }

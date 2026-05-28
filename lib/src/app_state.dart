@@ -169,6 +169,12 @@ class CsacAppState extends ChangeNotifier {
     await preferences.save();
   }
 
+  Future<void> updateChatPreferences(CsacChatPreferences chat) async {
+    preferences = preferences.copyWith(chat: chat);
+    notifyListeners();
+    await preferences.save();
+  }
+
   Future<bool> updateServerUrl(String value) async {
     final normalizedUrl = value.trim().isEmpty
         ? ''
@@ -353,24 +359,39 @@ class CsacAppState extends ChangeNotifier {
       // 服务器计数归零时自动清除 dismissed 标记
       if (base.notices == 0) _dismissedBadges.remove('notices');
       if (base.friendRequests == 0) _dismissedBadges.remove('friendRequests');
-      if (base.groupApplications == 0) _dismissedBadges.remove('groupApplications');
+      if (base.groupApplications == 0)
+        _dismissedBadges.remove('groupApplications');
       if (mentions.mentions == 0) _dismissedBadges.remove('mentions');
       if (mentions.replies == 0) _dismissedBadges.remove('replies');
       unawaited(DismissedBadgeStore.save(_dismissedBadges));
       notificationCounts = NotificationCounts(
         notices: _dismissedBadges.contains('notices') ? 0 : base.notices,
-        friendRequests: _dismissedBadges.contains('friendRequests') ? 0 : base.friendRequests,
-        groupApplications: _dismissedBadges.contains('groupApplications') ? 0 : base.groupApplications,
+        friendRequests: _dismissedBadges.contains('friendRequests')
+            ? 0
+            : base.friendRequests,
+        groupApplications: _dismissedBadges.contains('groupApplications')
+            ? 0
+            : base.groupApplications,
         mentions: _dismissedBadges.contains('mentions') ? 0 : mentions.mentions,
         replies: _dismissedBadges.contains('replies') ? 0 : mentions.replies,
       );
     } catch (_) {
       notificationCounts = NotificationCounts(
-        notices: _dismissedBadges.contains('notices') ? 0 : notificationCounts.notices,
-        friendRequests: _dismissedBadges.contains('friendRequests') ? 0 : notificationCounts.friendRequests,
-        groupApplications: _dismissedBadges.contains('groupApplications') ? 0 : notificationCounts.groupApplications,
-        mentions: _dismissedBadges.contains('mentions') ? 0 : notificationCounts.mentions,
-        replies: _dismissedBadges.contains('replies') ? 0 : notificationCounts.replies,
+        notices: _dismissedBadges.contains('notices')
+            ? 0
+            : notificationCounts.notices,
+        friendRequests: _dismissedBadges.contains('friendRequests')
+            ? 0
+            : notificationCounts.friendRequests,
+        groupApplications: _dismissedBadges.contains('groupApplications')
+            ? 0
+            : notificationCounts.groupApplications,
+        mentions: _dismissedBadges.contains('mentions')
+            ? 0
+            : notificationCounts.mentions,
+        replies: _dismissedBadges.contains('replies')
+            ? 0
+            : notificationCounts.replies,
       );
     }
     notifyListeners();
