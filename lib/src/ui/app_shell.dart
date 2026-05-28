@@ -140,11 +140,7 @@ class SplashScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                CupertinoIcons.chat_bubble_2_fill,
-                size: 40,
-                color: CupertinoColors.white,
-              ),
+              child: const _AppIconImage(size: 80, borderRadius: 20),
             ),
             const SizedBox(height: 24),
             Text(
@@ -266,11 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        CupertinoIcons.chat_bubble_2_fill,
-                        size: 44,
-                        color: CupertinoColors.white,
-                      ),
+                      child: const _AppIconImage(size: 88, borderRadius: 22),
                     ),
                   ),
                   const SizedBox(height: 28),

@@ -140,6 +140,26 @@ class _AdaptivePageFrame extends StatelessWidget {
   }
 }
 
+class _AppIconImage extends StatelessWidget {
+  const _AppIconImage({this.size = 40, this.borderRadius});
+
+  final double size;
+  final double? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius ?? size * 0.22),
+      child: Image.asset(
+        'assets/icons/app_icon.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // 通用组件
 // ============================================================================

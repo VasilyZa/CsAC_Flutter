@@ -844,8 +844,8 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.1.2-33';
-const _csacAppBuild = '33';
+const _csacAppVersion = '1.1.3-34';
+const _csacAppBuild = '34';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
 Brightness _estimateBrightness(Color color) {
@@ -891,19 +891,7 @@ class AppInfoScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: colors.primaryColor.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          CupertinoIcons.chat_bubble_2,
-                          color: colors.primaryColor,
-                          size: 22,
-                        ),
-                      ),
+                      const _AppIconImage(size: 40, borderRadius: 10),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -938,7 +926,7 @@ class AppInfoScreen extends StatelessWidget {
               margin: EdgeInsets.zero,
               children: [
                 _CupertinoListTile(
-                  leading: const Icon(CupertinoIcons.app, size: 22),
+                  leading: const _AppIconImage(size: 24, borderRadius: 6),
                   title: strings.text('App name'),
                   subtitle: _csacAppName,
                 ),

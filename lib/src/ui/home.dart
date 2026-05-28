@@ -345,11 +345,7 @@ class _WideSidebar extends StatelessWidget {
               // App logo
               Padding(
                 padding: const EdgeInsets.only(top: 20, bottom: 16),
-                child: Icon(
-                  CupertinoIcons.chat_bubble_2_fill,
-                  color: primary,
-                  size: 26,
-                ),
+                child: const _AppIconImage(size: 32, borderRadius: 8),
               ),
               // Nav items
               ...List.generate(items.length, (i) {
@@ -470,10 +466,9 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              CupertinoIcons.chat_bubble_2,
-              size: 56,
-              color: colors.tertiaryLabel,
+            Opacity(
+              opacity: 0.55,
+              child: const _AppIconImage(size: 64, borderRadius: 16),
             ),
             const SizedBox(height: 14),
             Text(
