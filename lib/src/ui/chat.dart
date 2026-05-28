@@ -1301,12 +1301,7 @@ class _ChatScreenState extends State<ChatScreen> {
         scrollToEnd();
         return;
       }
-      Scrollable.ensureVisible(
-        keyContext,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOut,
-        alignment: 0.42,
-      );
+      revealMessage(keyContext, duration: const Duration(milliseconds: 280));
     });
   }
 
@@ -1319,11 +1314,16 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       return;
     }
+    revealMessage(keyContext, duration: const Duration(milliseconds: 260));
+  }
+
+  void revealMessage(BuildContext keyContext, {required Duration duration}) {
     Scrollable.ensureVisible(
       keyContext,
-      duration: const Duration(milliseconds: 260),
+      duration: duration,
       curve: Curves.easeOut,
-      alignment: 0.42,
+      alignment: 0.18,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
     );
   }
 
