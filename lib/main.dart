@@ -38,5 +38,7 @@ void main() {
 }
 
 String appClientNameKey() {
-  return Platform.isAndroid ? 'CsAC Mobile' : 'CsAC Desktop Client';
+  return Platform.isAndroid || Platform.isIOS
+      ? 'CsAC Mobile'
+      : 'CsAC Desktop Client';
 }
