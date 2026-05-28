@@ -59,6 +59,26 @@ class CsacLocalCache {
     );
   }
 
+  Future<void> removeConversation(Conversation conversation) async {
+    final db = await _database();
+    final type = _conversationTypeName(conversation.type);
+    db.execute(
+      'DELETE FROM messages WHERE conversation_type = ? AND conversation_id = ?',
+      [type, conversation.id],
+    );
+    db.execute(
+      '''
+      DELETE FROM local_deleted_messages
+      WHERE conversation_type = ? AND conversation_id = ?
+      ''',
+      [type, conversation.id],
+    );
+    db.execute('DELETE FROM conversations WHERE type = ? AND remote_id = ?', [
+      type,
+      conversation.id,
+    ]);
+  }
+
   Future<CsacUser?> loadUser() async {
     final db = await _database();
     final rows = db.select('''

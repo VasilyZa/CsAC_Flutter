@@ -24,6 +24,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   bool acting = false;
   String? error;
 
+  bool get groupUnavailable {
+    return widget.conversation.type == ConversationType.group &&
+        error == context.strings.text('This group is no longer available.');
+  }
+
   GroupMember? get currentGroupMember {
     final currentUid = widget.state.user?.uid;
     if (currentUid == null) {
@@ -98,7 +103,24 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
     } catch (err) {
       if (mounted) {
-        setState(() => error = err.toString());
+        if (widget.conversation.type == ConversationType.group &&
+            isGroupUnavailableError(err)) {
+          await widget.state.removeConversationLocal(widget.conversation);
+          if (!mounted) {
+            return;
+          }
+          setState(
+            () => error = context.strings.text(
+              'This group is no longer available.',
+            ),
+          );
+          _showCupertinoToast(
+            context,
+            context.strings.text('This group has been removed from chats.'),
+          );
+        } else {
+          setState(() => error = err.toString());
+        }
       }
     } finally {
       if (mounted) {
@@ -355,9 +377,21 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         return;
       }
       _showCupertinoToast(context, strings.text('Left group.'));
-      Navigator.of(context).pop();
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (err) {
       if (mounted) {
+        if (isGroupUnavailableError(err)) {
+          await widget.state.removeConversationLocal(widget.conversation);
+          if (!mounted) {
+            return;
+          }
+          _showCupertinoToast(
+            context,
+            strings.text('This group has been removed from chats.'),
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          return;
+        }
         _showCupertinoToast(
           context,
           strings.format('Leave failed: {error}', {'error': err}),
@@ -517,8 +551,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                 const SizedBox(height: 2),
                                 Text(
                                   profile.subtitle.isEmpty
-                                      ? strings.format(
-                                          'Room {id}', {'id': profile.id})
+                                      ? strings.format('Room {id}', {
+                                          'id': profile.id,
+                                        })
                                       : profile.subtitle,
                                   style: TextStyle(
                                     fontSize: 14,
@@ -538,55 +573,81 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 _CupertinoGroupedCard(
                   children: [
                     _CupertinoListTile(
-                      leading: Icon(CupertinoIcons.number,
-                          size: 20, color: colors.secondaryLabel),
+                      leading: Icon(
+                        CupertinoIcons.number,
+                        size: 20,
+                        color: colors.secondaryLabel,
+                      ),
                       title: strings.text('Room ID'),
                       subtitle: '${profile.id}',
                       trailing: GestureDetector(
-                        onTap: () => copyText(
-                            strings.text('Room ID'), '${profile.id}'),
-                        child: Icon(CupertinoIcons.doc_on_doc,
-                            size: 18, color: colors.tertiaryLabel),
+                        onTap: () =>
+                            copyText(strings.text('Room ID'), '${profile.id}'),
+                        child: Icon(
+                          CupertinoIcons.doc_on_doc,
+                          size: 18,
+                          color: colors.tertiaryLabel,
+                        ),
                       ),
                     ),
                     if (profile.description.isNotEmpty)
                       _CupertinoListTile(
-                        leading: Icon(CupertinoIcons.info,
-                            size: 20, color: colors.secondaryLabel),
+                        leading: Icon(
+                          CupertinoIcons.info,
+                          size: 20,
+                          color: colors.secondaryLabel,
+                        ),
                         title: strings.text('Description'),
                         subtitle: profile.description,
                       ),
                     if (profile.notice.isNotEmpty)
                       _CupertinoListTile(
-                        leading: Icon(CupertinoIcons.speaker_2,
-                            size: 20, color: colors.secondaryLabel),
+                        leading: Icon(
+                          CupertinoIcons.speaker_2,
+                          size: 20,
+                          color: colors.secondaryLabel,
+                        ),
                         title: strings.text('Notice'),
                         subtitle: profile.notice,
                       ),
                     if (profile.inviteCode.isNotEmpty)
                       _CupertinoListTile(
-                        leading: Icon(CupertinoIcons.lock,
-                            size: 20, color: colors.secondaryLabel),
+                        leading: Icon(
+                          CupertinoIcons.lock,
+                          size: 20,
+                          color: colors.secondaryLabel,
+                        ),
                         title: strings.text('Invite code'),
                         subtitle: profile.inviteCode,
                         trailing: GestureDetector(
                           onTap: () => copyText(
-                              strings.text('Invite code'), profile.inviteCode),
-                          child: Icon(CupertinoIcons.doc_on_doc,
-                              size: 18, color: colors.tertiaryLabel),
+                            strings.text('Invite code'),
+                            profile.inviteCode,
+                          ),
+                          child: Icon(
+                            CupertinoIcons.doc_on_doc,
+                            size: 18,
+                            color: colors.tertiaryLabel,
+                          ),
                         ),
                       ),
                     if (profile.code.isNotEmpty)
                       _CupertinoListTile(
-                        leading: Icon(CupertinoIcons.lock_shield,
-                            size: 20, color: colors.secondaryLabel),
+                        leading: Icon(
+                          CupertinoIcons.lock_shield,
+                          size: 20,
+                          color: colors.secondaryLabel,
+                        ),
                         title: strings.text('Fixed code'),
                         subtitle: profile.code,
                       ),
                     if (profile.question.isNotEmpty)
                       _CupertinoListTile(
-                        leading: Icon(CupertinoIcons.question_circle,
-                            size: 20, color: colors.secondaryLabel),
+                        leading: Icon(
+                          CupertinoIcons.question_circle,
+                          size: 20,
+                          color: colors.secondaryLabel,
+                        ),
                         title: strings.text('Question'),
                         subtitle: profile.question,
                       ),
@@ -644,8 +705,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(CupertinoIcons.square_arrow_left,
-                                size: 18),
+                            const Icon(
+                              CupertinoIcons.square_arrow_left,
+                              size: 18,
+                            ),
                             const SizedBox(width: 6),
                             Text(strings.text('Leave group')),
                           ],
@@ -738,7 +801,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         ? strings.text('Group details')
         : strings.text('User details');
     return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(border: null, backgroundColor: CsacColors.of(context).navBarBackground,
+      navigationBar: CupertinoNavigationBar(
+        border: null,
+        backgroundColor: CsacColors.of(context).navBarBackground,
         middle: Text(title),
         trailing: GestureDetector(
           onTap: loading ? null : load,
@@ -753,13 +818,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         child: loading
             ? const Center(child: CupertinoActivityIndicator())
             : error != null
-                ? _InlineError(message: error!, onRetry: load)
-                : widget.conversation.type == ConversationType.private
-                    ? UserProfileScreen(
-                        state: widget.state,
-                        uid: widget.conversation.id,
-                      )
-                    : buildGroupProfile(group!),
+            ? groupUnavailable
+                  ? _EmptyPanel(message: error!)
+                  : _InlineError(message: error!, onRetry: load)
+            : widget.conversation.type == ConversationType.private
+            ? UserProfileScreen(
+                state: widget.state,
+                uid: widget.conversation.id,
+              )
+            : buildGroupProfile(group!),
       ),
     );
   }
@@ -793,6 +860,10 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   bool acting = false;
   int? actingApplicationId;
   String? error;
+
+  bool get groupUnavailable {
+    return error == context.strings.text('This group is no longer available.');
+  }
 
   GroupMember? get currentMember {
     final currentUid = widget.state.user?.uid;
@@ -853,7 +924,22 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       });
     } catch (err) {
       if (mounted) {
-        setState(() => error = err.toString());
+        if (isGroupUnavailableError(err)) {
+          await widget.state.removeGroupConversationLocal(group.id);
+          if (!mounted) {
+            return;
+          }
+          setState(
+            () => error = context.strings.text(
+              'This group is no longer available.',
+            ),
+          );
+          showSnack(
+            context.strings.text('This group has been removed from chats.'),
+          );
+        } else {
+          setState(() => error = err.toString());
+        }
       }
     } finally {
       if (mounted) {
@@ -866,7 +952,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     _showCupertinoToast(context, message);
   }
 
-  Future<void> runAction(
+  Future<bool> runAction(
     Future<void> Function() action,
     String success, {
     bool reload = true,
@@ -875,18 +961,31 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     try {
       await action();
       if (!mounted) {
-        return;
+        return false;
       }
       showSnack(context.strings.text(success));
       if (reload) {
         await load();
       }
+      return true;
     } catch (err) {
       if (mounted) {
+        if (isGroupUnavailableError(err)) {
+          await widget.state.removeGroupConversationLocal(group.id);
+          if (!mounted) {
+            return false;
+          }
+          showSnack(
+            context.strings.text('This group has been removed from chats.'),
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          return true;
+        }
         showSnack(
           context.strings.format('Action failed: {error}', {'error': err}),
         );
       }
+      return false;
     } finally {
       if (mounted) {
         setState(() => acting = false);
@@ -1186,9 +1285,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     }
     final ok = await _showCupertinoConfirm(
       context,
-      title: strings.format('Transfer group to {name}?', {
-        'name': target.name,
-      }),
+      title: strings.format('Transfer group to {name}?', {'name': target.name}),
       message: strings.text('You will lose owner permissions after transfer.'),
       confirmText: 'Transfer',
       isDestructive: true,
@@ -1214,12 +1311,13 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     if (!ok || !mounted) {
       return;
     }
-    await runAction(
+    final success = await runAction(
       () => widget.state.disbandGroup(group.id),
       'Group disbanded.',
+      reload: false,
     );
-    if (mounted) {
-      Navigator.of(context).pop();
+    if (mounted && success) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -1317,7 +1415,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(border: null, backgroundColor: CsacColors.of(context).navBarBackground,
+      navigationBar: CupertinoNavigationBar(
+        border: null,
+        backgroundColor: CsacColors.of(context).navBarBackground,
         middle: Text(strings.text('Group management')),
         trailing: GestureDetector(
           onTap: loading ? null : load,
@@ -1332,300 +1432,294 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
         child: loading
             ? const Center(child: CupertinoActivityIndicator())
             : error != null
-                ? _InlineError(message: error!, onRetry: load)
-                : !canManage
-                    ? _EmptyPanel(
-                        message: strings.text('No management permission.'))
-                    : CustomScrollView(
-                        slivers: [
-                          CupertinoSliverRefreshControl(onRefresh: load),
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
-                              child: Column(
-                                children: [
-                                  // Group header card
-                                  _CupertinoGroupedCard(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 44,
-                                              height: 44,
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    colors.elevatedBackground,
-                                                borderRadius:
-                                                    BorderRadius.circular(22),
-                                              ),
-                                              child: Icon(
-                                                CupertinoIcons.group_solid,
-                                                color: colors.secondaryLabel,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    group.name,
-                                                    style: TextStyle(
-                                                      fontSize: 17,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: colors.label,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    [
-                                                      strings.format(
-                                                          'Room {id}',
-                                                          {'id': group.id}),
-                                                      if (currentUserIsOwner)
-                                                        strings.text('Owner')
-                                                      else if (group.isAdmin)
-                                                        strings.text('Admin'),
-                                                    ].join(' | '),
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      color:
-                                                          colors.secondaryLabel,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+            ? groupUnavailable
+                  ? _EmptyPanel(message: error!)
+                  : _InlineError(message: error!, onRetry: load)
+            : !canManage
+            ? _EmptyPanel(message: strings.text('No management permission.'))
+            : CustomScrollView(
+                slivers: [
+                  CupertinoSliverRefreshControl(onRefresh: load),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+                      child: Column(
+                        children: [
+                          // Group header card
+                          _CupertinoGroupedCard(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: colors.elevatedBackground,
+                                        borderRadius: BorderRadius.circular(22),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  // Report
-                                  _CupertinoGroupedCard(
-                                    children: [
-                                      _CupertinoListTile(
-                                        leading: Icon(CupertinoIcons.flag,
-                                            size: 20,
-                                            color:
-                                                CupertinoColors.destructiveRed),
-                                        title: strings.text('Report group'),
-                                        titleColor:
-                                            CupertinoColors.destructiveRed,
-                                        onTap: () => reportGroup(group),
-                                      ),
-                                    ],
-                                  ),
-                                  // Group settings section
-                                  const SizedBox(height: 16),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        strings.text('Group settings'),
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: colors.secondaryLabel,
-                                        ),
+                                      child: Icon(
+                                        CupertinoIcons.group_solid,
+                                        color: colors.secondaryLabel,
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  _CupertinoGroupedCard(
-                                    children: [
-                                      _CupertinoListTile(
-                                        leading: Icon(CupertinoIcons.pencil,
-                                            size: 20,
-                                            color: colors.secondaryLabel),
-                                        title: strings.text('Edit group info'),
-                                        subtitle: group.description,
-                                        onTap: acting ? null : editInfo,
-                                      ),
-                                      _CupertinoListTile(
-                                        leading: Icon(CupertinoIcons.slider_horizontal_3,
-                                            size: 20,
-                                            color: colors.secondaryLabel),
-                                        title: strings.text('Join settings'),
-                                        subtitle: group.joinType,
-                                        onTap: acting ? null : editSettings,
-                                      ),
-                                      _CupertinoListTile(
-                                        leading: Icon(CupertinoIcons.refresh,
-                                            size: 20,
-                                            color: colors.secondaryLabel),
-                                        title:
-                                            strings.text('Reset invite code'),
-                                        subtitle: group.inviteCode,
-                                        onTap: acting ? null : resetInviteCode,
-                                      ),
-                                    ],
-                                  ),
-                                  // Applications section
-                                  const SizedBox(height: 16),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            strings
-                                                .text('Group applications'),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            group.name,
                                             style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w600,
+                                              color: colors.label,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            [
+                                              strings.format('Room {id}', {
+                                                'id': group.id,
+                                              }),
+                                              if (currentUserIsOwner)
+                                                strings.text('Owner')
+                                              else if (group.isAdmin)
+                                                strings.text('Admin'),
+                                            ].join(' | '),
+                                            style: TextStyle(
+                                              fontSize: 14,
                                               color: colors.secondaryLabel,
                                             ),
                                           ),
-                                        ),
-                                        Text(
-                                          '${applications.where((item) => item.pending).length}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: colors.secondaryLabel,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  if (applications.isEmpty)
-                                    _EmptyPanel(
-                                      message: strings
-                                          .text('No group applications.'),
-                                    )
-                                  else
-                                    _CupertinoGroupedCard(
-                                      children: [
-                                        for (final application
-                                            in applications)
-                                          _buildApplicationTile(
-                                              application, strings, colors),
-                                      ],
-                                    ),
-                                  // Members section
-                                  const SizedBox(height: 16),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            strings.text('Members'),
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: colors.secondaryLabel,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          '${members.length}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: colors.secondaryLabel,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  _CupertinoGroupedCard(
-                                    children: [
-                                      for (final member in members)
-                                        _CupertinoListTile(
-                                          leading: _Avatar(
-                                            url: member.avatar,
-                                            fallback:
-                                                CupertinoIcons.person_solid,
-                                          ),
-                                          title: member.name,
-                                          subtitle: member.subtitle.isEmpty
-                                              ? 'UID ${member.uid}'
-                                              : member.subtitle,
-                                          onTap: () => openUserProfile(
-                                            context,
-                                            widget.state,
-                                            member.uid,
-                                            group: group,
-                                            member: member,
-                                          ),
-                                          trailing: GestureDetector(
-                                            onTap: acting
-                                                ? null
-                                                : () =>
-                                                    showMemberActions(member),
-                                            child: Icon(
-                                              CupertinoIcons.ellipsis,
-                                              size: 20,
-                                              color: colors.tertiaryLabel,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  // Owner actions
-                                  if (currentUserIsOwner) ...[
-                                    const SizedBox(height: 16),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          strings.text('Owner actions'),
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                            color: colors.secondaryLabel,
-                                          ),
-                                        ),
+                                        ],
                                       ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    _CupertinoGroupedCard(
-                                      children: [
-                                        _CupertinoListTile(
-                                          leading: Icon(
-                                              CupertinoIcons.arrow_right_arrow_left,
-                                              size: 20,
-                                              color: colors.secondaryLabel),
-                                          title: strings
-                                              .text('Transfer group owner'),
-                                          onTap:
-                                              acting ? null : transferGroup,
-                                        ),
-                                        _CupertinoListTile(
-                                          leading: Icon(
-                                              CupertinoIcons.trash,
-                                              size: 20,
-                                              color: CupertinoColors
-                                                  .destructiveRed),
-                                          title:
-                                              strings.text('Disband group'),
-                                          titleColor: CupertinoColors
-                                              .destructiveRed,
-                                          onTap:
-                                              acting ? null : disbandGroup,
-                                        ),
-                                      ],
                                     ),
                                   ],
-                                ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          // Report
+                          _CupertinoGroupedCard(
+                            children: [
+                              _CupertinoListTile(
+                                leading: Icon(
+                                  CupertinoIcons.flag,
+                                  size: 20,
+                                  color: CupertinoColors.destructiveRed,
+                                ),
+                                title: strings.text('Report group'),
+                                titleColor: CupertinoColors.destructiveRed,
+                                onTap: () => reportGroup(group),
+                              ),
+                            ],
+                          ),
+                          // Group settings section
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                strings.text('Group settings'),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: colors.secondaryLabel,
+                                ),
                               ),
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          _CupertinoGroupedCard(
+                            children: [
+                              _CupertinoListTile(
+                                leading: Icon(
+                                  CupertinoIcons.pencil,
+                                  size: 20,
+                                  color: colors.secondaryLabel,
+                                ),
+                                title: strings.text('Edit group info'),
+                                subtitle: group.description,
+                                onTap: acting ? null : editInfo,
+                              ),
+                              _CupertinoListTile(
+                                leading: Icon(
+                                  CupertinoIcons.slider_horizontal_3,
+                                  size: 20,
+                                  color: colors.secondaryLabel,
+                                ),
+                                title: strings.text('Join settings'),
+                                subtitle: group.joinType,
+                                onTap: acting ? null : editSettings,
+                              ),
+                              _CupertinoListTile(
+                                leading: Icon(
+                                  CupertinoIcons.refresh,
+                                  size: 20,
+                                  color: colors.secondaryLabel,
+                                ),
+                                title: strings.text('Reset invite code'),
+                                subtitle: group.inviteCode,
+                                onTap: acting ? null : resetInviteCode,
+                              ),
+                            ],
+                          ),
+                          // Applications section
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    strings.text('Group applications'),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: colors.secondaryLabel,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${applications.where((item) => item.pending).length}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colors.secondaryLabel,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          if (applications.isEmpty)
+                            _EmptyPanel(
+                              message: strings.text('No group applications.'),
+                            )
+                          else
+                            _CupertinoGroupedCard(
+                              children: [
+                                for (final application in applications)
+                                  _buildApplicationTile(
+                                    application,
+                                    strings,
+                                    colors,
+                                  ),
+                              ],
+                            ),
+                          // Members section
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    strings.text('Members'),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: colors.secondaryLabel,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${members.length}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colors.secondaryLabel,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          _CupertinoGroupedCard(
+                            children: [
+                              for (final member in members)
+                                _CupertinoListTile(
+                                  leading: _Avatar(
+                                    url: member.avatar,
+                                    fallback: CupertinoIcons.person_solid,
+                                  ),
+                                  title: member.name,
+                                  subtitle: member.subtitle.isEmpty
+                                      ? 'UID ${member.uid}'
+                                      : member.subtitle,
+                                  onTap: () => openUserProfile(
+                                    context,
+                                    widget.state,
+                                    member.uid,
+                                    group: group,
+                                    member: member,
+                                  ),
+                                  trailing: GestureDetector(
+                                    onTap: acting
+                                        ? null
+                                        : () => showMemberActions(member),
+                                    child: Icon(
+                                      CupertinoIcons.ellipsis,
+                                      size: 20,
+                                      color: colors.tertiaryLabel,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          // Owner actions
+                          if (currentUserIsOwner) ...[
+                            const SizedBox(height: 16),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  strings.text('Owner actions'),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: colors.secondaryLabel,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _CupertinoGroupedCard(
+                              children: [
+                                _CupertinoListTile(
+                                  leading: Icon(
+                                    CupertinoIcons.arrow_right_arrow_left,
+                                    size: 20,
+                                    color: colors.secondaryLabel,
+                                  ),
+                                  title: strings.text('Transfer group owner'),
+                                  onTap: acting ? null : transferGroup,
+                                ),
+                                _CupertinoListTile(
+                                  leading: Icon(
+                                    CupertinoIcons.trash,
+                                    size: 20,
+                                    color: CupertinoColors.destructiveRed,
+                                  ),
+                                  title: strings.text('Disband group'),
+                                  titleColor: CupertinoColors.destructiveRed,
+                                  onTap: acting ? null : disbandGroup,
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -1684,8 +1778,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
               ],
             ),
           ),
-          if (application.content.isNotEmpty ||
-              application.answer.isNotEmpty)
+          if (application.content.isNotEmpty || application.answer.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
@@ -1702,7 +1795,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
               children: [
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 6),
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
                   onPressed: isActing
                       ? null
                       : () => handleApplication(application, 'refuse'),
@@ -1714,7 +1809,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 const SizedBox(width: 8),
                 CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 6),
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
                   onPressed: isActing
                       ? null
                       : () => handleApplication(application, 'pass'),

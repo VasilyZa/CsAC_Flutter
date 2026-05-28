@@ -124,6 +124,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool mentionPickerOpen = false;
   bool offline = false;
   bool showJumpToBottom = false;
+  bool conversationUnavailable = false;
   String previousInputText = '';
   String? error;
 
@@ -320,8 +321,43 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       setState(() => groupProfile = loaded);
-    } catch (_) {
-      // The chat should remain usable even when the detail request fails.
+    } catch (err) {
+      if (isGroupUnavailableError(err)) {
+        await handleUnavailableConversation();
+      }
+    }
+  }
+
+  Future<void> handleUnavailableConversation() async {
+    if (!mounted || conversationUnavailable) {
+      return;
+    }
+    setState(() {
+      conversationUnavailable = true;
+      error = context.strings.text('This group is no longer available.');
+      pendingSends.clear();
+    });
+    if (widget.conversation.type == ConversationType.group) {
+      await widget.state.removeConversationLocal(widget.conversation);
+    }
+    if (!mounted) {
+      return;
+    }
+    showSnack(context.strings.text('This group has been removed from chats.'));
+    Navigator.of(context).maybePop();
+  }
+
+  String sendFailureMessage(Object error) {
+    final strings = context.strings;
+    switch (classifySendRestriction(error)) {
+      case CsacSendRestriction.groupUnavailable:
+        return strings.text('This group is no longer available.');
+      case CsacSendRestriction.muted:
+        return strings.text('You are muted and cannot send messages.');
+      case CsacSendRestriction.forbidden:
+        return strings.text('You do not have permission to send messages.');
+      case CsacSendRestriction.none:
+        return error.toString();
     }
   }
 
@@ -380,6 +416,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
+      if (isGroupUnavailableError(err)) {
+        await handleUnavailableConversation();
+        return;
+      }
       setState(() {
         offline = messages.isNotEmpty;
         error = messages.isEmpty
@@ -419,6 +459,10 @@ class _ChatScreenState extends State<ChatScreen> {
       await markCurrentConversationRead();
       scrollAfterLoad();
     } catch (err) {
+      if (isGroupUnavailableError(err)) {
+        await handleUnavailableConversation();
+        return;
+      }
       if (mounted) {
         setState(() {
           error = err.toString();
@@ -481,6 +525,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
+      if (isGroupUnavailableError(err)) {
+        await handleUnavailableConversation();
+        return;
+      }
       if (!silent) {
         setState(() => error = err.toString());
       }
@@ -493,6 +541,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> send() async {
+    if (conversationUnavailable) {
+      showSnack(context.strings.text('This group is no longer available.'));
+      return;
+    }
     final text = input.text.trim();
     if (text.isEmpty) {
       return;
@@ -516,6 +568,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> pickAndSendImage() async {
+    if (conversationUnavailable) {
+      showSnack(context.strings.text('This group is no longer available.'));
+      return;
+    }
     if (pickingImage) {
       return;
     }
@@ -570,6 +626,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> startRecording() async {
+    if (conversationUnavailable) {
+      showSnack(context.strings.text('This group is no longer available.'));
+      return;
+    }
     final permissionMessage = context.strings.text(
       'Microphone permission is required.',
     );
@@ -733,13 +793,27 @@ class _ChatScreenState extends State<ChatScreen> {
       await refresh(silent: true);
       scrollToEnd();
     } catch (err) {
+      if (!mounted) {
+        return;
+      }
+      final message = sendFailureMessage(err);
+      if (isGroupUnavailableError(err)) {
+        replacePendingSend(
+          localId,
+          (item) =>
+              item.copyWith(status: _PendingSendStatus.failed, error: message),
+        );
+        await handleUnavailableConversation();
+        return;
+      }
       replacePendingSend(
         localId,
-        (item) => item.copyWith(
-          status: _PendingSendStatus.failed,
-          error: err.toString(),
-        ),
+        (item) =>
+            item.copyWith(status: _PendingSendStatus.failed, error: message),
       );
+      if (classifySendRestriction(err) != CsacSendRestriction.none) {
+        showSnack(message);
+      }
     }
   }
 
@@ -1360,9 +1434,17 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
+      final message = sendFailureMessage(err);
+      if (target.type == ConversationType.group &&
+          isGroupUnavailableError(err)) {
+        await widget.state.removeConversationLocal(target);
+        if (!mounted) {
+          return;
+        }
+      }
       _showCupertinoToast(
         context,
-        context.strings.format('Forward failed: {error}', {'error': err}),
+        context.strings.format('Forward failed: {error}', {'error': message}),
       );
     }
   }
@@ -1495,9 +1577,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final announcement = groupProfile?.notice.trim() ?? '';
-    final showEmpty = !loading && messages.isEmpty && pendingSends.isEmpty;
+    final showEmpty =
+        !loading &&
+        messages.isEmpty &&
+        pendingSends.isEmpty &&
+        !conversationUnavailable;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 600;
+    final composeEnabled = !conversationUnavailable;
     final chatPrefs = widget.state.preferences.chat;
     final backgroundImagePath = chatPrefs.backgroundImagePath.trim();
     final backgroundColor = chatPrefs.backgroundColorValue == 0
@@ -1649,7 +1736,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         imagePath: backgroundImagePath,
                       ),
                     ),
-                    loading
+                    conversationUnavailable
+                        ? _EmptyPanel(
+                            message: strings.text(
+                              'This group is no longer available.',
+                            ),
+                          )
+                        : loading
                         ? const Center(child: CupertinoActivityIndicator())
                         : showEmpty
                         ? _EmptyPanel(message: strings.text('No messages.'))
@@ -1802,7 +1895,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                     : CupertinoIcons.plus,
                                 color: recording ? colors.destructive : null,
                                 busy: pickingImage,
-                                onPressed: showComposeMenu,
+                                onPressed: composeEnabled
+                                    ? showComposeMenu
+                                    : null,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -1811,8 +1906,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                   minLines: 1,
                                   maxLines: 4,
                                   textInputAction: TextInputAction.send,
-                                  onSubmitted: (_) => send(),
-                                  placeholder: strings.text('Message'),
+                                  enabled: composeEnabled,
+                                  onSubmitted: composeEnabled
+                                      ? (_) => send()
+                                      : null,
+                                  placeholder: composeEnabled
+                                      ? strings.text('Message')
+                                      : strings.text(
+                                          'This group is no longer available.',
+                                        ),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
                                     vertical: 10,
@@ -1834,7 +1936,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 padding: const EdgeInsets.all(8),
                                 minSize: 34,
                                 borderRadius: BorderRadius.circular(17),
-                                onPressed: send,
+                                onPressed: composeEnabled ? send : null,
                                 child: const Icon(
                                   CupertinoIcons.arrow_up,
                                   size: 18,

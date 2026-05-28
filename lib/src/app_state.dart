@@ -13,6 +13,66 @@ import 'models.dart';
 import 'notification_service.dart';
 import 'preferences.dart';
 
+enum CsacSendRestriction { none, groupUnavailable, muted, forbidden }
+
+bool isGroupUnavailableError(Object error) {
+  final message = _normalizedErrorMessage(error);
+  return message.contains('群组已解散') ||
+      message.contains('群聊已解散') ||
+      message.contains('群已解散') ||
+      message.contains('群组不存在') ||
+      message.contains('群聊不存在') ||
+      message.contains('房间不存在') ||
+      message.contains('已退出群组') ||
+      message.contains('你不在群组') ||
+      message.contains('您不在群组') ||
+      message.contains('你不在该群') ||
+      message.contains('您不在该群') ||
+      message.contains('you are not in group') ||
+      message.contains('you are not in this group') ||
+      message.contains('group not found') ||
+      message.contains('group has been disbanded') ||
+      message.contains('group dissolved') ||
+      message.contains('room not found') ||
+      message.contains('room has been disbanded');
+}
+
+CsacSendRestriction classifySendRestriction(Object error) {
+  final message = _normalizedErrorMessage(error);
+  if (isGroupUnavailableError(error)) {
+    return CsacSendRestriction.groupUnavailable;
+  }
+  if (message.contains('禁言') ||
+      message.contains('被禁言') ||
+      message.contains('已被禁言') ||
+      message.contains('muted') ||
+      message.contains('silenced')) {
+    return CsacSendRestriction.muted;
+  }
+  if (message.contains('禁止发送') ||
+      message.contains('禁止发言') ||
+      message.contains('不能发送') ||
+      message.contains('无法发送') ||
+      message.contains('无权发送') ||
+      message.contains('没有权限') ||
+      message.contains('无权限') ||
+      message.contains('权限不足') ||
+      message.contains('封禁') ||
+      message.contains('被封禁') ||
+      message.contains('拉黑') ||
+      message.contains('access forbidden') ||
+      message.contains('forbidden') ||
+      message.contains('permission') ||
+      message.contains('banned')) {
+    return CsacSendRestriction.forbidden;
+  }
+  return CsacSendRestriction.none;
+}
+
+String _normalizedErrorMessage(Object error) {
+  return error.toString().replaceFirst('Exception: ', '').toLowerCase();
+}
+
 class CsacAppState extends ChangeNotifier {
   CsacAppState({
     CsacApiClient? client,
@@ -362,6 +422,15 @@ class CsacAppState extends ChangeNotifier {
     return '${conversation.type.name}:${conversation.id}';
   }
 
+  Conversation? findConversation(ConversationType type, int id) {
+    for (final conversation in conversations) {
+      if (conversation.type == type && conversation.id == id) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
   Future<void> loadConversations() async {
     try {
       await syncConversations();
@@ -429,12 +498,21 @@ class CsacAppState extends ChangeNotifier {
       final base = results[0];
       final mentions = results[1];
       // 服务器计数归零时自动清除 dismissed 标记
-      if (base.notices == 0) _dismissedBadges.remove('notices');
-      if (base.friendRequests == 0) _dismissedBadges.remove('friendRequests');
-      if (base.groupApplications == 0)
+      if (base.notices == 0) {
+        _dismissedBadges.remove('notices');
+      }
+      if (base.friendRequests == 0) {
+        _dismissedBadges.remove('friendRequests');
+      }
+      if (base.groupApplications == 0) {
         _dismissedBadges.remove('groupApplications');
-      if (mentions.mentions == 0) _dismissedBadges.remove('mentions');
-      if (mentions.replies == 0) _dismissedBadges.remove('replies');
+      }
+      if (mentions.mentions == 0) {
+        _dismissedBadges.remove('mentions');
+      }
+      if (mentions.replies == 0) {
+        _dismissedBadges.remove('replies');
+      }
       unawaited(DismissedBadgeStore.save(_dismissedBadges));
       notificationCounts = NotificationCounts(
         notices: _dismissedBadges.contains('notices') ? 0 : base.notices,
@@ -529,6 +607,41 @@ class CsacAppState extends ChangeNotifier {
   Future<void> clearConversationLocalCache(Conversation conversation) async {
     await cache.clearConversationMessages(conversation);
     await ConversationDraftStore.clear(conversation);
+  }
+
+  Future<void> removeConversationLocal(Conversation conversation) async {
+    final key = _conversationKey(conversation);
+    conversations = conversations
+        .where(
+          (item) =>
+              item.type != conversation.type || item.id != conversation.id,
+        )
+        .toList();
+    if (activeConversation != null && isActiveConversation(conversation)) {
+      activeConversation = null;
+    }
+    if (mutedConversationKeys.contains(key)) {
+      mutedConversationKeys = mutedConversationKeys.toSet()..remove(key);
+      await MutedConversationStore.save(mutedConversationKeys);
+    }
+    if (pinnedConversationKeys.contains(key)) {
+      pinnedConversationKeys = pinnedConversationKeys.toSet()..remove(key);
+      await PinnedConversationStore.save(pinnedConversationKeys);
+    }
+    await cache.removeConversation(conversation);
+    await ConversationDraftStore.clear(conversation);
+    notifyListeners();
+  }
+
+  Future<void> removeGroupConversationLocal(int roomId) async {
+    final conversation =
+        findConversation(ConversationType.group, roomId) ??
+        Conversation(
+          type: ConversationType.group,
+          id: roomId,
+          name: 'Room $roomId',
+        );
+    await removeConversationLocal(conversation);
   }
 
   Future<List<CsacNotice>> loadNotices() {
@@ -673,8 +786,19 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> leaveGroup(int roomId) async {
-    await client.leaveGroup(roomId);
-    await syncConversations();
+    try {
+      await client.leaveGroup(roomId);
+    } catch (err) {
+      if (!isGroupUnavailableError(err)) {
+        rethrow;
+      }
+    }
+    await removeGroupConversationLocal(roomId);
+    try {
+      await syncConversations();
+    } catch (_) {
+      // The group is already removed locally; network sync can recover later.
+    }
   }
 
   Future<void> editGroupInfo(
@@ -721,8 +845,19 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> disbandGroup(int roomId) async {
-    await client.disbandGroup(roomId);
-    await syncConversations();
+    try {
+      await client.disbandGroup(roomId);
+    } catch (err) {
+      if (!isGroupUnavailableError(err)) {
+        rethrow;
+      }
+    }
+    await removeGroupConversationLocal(roomId);
+    try {
+      await syncConversations();
+    } catch (_) {
+      // The group is already removed locally; network sync can recover later.
+    }
   }
 
   Future<void> muteGroupMember(int roomId, int targetUid, int minutes) {
