@@ -705,6 +705,10 @@ class CsacAppState extends ChangeNotifier {
     return cache.loadMessages(conversation);
   }
 
+  Future<List<ChatMessage>> loadAllCachedMessages(Conversation conversation) {
+    return cache.loadAllMessages(conversation);
+  }
+
   Future<List<ChatMessage>> loadCachedMessagesAround(
     Conversation conversation,
     int messageId,
@@ -724,6 +728,14 @@ class CsacAppState extends ChangeNotifier {
     String query,
   ) {
     return cache.searchConversationMessages(conversation, query);
+  }
+
+  Future<List<ConversationMediaItem>> loadConversationMedia(
+    Conversation conversation, {
+    ConversationMediaKind kind = ConversationMediaKind.all,
+    String query = '',
+  }) {
+    return cache.loadConversationMedia(conversation, kind: kind, query: query);
   }
 
   Future<List<GroupMember>> loadGroupMembers(int roomId) {

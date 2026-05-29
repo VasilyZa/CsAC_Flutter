@@ -74,21 +74,37 @@ Future<void> showReportDialog({
                   : () async {
                       final text = reason.text.trim();
                       if (text.length < 10) {
-                        _showCupertinoToast(context, strings.text('Report reason must be at least 10 characters.'));
+                        _showCupertinoToast(
+                          context,
+                          strings.text(
+                            'Report reason must be at least 10 characters.',
+                          ),
+                        );
                         return;
                       }
                       setState(() => submitting = true);
                       try {
                         await state.client.submitReport(
-                          type: type, reason: text, anonymous: anonymous,
-                          uid: uid, rid: rid, messageId: messageId,
-                          nickname: nickname, username: username, roomName: roomName,
+                          type: type,
+                          reason: text,
+                          anonymous: anonymous,
+                          uid: uid,
+                          rid: rid,
+                          messageId: messageId,
+                          nickname: nickname,
+                          username: username,
+                          roomName: roomName,
                         );
                         if (context.mounted) Navigator.of(context).pop(true);
                       } catch (err) {
                         if (context.mounted) {
                           setState(() => submitting = false);
-                          _showCupertinoToast(context, strings.format('Submit failed: {error}', {'error': err}));
+                          _showCupertinoToast(
+                            context,
+                            strings.format('Submit failed: {error}', {
+                              'error': err,
+                            }),
+                          );
                         }
                       }
                     },
@@ -164,17 +180,28 @@ Future<void> showBugReportDialog({
                       final t = titleCtrl.text.trim();
                       final d = descCtrl.text.trim();
                       if (t.isEmpty || d.isEmpty) {
-                        _showCupertinoToast(context, strings.text('Please fill all feedback fields.'));
+                        _showCupertinoToast(
+                          context,
+                          strings.text('Please fill all feedback fields.'),
+                        );
                         return;
                       }
                       setState(() => submitting = true);
                       try {
-                        await state.client.submitBugReport(title: t, description: d);
+                        await state.client.submitBugReport(
+                          title: t,
+                          description: d,
+                        );
                         if (context.mounted) Navigator.of(context).pop(true);
                       } catch (err) {
                         if (context.mounted) {
                           setState(() => submitting = false);
-                          _showCupertinoToast(context, strings.format('Submit failed: {error}', {'error': err}));
+                          _showCupertinoToast(
+                            context,
+                            strings.format('Submit failed: {error}', {
+                              'error': err,
+                            }),
+                          );
                         }
                       }
                     },
@@ -201,14 +228,9 @@ Future<void> openUserProfile(
   GroupProfile? group,
   GroupMember? member,
 }) {
-  return Navigator.of(context).push(
-    CupertinoPageRoute<void>(
-      builder: (_) => UserProfileScreen(
-        state: state,
-        uid: uid,
-        group: group,
-        member: member,
-      ),
-    ),
+  return _csacPush<void>(
+    context,
+    (_) =>
+        UserProfileScreen(state: state, uid: uid, group: group, member: member),
   );
 }

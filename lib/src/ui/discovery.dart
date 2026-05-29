@@ -277,8 +277,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pushReplacement(
-                CupertinoPageRoute<void>(
-                  builder: (_) => ConversationDetailScreen(
+                _csacPageRoute<void>(
+                  (_) => ConversationDetailScreen(
                     state: widget.state,
                     conversation: created.conversation,
                   ),
@@ -292,8 +292,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pushReplacement(
-                CupertinoPageRoute<void>(
-                  builder: (_) => ChatScreen(
+                _csacPageRoute<void>(
+                  (_) => ChatScreen(
                     state: widget.state,
                     conversation: created.conversation,
                   ),
@@ -422,10 +422,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       if (!mounted) {
         return;
       }
-      _showCupertinoToast(
-        context,
-        context.strings.text('Join request sent.'),
-      );
+      _showCupertinoToast(context, context.strings.text('Join request sent.'));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
@@ -462,16 +459,15 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   }
 
   void openGroupDetail(GroupProfile group) {
-    Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ConversationDetailScreen(
-          state: widget.state,
-          conversation: Conversation(
-            type: ConversationType.group,
-            id: group.id,
-            name: group.name,
-            subtitle: group.subtitle,
-          ),
+    _csacPush<void>(
+      context,
+      (_) => ConversationDetailScreen(
+        state: widget.state,
+        conversation: Conversation(
+          type: ConversationType.group,
+          id: group.id,
+          name: group.name,
+          subtitle: group.subtitle,
         ),
       ),
     );
@@ -559,9 +555,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       child: CupertinoActivityIndicator(),
                     )
                   else if (filteredPublicGroups().isEmpty)
-                    _EmptyPanel(
-                      message: strings.text('No public groups.'),
-                    )
+                    _EmptyPanel(message: strings.text('No public groups.'))
                   else
                     _CupertinoGroupedCard(
                       margin: EdgeInsets.zero,
@@ -584,15 +578,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                               ),
                               title: group.name,
                               subtitle: [
-                                strings.format(
-                                  'Room {id}',
-                                  {'id': group.id},
-                                ),
+                                strings.format('Room {id}', {'id': group.id}),
                                 group.subtitle,
                                 group.description,
-                              ]
-                                  .where((part) => part.isNotEmpty)
-                                  .join(' | '),
+                              ].where((part) => part.isNotEmpty).join(' | '),
                               trailing: CupertinoButton(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -702,13 +691,12 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   }
 
   Future<void> openResult(MessageSearchResult result) {
-    return Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ChatScreen(
-          state: widget.state,
-          conversation: result.conversation,
-          focusMessageId: result.message.id,
-        ),
+    return _csacPush<void>(
+      context,
+      (_) => ChatScreen(
+        state: widget.state,
+        conversation: result.conversation,
+        focusMessageId: result.message.id,
       ),
     );
   }
@@ -869,9 +857,7 @@ class _ScopeChip extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w500,
               height: 1.0,
-              color: selected
-                  ? CupertinoColors.white
-                  : colors.label,
+              color: selected ? CupertinoColors.white : colors.label,
             ),
           ),
         ),
@@ -966,8 +952,8 @@ class _SearchResultTile extends StatelessWidget {
                 message.imageUrl.isNotEmpty
                     ? CupertinoIcons.photo
                     : message.isEssence
-                        ? CupertinoIcons.star
-                        : CupertinoIcons.chevron_forward,
+                    ? CupertinoIcons.star
+                    : CupertinoIcons.chevron_forward,
                 size: 16,
                 color: CupertinoColors.systemGrey2,
               ),

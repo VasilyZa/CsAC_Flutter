@@ -258,23 +258,33 @@ class _AnimatedNarrowPageSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final forward = index >= previousIndex;
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 260),
-      reverseDuration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
+      duration: _csacMotionSlow,
+      reverseDuration: const Duration(milliseconds: 300),
+      switchInCurve: _csacEmphasizedEaseOut,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
         final incoming = child.key == ValueKey<int>(index);
         final beginOffset = incoming
-            ? Offset(forward ? 0.10 : -0.10, 0)
-            : Offset(forward ? -0.06 : 0.06, 0);
+            ? Offset(forward ? 0.09 : -0.09, 0.008)
+            : Offset(forward ? -0.035 : 0.035, 0);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: incoming ? _csacEmphasizedEaseOut : Curves.easeInCubic,
+        );
         return FadeTransition(
-          opacity: animation,
+          opacity: curved,
           child: SlideTransition(
             position: Tween<Offset>(
               begin: beginOffset,
               end: Offset.zero,
-            ).animate(animation),
-            child: child,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(
+                begin: incoming ? 0.986 : 1.006,
+                end: 1,
+              ).animate(curved),
+              child: child,
+            ),
           ),
         );
       },
@@ -602,10 +612,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 CupertinoButton(
                   padding: const EdgeInsets.all(6),
                   minimumSize: const Size(36, 36),
-                  onPressed: () => Navigator.of(context).push(
-                    CupertinoPageRoute<void>(
-                      builder: (_) => AddFriendScreen(state: widget.state),
-                    ),
+                  onPressed: () => _csacPush<void>(
+                    context,
+                    (_) => AddFriendScreen(state: widget.state),
                   ),
                   child: Icon(
                     CupertinoIcons.person_add,
@@ -617,10 +626,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 CupertinoButton(
                   padding: const EdgeInsets.all(6),
                   minimumSize: const Size(36, 36),
-                  onPressed: () => Navigator.of(context).push(
-                    CupertinoPageRoute<void>(
-                      builder: (_) => JoinGroupScreen(state: widget.state),
-                    ),
+                  onPressed: () => _csacPush<void>(
+                    context,
+                    (_) => JoinGroupScreen(state: widget.state),
                   ),
                   child: Icon(
                     CupertinoIcons.person_2_alt,
@@ -632,10 +640,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 CupertinoButton(
                   padding: const EdgeInsets.all(6),
                   minimumSize: const Size(36, 36),
-                  onPressed: () => Navigator.of(context).push(
-                    CupertinoPageRoute<void>(
-                      builder: (_) => CreateGroupScreen(state: widget.state),
-                    ),
+                  onPressed: () => _csacPush<void>(
+                    context,
+                    (_) => CreateGroupScreen(state: widget.state),
                   ),
                   child: Icon(
                     CupertinoIcons.plus_bubble,
@@ -723,11 +730,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
               widget.onConversationSelected!(conversation);
               return;
             }
-            await Navigator.of(context).push(
-              CupertinoPageRoute<void>(
-                builder: (_) =>
-                    ChatScreen(state: widget.state, conversation: conversation),
-              ),
+            await _csacPush<void>(
+              context,
+              (_) =>
+                  ChatScreen(state: widget.state, conversation: conversation),
             );
             if (mounted) refresh();
           },
@@ -753,11 +759,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
     final action = await showCupertinoModalPopup<_ConversationAction>(
       context: context,
-      builder: (context) => _ConversationActionSheet(
-        conversation: conversation,
-        muted: muted,
-        pinned: pinned,
-      ),
+      builder: (context) => _CsacBlurredPopup(
+        child: _ConversationActionSheet(
+          conversation: conversation,
+          muted: muted,
+          pinned: pinned,
+        ),
+      ).csacPopupEnter(),
     );
     if (action == null || !mounted) return;
     try {
@@ -855,8 +863,7 @@ class _ConversationTile extends StatelessWidget {
     final colors = CsacColors.of(context);
     final strings = context.strings;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return _CsacPressable(
       onTap: onTap,
       onLongPress: onLongPress,
       child: AnimatedContainer(

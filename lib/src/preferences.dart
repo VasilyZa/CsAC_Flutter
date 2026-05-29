@@ -27,6 +27,10 @@ class CsacPreferences {
       'csac.chat.tap_to_dismiss_keyboard';
   static const _chatBackgroundColorKey = 'csac.chat.background_color';
   static const _chatBackgroundImagePathKey = 'csac.chat.background_image_path';
+  static const _chatVoiceContinuousPlaybackKey =
+      'csac.chat.voice_continuous_playback';
+  static const _chatLinuxFfmpegVoiceFallbackKey =
+      'csac.chat.linux_ffmpeg_voice_fallback';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -63,8 +67,15 @@ class CsacPreferences {
         showSenderName: prefs.getBool(_chatShowSenderNameKey) ?? true,
         tapToDismissKeyboard:
             prefs.getBool(_chatTapToDismissKeyboardKey) ?? true,
-        backgroundColorValue: prefs.getInt(_chatBackgroundColorKey) ?? 0,
+        backgroundColorValue: _opaqueColorFromPrefs(
+          prefs,
+          _chatBackgroundColorKey,
+        ),
         backgroundImagePath: prefs.getString(_chatBackgroundImagePathKey) ?? '',
+        voiceContinuousPlayback:
+            prefs.getBool(_chatVoiceContinuousPlaybackKey) ?? false,
+        linuxFfmpegVoiceFallback:
+            prefs.getBool(_chatLinuxFfmpegVoiceFallbackKey) ?? false,
       ),
     );
   }
@@ -84,7 +95,10 @@ class CsacPreferences {
     if (chat.backgroundColorValue == 0) {
       await prefs.remove(_chatBackgroundColorKey);
     } else {
-      await prefs.setInt(_chatBackgroundColorKey, chat.backgroundColorValue);
+      await prefs.setInt(
+        _chatBackgroundColorKey,
+        _opaqueColorValue(chat.backgroundColorValue),
+      );
     }
     if (chat.backgroundImagePath.trim().isEmpty) {
       await prefs.remove(_chatBackgroundImagePathKey);
@@ -94,6 +108,14 @@ class CsacPreferences {
         chat.backgroundImagePath.trim(),
       );
     }
+    await prefs.setBool(
+      _chatVoiceContinuousPlaybackKey,
+      chat.voiceContinuousPlayback,
+    );
+    await prefs.setBool(
+      _chatLinuxFfmpegVoiceFallbackKey,
+      chat.linuxFfmpegVoiceFallback,
+    );
     if (serverUrl.trim().isEmpty) {
       await prefs.remove(_serverUrlKey);
     } else {
@@ -118,6 +140,18 @@ class CsacPreferences {
     return 0xff000000 | (value & 0x00ffffff);
   }
 
+  static int _opaqueColorFromPrefs(SharedPreferences prefs, String key) {
+    final value = prefs.getInt(key);
+    if (value == null || value == 0) {
+      return 0;
+    }
+    return _opaqueColorValue(value);
+  }
+
+  static int _opaqueColorValue(int value) {
+    return 0xff000000 | (value & 0x00ffffff);
+  }
+
   static CsacLanguage _languageFromName(String? value) {
     for (final language in CsacLanguage.values) {
       if (language.name == value) {
@@ -136,6 +170,8 @@ class CsacChatPreferences {
     this.tapToDismissKeyboard = true,
     this.backgroundColorValue = 0,
     this.backgroundImagePath = '',
+    this.voiceContinuousPlayback = false,
+    this.linuxFfmpegVoiceFallback = false,
   });
 
   final bool showSeconds;
@@ -144,6 +180,8 @@ class CsacChatPreferences {
   final bool tapToDismissKeyboard;
   final int backgroundColorValue;
   final String backgroundImagePath;
+  final bool voiceContinuousPlayback;
+  final bool linuxFfmpegVoiceFallback;
 
   CsacChatPreferences copyWith({
     bool? showSeconds,
@@ -152,6 +190,8 @@ class CsacChatPreferences {
     bool? tapToDismissKeyboard,
     int? backgroundColorValue,
     String? backgroundImagePath,
+    bool? voiceContinuousPlayback,
+    bool? linuxFfmpegVoiceFallback,
   }) {
     return CsacChatPreferences(
       showSeconds: showSeconds ?? this.showSeconds,
@@ -160,6 +200,10 @@ class CsacChatPreferences {
       tapToDismissKeyboard: tapToDismissKeyboard ?? this.tapToDismissKeyboard,
       backgroundColorValue: backgroundColorValue ?? this.backgroundColorValue,
       backgroundImagePath: backgroundImagePath ?? this.backgroundImagePath,
+      voiceContinuousPlayback:
+          voiceContinuousPlayback ?? this.voiceContinuousPlayback,
+      linuxFfmpegVoiceFallback:
+          linuxFfmpegVoiceFallback ?? this.linuxFfmpegVoiceFallback,
     );
   }
 }

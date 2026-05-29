@@ -2,6 +2,8 @@ enum ConversationType { private, group }
 
 enum SearchScope { all, private, group, image, essence }
 
+enum ConversationMediaKind { all, image, voice, file }
+
 class CsacUser {
   const CsacUser({
     required this.uid,
@@ -387,6 +389,8 @@ class ChatMessage {
     this.imageUrl = '',
     this.voiceUrl = '',
     this.voiceDuration = 0,
+    this.fileUrl = '',
+    this.fileName = '',
     this.canRecall = false,
     this.isRecalled = false,
     this.isEssence = false,
@@ -404,6 +408,8 @@ class ChatMessage {
   final String imageUrl;
   final String voiceUrl;
   final int voiceDuration;
+  final String fileUrl;
+  final String fileName;
   final bool canRecall;
   final bool isRecalled;
   final bool isEssence;
@@ -421,6 +427,8 @@ class ChatMessage {
     String? imageUrl,
     String? voiceUrl,
     int? voiceDuration,
+    String? fileUrl,
+    String? fileName,
     bool? canRecall,
     bool? isRecalled,
     bool? isEssence,
@@ -438,6 +446,8 @@ class ChatMessage {
       imageUrl: imageUrl ?? this.imageUrl,
       voiceUrl: voiceUrl ?? this.voiceUrl,
       voiceDuration: voiceDuration ?? this.voiceDuration,
+      fileUrl: fileUrl ?? this.fileUrl,
+      fileName: fileName ?? this.fileName,
       canRecall: canRecall ?? this.canRecall,
       isRecalled: isRecalled ?? this.isRecalled,
       isEssence: isEssence ?? this.isEssence,
@@ -459,13 +469,32 @@ class ChatMessage {
     final rawImage = firstString(json, const ['image_url', 'image', 'img']);
     final rawVoice = firstString(json, const [
       'voice_url',
+      'voice_path',
+      'voice_file',
+      'voice_src',
+      'voiceUrl',
       'voice',
       'audio_url',
+      'audio_path',
+      'audio_file',
+      'audio_src',
+      'audioUrl',
       'audio',
+    ]);
+    final rawFile = firstString(json, const [
+      'file_url',
+      'file',
+      'file_path',
+      'attachment_url',
+      'attachment',
+      'document_url',
+      'download_url',
+      'url',
     ]);
     final rawContent = asString(json['content']).trim();
     final contentLooksLikeImage = looksLikeImagePath(rawContent);
     final contentLooksLikeVoice = looksLikeVoicePath(rawContent);
+    final contentLooksLikeFile = looksLikeFilePath(rawContent);
     final image = isRecalled
         ? ''
         : normalizeApiUrl(
@@ -476,6 +505,17 @@ class ChatMessage {
         : normalizeApiUrl(
             contentLooksLikeVoice && rawVoice.isEmpty ? rawContent : rawVoice,
           );
+    final file = isRecalled
+        ? ''
+        : normalizeApiUrl(
+            contentLooksLikeFile && rawFile.isEmpty ? rawContent : rawFile,
+          );
+    final fileName = firstString(json, const [
+      'file_name',
+      'filename',
+      'attachment_name',
+      'document_name',
+    ]).ifEmpty(fileNameFromUrl(file));
     var body = asString(json['content']).trim();
     if (isRecalled) {
       body = '[recalled]';
@@ -486,11 +526,17 @@ class ChatMessage {
       if (voice.isNotEmpty && contentLooksLikeVoice) {
         body = '';
       }
+      if (file.isNotEmpty && contentLooksLikeFile) {
+        body = '';
+      }
       if (body.isEmpty && image.isNotEmpty) {
         body = '[image]';
       }
       if (body.isEmpty && voice.isNotEmpty) {
         body = '[voice]';
+      }
+      if (body.isEmpty && file.isNotEmpty) {
+        body = '[file]';
       }
       if (body.isEmpty) {
         body = '[empty]';
@@ -513,7 +559,16 @@ class ChatMessage {
       rawTime: rawTime,
       imageUrl: image,
       voiceUrl: voice,
-      voiceDuration: firstInt(json, const ['duration', 'voice_duration']),
+      voiceDuration: firstInt(json, const [
+        'duration',
+        'voice_duration',
+        'voice_seconds',
+        'voiceDuration',
+        'audio_duration',
+        'audioDuration',
+      ]),
+      fileUrl: file,
+      fileName: fileName,
       canRecall: asBool(json['can_recall']),
       isRecalled: isRecalled,
       isEssence: asBool(json['is_essence']),
@@ -618,6 +673,20 @@ class MessageSearchResult {
   final Conversation conversation;
   final ChatMessage message;
   final String snippet;
+}
+
+class ConversationMediaItem {
+  const ConversationMediaItem({
+    required this.kind,
+    required this.message,
+    required this.url,
+    this.title = '',
+  });
+
+  final ConversationMediaKind kind;
+  final ChatMessage message;
+  final String url;
+  final String title;
 }
 
 class NotificationCounts {
@@ -1087,7 +1156,7 @@ bool looksLikeVoicePath(String value) {
   final path = uri?.path.isNotEmpty == true ? uri!.path : text;
   final lower = path.toLowerCase().split('?').first.split('#').first;
   final hasAudioExtension = RegExp(
-    r'\.(webm|ogg|mp3|mpeg|wav|m4a|mp4|aac)$',
+    r'\.(webm|ogg|opus|mp3|mpeg|wav|flac|m4a|mp4|aac|caf|3gp|3gpp|amr)$',
   ).hasMatch(lower);
   if (!hasAudioExtension) {
     return false;
@@ -1095,6 +1164,40 @@ bool looksLikeVoicePath(String value) {
   return lower.startsWith('upload/') ||
       lower.startsWith('/upload/') ||
       uri?.hasScheme == true;
+}
+
+bool looksLikeFilePath(String value) {
+  final text = value.trim();
+  if (text.isEmpty || text.contains('\n')) {
+    return false;
+  }
+  if (looksLikeImagePath(text) || looksLikeVoicePath(text)) {
+    return false;
+  }
+  final uri = Uri.tryParse(text);
+  final path = uri?.path.isNotEmpty == true ? uri!.path : text;
+  final lower = path.toLowerCase().split('?').first.split('#').first;
+  final hasFileExtension = RegExp(r'\.[a-z0-9]{1,8}$').hasMatch(lower);
+  if (!hasFileExtension) {
+    return false;
+  }
+  return lower.startsWith('upload/') ||
+      lower.startsWith('/upload/') ||
+      uri?.hasScheme == true;
+}
+
+String fileNameFromUrl(String url) {
+  final value = url.trim();
+  if (value.isEmpty) {
+    return '';
+  }
+  final uri = Uri.tryParse(value);
+  final path = uri?.path.isNotEmpty == true ? uri!.path : value;
+  final name = path.split('/').where((part) => part.isNotEmpty).lastOrNull;
+  if (name == null || name.trim().isEmpty) {
+    return '';
+  }
+  return Uri.decodeComponent(name.split('?').first.split('#').first);
 }
 
 String humanReadableTimestamp(String raw, {bool showSeconds = false}) {

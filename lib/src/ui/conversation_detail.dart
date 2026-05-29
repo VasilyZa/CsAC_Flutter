@@ -444,35 +444,37 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final strings = context.strings;
     final action = await showCupertinoModalPopup<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('mute10'),
-            child: Text(strings.text('Mute 10 minutes')),
+      builder: (context) => _CsacBlurredPopup(
+        child: CupertinoActionSheet(
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('mute10'),
+              child: Text(strings.text('Mute 10 minutes')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('unmute'),
+              child: Text(strings.text('Unmute')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('admin'),
+              child: Text(strings.text('Set admin')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('removeAdmin'),
+              child: Text(strings.text('Remove admin')),
+            ),
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(context).pop('kick'),
+              child: Text(strings.text('Kick member')),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(strings.text('Cancel')),
           ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('unmute'),
-            child: Text(strings.text('Unmute')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('admin'),
-            child: Text(strings.text('Set admin')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('removeAdmin'),
-            child: Text(strings.text('Remove admin')),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop('kick'),
-            child: Text(strings.text('Kick member')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(null),
-          child: Text(strings.text('Cancel')),
         ),
-      ),
+      ).csacPopupEnter(),
     );
     if (action != null) {
       await memberAction(member, action);
@@ -480,20 +482,42 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Future<void> openGroupManagement(GroupProfile profile) async {
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => GroupManagementScreen(
-          state: widget.state,
-          group: profile,
-          initialMembers: members,
-          canManageOverride: canManageCurrentGroup,
-          isOwnerOverride: currentUserIsGroupOwner,
-        ),
+    await _csacPush<void>(
+      context,
+      (_) => GroupManagementScreen(
+        state: widget.state,
+        group: profile,
+        initialMembers: members,
+        canManageOverride: canManageCurrentGroup,
+        isOwnerOverride: currentUserIsGroupOwner,
       ),
     );
     if (mounted) {
       await load();
     }
+  }
+
+  void openMediaDrawer() {
+    _csacPush<void>(
+      context,
+      (_) => ConversationMediaScreen(
+        state: widget.state,
+        conversation: widget.conversation,
+        onOpenMessage: (messageId) {
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            _csacPageRoute<void>(
+              (_) => ChatScreen(
+                state: widget.state,
+                conversation: widget.conversation,
+                focusMessageId: messageId,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void copyText(String label, String value) {
@@ -567,7 +591,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                       ),
                     ),
                   ],
-                ),
+                ).csacCardEnter(delayMs: 20),
                 const SizedBox(height: 6),
                 // Group info card
                 _CupertinoGroupedCard(
@@ -651,8 +675,18 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         title: strings.text('Question'),
                         subtitle: profile.question,
                       ),
+                    _CupertinoListTile(
+                      leading: Icon(
+                        CupertinoIcons.collections,
+                        size: 20,
+                        color: colors.secondaryLabel,
+                      ),
+                      title: strings.text('Media drawer'),
+                      subtitle: strings.text('Images, voices and files'),
+                      onTap: openMediaDrawer,
+                    ),
                   ],
-                ),
+                ).csacCardEnter(delayMs: 60),
                 // Action buttons
                 if (canManageGroup) ...[
                   const SizedBox(height: 16),
@@ -672,7 +706,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ),
                       ),
                     ),
-                  ),
+                  ).csacCardEnter(delayMs: 100),
                 ],
                 if (!profile.isInGroup) ...[
                   const SizedBox(height: 12),
@@ -692,7 +726,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ),
                       ),
                     ),
-                  ),
+                  ).csacCardEnter(delayMs: 120),
                 ] else ...[
                   const SizedBox(height: 12),
                   Padding(
@@ -715,7 +749,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ),
                       ),
                     ),
-                  ),
+                  ).csacCardEnter(delayMs: 120),
                 ],
                 // Members section
                 const SizedBox(height: 20),
@@ -745,30 +779,32 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (members.isEmpty)
-                  _EmptyPanel(message: strings.text('No members.'))
+                  _EmptyPanel(
+                    message: strings.text('No members.'),
+                  ).csacCardEnter(delayMs: 180)
                 else
                   _CupertinoGroupedCard(
                     children: [
-                      for (final member in members)
+                      for (final entry in members.indexed)
                         _CupertinoListTile(
                           leading: _Avatar(
-                            url: member.avatar,
+                            url: entry.$2.avatar,
                             fallback: CupertinoIcons.person_solid,
                           ),
-                          title: member.name,
-                          subtitle: member.subtitle.isEmpty
-                              ? 'UID ${member.uid}'
-                              : member.subtitle,
+                          title: entry.$2.name,
+                          subtitle: entry.$2.subtitle.isEmpty
+                              ? 'UID ${entry.$2.uid}'
+                              : entry.$2.subtitle,
                           onTap: () => openUserProfile(
                             context,
                             widget.state,
-                            member.uid,
+                            entry.$2.uid,
                             group: profile,
-                            member: member,
+                            member: entry.$2,
                           ),
                           trailing: canManageGroup
                               ? GestureDetector(
-                                  onTap: () => showMemberActions(member),
+                                  onTap: () => showMemberActions(entry.$2),
                                   child: Icon(
                                     CupertinoIcons.ellipsis,
                                     size: 20,
@@ -776,9 +812,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                   ),
                                 )
                               : null,
-                        ),
+                        ).csacCardEnter(delayMs: 180 + entry.$1 * 18),
                     ],
-                  ),
+                  ).csacCardEnter(delayMs: 150),
               ],
             ),
           ),
@@ -1213,40 +1249,42 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     ];
     final selected = await showCupertinoModalPopup<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: [
-          if (actions.contains('mute10'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('mute10'),
-              child: Text(strings.text('Mute 10 minutes')),
-            ),
-          if (actions.contains('unmute'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('unmute'),
-              child: Text(strings.text('Unmute')),
-            ),
-          if (actions.contains('admin'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('admin'),
-              child: Text(strings.text('Set admin')),
-            ),
-          if (actions.contains('removeAdmin'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('removeAdmin'),
-              child: Text(strings.text('Remove admin')),
-            ),
-          if (actions.contains('kick'))
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () => Navigator.of(context).pop('kick'),
-              child: Text(strings.text('Kick member')),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(null),
-          child: Text(strings.text('Cancel')),
+      builder: (context) => _CsacBlurredPopup(
+        child: CupertinoActionSheet(
+          actions: [
+            if (actions.contains('mute10'))
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(context).pop('mute10'),
+                child: Text(strings.text('Mute 10 minutes')),
+              ),
+            if (actions.contains('unmute'))
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(context).pop('unmute'),
+                child: Text(strings.text('Unmute')),
+              ),
+            if (actions.contains('admin'))
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(context).pop('admin'),
+                child: Text(strings.text('Set admin')),
+              ),
+            if (actions.contains('removeAdmin'))
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(context).pop('removeAdmin'),
+                child: Text(strings.text('Remove admin')),
+              ),
+            if (actions.contains('kick'))
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.of(context).pop('kick'),
+                child: Text(strings.text('Kick member')),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(strings.text('Cancel')),
+          ),
         ),
-      ),
+      ).csacPopupEnter(),
     );
     if (selected != null) {
       await memberAction(member, selected);
@@ -1328,74 +1366,77 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final colors = CsacColors.of(context);
     return showCupertinoModalPopup<GroupMember>(
       context: context,
-      builder: (context) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.6,
-        ),
-        decoration: BoxDecoration(
-          color: colors.cardBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: candidates.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    context.strings.text('No selectable members.'),
-                    style: TextStyle(color: colors.secondaryLabel),
+      builder: (context) => _CsacBlurredPopup(
+        borderRadius: 14,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: candidates.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      context.strings.text('No selectable members.'),
+                      style: TextStyle(color: colors.secondaryLabel),
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.label,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => Navigator.of(context).pop(null),
+                              child: Icon(
+                                CupertinoIcons.xmark_circle_fill,
+                                color: colors.tertiaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final member in candidates)
+                              _CupertinoListTile(
+                                leading: _Avatar(
+                                  url: member.avatar,
+                                  fallback: CupertinoIcons.person_solid,
+                                ),
+                                title: member.name,
+                                subtitle: member.subtitle.isEmpty
+                                    ? 'UID ${member.uid}'
+                                    : member.subtitle,
+                                onTap: () => Navigator.of(context).pop(member),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                color: colors.label,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => Navigator.of(context).pop(null),
-                            child: Icon(
-                              CupertinoIcons.xmark_circle_fill,
-                              color: colors.tertiaryLabel,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final member in candidates)
-                            _CupertinoListTile(
-                              leading: _Avatar(
-                                url: member.avatar,
-                                fallback: CupertinoIcons.person_solid,
-                              ),
-                              title: member.name,
-                              subtitle: member.subtitle.isEmpty
-                                  ? 'UID ${member.uid}'
-                                  : member.subtitle,
-                              onTap: () => Navigator.of(context).pop(member),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+          ),
         ),
-      ),
+      ).csacPopupEnter(),
     );
   }
 

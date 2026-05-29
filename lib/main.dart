@@ -1,9 +1,12 @@
 import 'dart:async';
-import 'dart:io' show Directory, File, Platform;
+import 'dart:convert';
+import 'dart:io' show Directory, File, Platform, Process;
+import 'dart:math' show min;
 import 'dart:ui';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart';
@@ -29,6 +32,8 @@ part 'src/ui/profile_settings.dart';
 part 'src/ui/common_widgets.dart';
 part 'src/ui/user_profile.dart';
 part 'src/ui/conversation_detail.dart';
+part 'src/ui/conversation_media.dart';
+part 'src/ui/chat_archive.dart';
 part 'src/ui/chat.dart';
 part 'src/ui/media.dart';
 part 'src/ui/helpers.dart';

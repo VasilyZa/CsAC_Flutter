@@ -67,7 +67,11 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
         border: null,
         trailing: GestureDetector(
           onTap: widget.state.refreshNotificationCounts,
-          child: Icon(CupertinoIcons.refresh, size: 20, color: colors.primaryColor),
+          child: Icon(
+            CupertinoIcons.refresh,
+            size: 20,
+            color: colors.primaryColor,
+          ),
         ),
       ),
       child: SafeArea(
@@ -85,35 +89,50 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
                     label: strings.text('Notices'),
                     badge: counts.notices,
                     selected: _selectedIndex == 0,
-                    onTap: () { setState(() => _selectedIndex = 0); _clearBadgeForTab(0); },
+                    onTap: () {
+                      setState(() => _selectedIndex = 0);
+                      _clearBadgeForTab(0);
+                    },
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.at,
                     label: strings.text('Mentions'),
                     badge: counts.mentions + counts.replies,
                     selected: _selectedIndex == 1,
-                    onTap: () { setState(() => _selectedIndex = 1); _clearBadgeForTab(1); },
+                    onTap: () {
+                      setState(() => _selectedIndex = 1);
+                      _clearBadgeForTab(1);
+                    },
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.person_badge_minus,
                     label: strings.text('Friend changes'),
                     badge: 0,
                     selected: _selectedIndex == 2,
-                    onTap: () { setState(() => _selectedIndex = 2); _clearBadgeForTab(2); },
+                    onTap: () {
+                      setState(() => _selectedIndex = 2);
+                      _clearBadgeForTab(2);
+                    },
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.person_badge_plus,
                     label: strings.text('Friends'),
                     badge: counts.friendRequests,
                     selected: _selectedIndex == 3,
-                    onTap: () { setState(() => _selectedIndex = 3); _clearBadgeForTab(3); },
+                    onTap: () {
+                      setState(() => _selectedIndex = 3);
+                      _clearBadgeForTab(3);
+                    },
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.group,
                     label: strings.text('Groups'),
                     badge: counts.groupApplications,
                     selected: _selectedIndex == 4,
-                    onTap: () { setState(() => _selectedIndex = 4); _clearBadgeForTab(4); },
+                    onTap: () {
+                      setState(() => _selectedIndex = 4);
+                      _clearBadgeForTab(4);
+                    },
                   ),
                 ],
               ),
@@ -309,8 +328,9 @@ class _MentionsPageState extends State<MentionsPage> {
                   _CupertinoListTile(
                     leading: const Icon(CupertinoIcons.info, size: 22),
                     title: strings.text('Mention list unavailable'),
-                    subtitle:
-                        strings.text('Open related chats from the chat list.'),
+                    subtitle: strings.text(
+                      'Open related chats from the chat list.',
+                    ),
                   ),
                 ],
               ),
@@ -386,7 +406,9 @@ class _NoticeTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: selected ? CupertinoColors.white : CupertinoColors.white,
+                    color: selected
+                        ? CupertinoColors.white
+                        : CupertinoColors.white,
                   ),
                 ),
               ),
@@ -563,8 +585,9 @@ class _NoticesPageState extends State<NoticesPage> {
                   Expanded(
                     child: Text(
                       strings.format('{count} unread', {
-                        'count':
-                            notices.where((notice) => !notice.isRead).length,
+                        'count': notices
+                            .where((notice) => !notice.isRead)
+                            .length,
                       }),
                       style: TextStyle(
                         fontSize: 16,
@@ -581,7 +604,9 @@ class _NoticesPageState extends State<NoticesPage> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: CupertinoTheme.of(context).primaryColor.withValues(alpha: 0.1),
+                        color: CupertinoTheme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -684,9 +709,10 @@ class _NoticesPageState extends State<NoticesPage> {
                             else
                               CupertinoButton(
                                 padding: EdgeInsets.zero,
-                                minSize: 28,
-                                onPressed:
-                                    acting ? null : () => markOneRead(notice),
+                                minimumSize: const Size(28, 28),
+                                onPressed: acting
+                                    ? null
+                                    : () => markOneRead(notice),
                                 child: const Icon(
                                   CupertinoIcons.checkmark_circle,
                                   size: 22,
@@ -911,7 +937,9 @@ class _FriendRequestTile extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: CupertinoColors.destructiveRed.withValues(alpha: 0.4),
+                          color: CupertinoColors.destructiveRed.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                       child: Text(
@@ -934,7 +962,9 @@ class _FriendRequestTile extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: acting
-                            ? CupertinoTheme.of(context).primaryColor.withValues(alpha: 0.5)
+                            ? CupertinoTheme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.5)
                             : CupertinoTheme.of(context).primaryColor,
                         borderRadius: BorderRadius.circular(18),
                       ),
@@ -1206,7 +1236,9 @@ class _GroupApplicationTile extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: CupertinoColors.destructiveRed.withValues(alpha: 0.4),
+                          color: CupertinoColors.destructiveRed.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                       child: Text(
@@ -1229,7 +1261,9 @@ class _GroupApplicationTile extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: acting
-                            ? CupertinoTheme.of(context).primaryColor.withValues(alpha: 0.5)
+                            ? CupertinoTheme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.5)
                             : CupertinoTheme.of(context).primaryColor,
                         borderRadius: BorderRadius.circular(18),
                       ),

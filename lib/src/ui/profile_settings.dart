@@ -63,15 +63,15 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         CupertinoButton(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          minSize: 0,
+                          minimumSize: Size.zero,
                           onPressed: () => _logout(context),
                           child: Text(strings.text('Login')),
                         ),
                       ],
                     ),
                   ),
-                ),
-              _ProfileHeroCard(state: state),
+                ).csacCardEnter(),
+              _ProfileHeroCard(state: state).csacCardEnter(delayMs: 20),
               const SizedBox(height: 12),
               _CupertinoGroupedCard(
                 margin: EdgeInsets.zero,
@@ -92,8 +92,7 @@ class ProfileScreen extends StatelessWidget {
                     trailing: _badgeCount(counts.groupApplications, colors),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
+              ).csacCardEnter(delayMs: 60),
               const SizedBox(height: 12),
               _CupertinoGroupedCard(
                 margin: EdgeInsets.zero,
@@ -110,10 +109,9 @@ class ProfileScreen extends StatelessWidget {
                     leading: const Icon(CupertinoIcons.settings, size: 22),
                     title: strings.text('Settings'),
                     onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute<void>(
-                          builder: (_) => SettingsScreen(state: state),
-                        ),
+                      _csacPush<void>(
+                        context,
+                        (_) => SettingsScreen(state: state),
                       );
                     },
                   ),
@@ -127,7 +125,7 @@ class ProfileScreen extends StatelessWidget {
                     onTap: () => _logout(context),
                   ),
                 ],
-              ),
+              ).csacCardEnter(delayMs: 100),
             ],
           ),
         ),
@@ -171,10 +169,9 @@ class _ProfileHeroCard extends StatelessWidget {
       onTap: user == null
           ? null
           : () {
-              Navigator.of(context).push(
-                CupertinoPageRoute<void>(
-                  builder: (_) => AccountSettingsScreen(state: state),
-                ),
+              _csacPush<void>(
+                context,
+                (_) => AccountSettingsScreen(state: state),
               );
             },
       child: Container(
@@ -238,14 +235,14 @@ class _ProfileHeroCard extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
+              ).csacCardEnter(delayMs: 60),
             ),
             if (user != null)
               Icon(
                 CupertinoIcons.chevron_right,
                 size: 16,
                 color: colors.tertiaryLabel,
-              ),
+              ).csacCardEnter(delayMs: 100),
           ],
         ),
       ),
@@ -571,11 +568,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       'Password upgrade and account deletion',
                     ),
                     onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute<void>(
-                          builder: (_) =>
-                              AccountSecurityScreen(state: widget.state),
-                        ),
+                      _csacPush<void>(
+                        context,
+                        (_) => AccountSecurityScreen(state: widget.state),
                       );
                     },
                   ),
@@ -922,7 +917,7 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.1.12-43';
+const _csacAppVersion = '1.2.0-43';
 const _csacAppBuild = '43';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
@@ -1241,7 +1236,7 @@ class _OpenSourceLicensesScreenState extends State<OpenSourceLicensesScreen> {
                               alignment: Alignment.centerRight,
                               child: CupertinoButton(
                                 padding: EdgeInsets.zero,
-                                minSize: 0,
+                                minimumSize: Size.zero,
                                 onPressed: () => copyLicense(license),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1550,11 +1545,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final selected = wide
         ? await showCupertinoDialog<int>(
             context: context,
-            builder: (context) => Center(child: content),
+            builder: (context) => Center(
+              child: _CsacBlurredPopup(child: content).csacPopupEnter(),
+            ),
           )
         : await showCupertinoModalPopup<int>(
             context: context,
-            builder: (context) => content,
+            builder: (context) => _CsacBlurredPopup(
+              borderRadius: 28,
+              child: content,
+            ).csacPopupEnter(),
           );
     if (selected != null) {
       await widget.state.updateThemeColor(selected);
@@ -1617,11 +1617,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: user == null
                         ? null
                         : () {
-                            Navigator.of(context).push(
-                              CupertinoPageRoute<void>(
-                                builder: (_) =>
-                                    AccountSettingsScreen(state: widget.state),
-                              ),
+                            _csacPush<void>(
+                              context,
+                              (_) => AccountSettingsScreen(state: widget.state),
                             );
                           },
                   ),
@@ -1637,11 +1635,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle:
                         '$_csacAppName $_csacAppVersion | $_csacAppBranch',
                     onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute<void>(
-                          builder: (_) => const AppInfoScreen(),
-                        ),
-                      );
+                      _csacPush<void>(context, (_) => const AppInfoScreen());
                     },
                   ),
                   _CupertinoListTile(
@@ -1651,10 +1645,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'View licenses for included libraries',
                     ),
                     onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute<void>(
-                          builder: (_) => const OpenSourceLicensesScreen(),
-                        ),
+                      _csacPush<void>(
+                        context,
+                        (_) => const OpenSourceLicensesScreen(),
                       );
                     },
                   ),
@@ -1705,11 +1698,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'Timestamps, bubbles, and input behavior',
                     ),
                     onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute<void>(
-                          builder: (_) =>
-                              ChatOptionsScreen(state: widget.state),
-                        ),
+                      _csacPush<void>(
+                        context,
+                        (_) => ChatOptionsScreen(state: widget.state),
                       );
                     },
                   ),
@@ -1999,6 +1990,7 @@ class _ChatOptionsScreenState extends State<ChatOptionsScreen> {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final chat = widget.state.preferences.chat;
+    final linuxVoiceFallbackAvailable = Platform.isLinux;
     return CupertinoPageScaffold(
       backgroundColor: colors.systemBackground,
       navigationBar: CupertinoNavigationBar(
@@ -2043,6 +2035,31 @@ class _ChatOptionsScreenState extends State<ChatOptionsScreen> {
                     value: chat.showSenderName,
                     onChanged: (value) =>
                         update(chat.copyWith(showSenderName: value)),
+                  ),
+                  _ChatOptionSwitchTile(
+                    icon: CupertinoIcons.play_circle,
+                    title: strings.text('Continuous voice playback'),
+                    subtitle: strings.text(
+                      'Automatically play the next voice message',
+                    ),
+                    value: chat.voiceContinuousPlayback,
+                    onChanged: (value) =>
+                        update(chat.copyWith(voiceContinuousPlayback: value)),
+                  ),
+                  _ChatOptionSwitchTile(
+                    icon: CupertinoIcons.waveform_path_ecg,
+                    title: strings.text('Linux ffmpeg voice fallback'),
+                    subtitle: strings.text(
+                      'Convert unsupported voice formats with ffmpeg on Linux',
+                    ),
+                    value:
+                        linuxVoiceFallbackAvailable &&
+                        chat.linuxFfmpegVoiceFallback,
+                    onChanged: linuxVoiceFallbackAvailable
+                        ? (value) => update(
+                            chat.copyWith(linuxFfmpegVoiceFallback: value),
+                          )
+                        : null,
                   ),
                   _CupertinoListTile(
                     leading: const Icon(CupertinoIcons.photo, size: 22),
@@ -2100,29 +2117,31 @@ class _ChatOptionSwitchTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final enabled = onChanged != null;
+    final textColor = enabled ? colors.label : colors.tertiaryLabel;
+    final subtitleColor = enabled
+        ? colors.secondaryLabel
+        : colors.tertiaryLabel;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: colors.label),
+          Icon(icon, size: 22, color: textColor),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 16, color: colors.label),
-                ),
+                Text(title, style: TextStyle(fontSize: 16, color: textColor)),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+                  style: TextStyle(fontSize: 13, color: subtitleColor),
                 ),
               ],
             ),

@@ -11,11 +11,19 @@ String compactMessage(String text, {int max = 80}) {
 }
 
 String formatVoiceDuration(int seconds) {
-  final value = seconds <= 0 ? 1 : seconds;
+  final value = seconds <= 0 ? 0 : seconds;
   final minutes = value ~/ 60;
   final rest = value % 60;
   if (minutes <= 0) return '${rest}s';
   return '$minutes:${rest.toString().padLeft(2, '0')}';
+}
+
+List<double> voiceWaveformHeights(int seed, int count) {
+  final base = seed <= 0 ? 17 : seed;
+  return List<double>.generate(count, (index) {
+    final value = (base * (index + 3) * 37 + index * index * 11) % 19;
+    return 7 + value.toDouble();
+  });
 }
 
 extension FirstOrNullExtension<T> on Iterable<T> {
@@ -60,8 +68,7 @@ class CsacColors {
       isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF4);
 
   // ── 文字层级 ──────────────────────────────────────────────
-  Color get label =>
-      isDark ? CupertinoColors.white : const Color(0xFF000000);
+  Color get label => isDark ? CupertinoColors.white : const Color(0xFF000000);
 
   Color get secondaryLabel =>
       isDark ? const Color(0x99EBEBF5) : const Color(0x993C3C43);
@@ -80,8 +87,7 @@ class CsacColors {
       isDark ? const Color(0xFF38383A) : const Color(0xFFC6C6C8);
 
   // ── 填充色 ────────────────────────────────────────────────
-  Color get fill =>
-      isDark ? const Color(0x5C787880) : const Color(0x33787880);
+  Color get fill => isDark ? const Color(0x5C787880) : const Color(0x33787880);
 
   Color get secondaryFill =>
       isDark ? const Color(0x52787880) : const Color(0x29787880);
@@ -108,15 +114,157 @@ class CsacColors {
 
   // ── 悬浮胶囊导航栏 ────────────────────────────────────────
   Color get floatingTabBarBackground =>
-      isDark
-          ? const Color(0xE6242426)
-          : const Color(0xE6FFFFFF);
+      isDark ? const Color(0xE6242426) : const Color(0xE6FFFFFF);
 }
 
 const double _csacPageHorizontalPadding = 16;
 const double _csacGroupedCornerRadius = 18;
 const double _csacControlCornerRadius = 16;
 const double _csacListMinHeight = 52;
+
+const Duration _csacMotionFast = Duration(milliseconds: 160);
+const Duration _csacMotionMedium = Duration(milliseconds: 260);
+const Duration _csacMotionSlow = Duration(milliseconds: 420);
+const Duration _csacPageMotion = _csacMotionSlow;
+const Duration _csacPageReverseMotion = Duration(milliseconds: 300);
+const Curve _csacEaseOut = Curves.easeOutCubic;
+const Curve _csacEaseInOut = Curves.easeInOutCubic;
+const Curve _csacEmphasizedEaseOut = Curves.easeOutExpo;
+
+PageRoute<T> _csacPageRoute<T>(WidgetBuilder builder) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionDuration: _csacPageMotion,
+    reverseTransitionDuration: _csacPageReverseMotion,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final enter = CurvedAnimation(
+        parent: animation,
+        curve: _csacEaseInOut,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final exit = CurvedAnimation(
+        parent: secondaryAnimation,
+        curve: _csacEaseInOut,
+        reverseCurve: _csacEaseOut,
+      );
+      final incoming = SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(enter),
+        child: child,
+      );
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(-0.28, 0),
+        ).animate(exit),
+        child: incoming,
+      );
+    },
+  );
+}
+
+Future<T?> _csacPush<T>(BuildContext context, WidgetBuilder builder) {
+  return Navigator.of(context).push<T>(_csacPageRoute<T>(builder));
+}
+
+extension _CsacMotionWidget on Widget {
+  Widget csacCardEnter({int delayMs = 0, double y = 8}) {
+    return animate(delay: Duration(milliseconds: delayMs))
+        .fadeIn(duration: _csacMotionMedium, curve: _csacEaseOut)
+        .slideY(
+          begin: y / 100,
+          end: 0,
+          duration: _csacMotionMedium,
+          curve: _csacEaseOut,
+        );
+  }
+
+  Widget csacPopupEnter({int delayMs = 0}) {
+    return animate(delay: Duration(milliseconds: delayMs))
+        .fadeIn(duration: _csacMotionMedium, curve: _csacEaseOut)
+        .scale(
+          begin: const Offset(0.96, 0.96),
+          end: const Offset(1, 1),
+          duration: _csacMotionMedium,
+          curve: _csacEmphasizedEaseOut,
+        );
+  }
+}
+
+class _CsacBlurredPopup extends StatelessWidget {
+  const _CsacBlurredPopup({required this.child, this.borderRadius = 24});
+
+  final Widget child;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _CsacPressable extends StatefulWidget {
+  const _CsacPressable({
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.scale = 0.985,
+    this.opacity = 0.72,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final double scale;
+  final double opacity;
+
+  @override
+  State<_CsacPressable> createState() => _CsacPressableState();
+}
+
+class _CsacPressableState extends State<_CsacPressable> {
+  bool pressed = false;
+
+  void setPressed(bool value) {
+    if (pressed == value ||
+        (widget.onTap == null && widget.onLongPress == null)) {
+      return;
+    }
+    setState(() => pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null || widget.onLongPress != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onTapDown: (_) => setPressed(true),
+      onTapUp: (_) => setPressed(false),
+      onTapCancel: () => setPressed(false),
+      child: AnimatedScale(
+        scale: pressed ? widget.scale : 1,
+        duration: _csacMotionFast,
+        curve: _csacEaseOut,
+        child: AnimatedOpacity(
+          opacity: enabled && pressed ? widget.opacity : 1,
+          duration: _csacMotionFast,
+          curve: _csacEaseOut,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
 
 class _AdaptivePageFrame extends StatelessWidget {
   const _AdaptivePageFrame({required this.child, this.maxWidth = 720});
@@ -187,10 +335,7 @@ class _EmptyPanel extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: colors.secondaryLabel,
-              ),
+              style: TextStyle(fontSize: 15, color: colors.secondaryLabel),
             ),
           ],
         ),
@@ -217,7 +362,12 @@ class _CupertinoGroupedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
     return Padding(
-      padding: margin ?? const EdgeInsets.symmetric(horizontal: _csacPageHorizontalPadding, vertical: 7),
+      padding:
+          margin ??
+          const EdgeInsets.symmetric(
+            horizontal: _csacPageHorizontalPadding,
+            vertical: 7,
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -235,19 +385,21 @@ class _CupertinoGroupedCard extends StatelessWidget {
                 ),
               ),
             ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
-            child: Container(
-              decoration: BoxDecoration(
-                color: colors.cardBackground,
-                border: Border.all(color: colors.separator.withValues(alpha: 0.30), width: 0.5),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _withSeparators(children, colors.separator),
+          Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.30),
+                width: 0.5,
               ),
             ),
-          ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _withSeparators(children, colors.separator),
+            ),
+          ).csacCardEnter(),
           if (footer != null)
             Padding(
               padding: const EdgeInsets.only(left: 4, top: 6),
@@ -267,11 +419,13 @@ class _CupertinoGroupedCard extends StatelessWidget {
     for (var i = 0; i < items.length; i++) {
       result.add(items[i]);
       if (i < items.length - 1) {
-        result.add(Container(
-          height: 0.5,
-          margin: const EdgeInsets.only(left: 60),
-          color: color.withValues(alpha: 0.55),
-        ));
+        result.add(
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.only(left: 60),
+            color: color.withValues(alpha: 0.55),
+          ),
+        );
       }
     }
     return result;
@@ -303,18 +457,14 @@ class _CupertinoListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return _CsacPressable(
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: _csacListMinHeight),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(width: 12),
-            ],
+            if (leading != null) ...[leading!, const SizedBox(width: 12)],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,10 +590,17 @@ class _InlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(CupertinoIcons.exclamationmark_circle, size: 16, color: colors.destructive),
+          Icon(
+            CupertinoIcons.exclamationmark_circle,
+            size: 16,
+            color: colors.destructive,
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(message, style: TextStyle(fontSize: 13, color: colors.destructive)),
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: colors.destructive),
+            ),
           ),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -473,7 +630,10 @@ Future<bool> _showCupertinoConfirm(
     builder: (ctx) => CupertinoAlertDialog(
       title: Text(title),
       content: message != null
-          ? Padding(padding: const EdgeInsets.only(top: 4), child: Text(message))
+          ? Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(message),
+            )
           : null,
       actions: [
         CupertinoDialogAction(
@@ -516,35 +676,38 @@ Future<T?> _showAdaptiveActionSheet<T>(
   if (!wide) {
     return showCupertinoModalPopup<T>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(title),
-        actions: [
-          for (final action in actions)
-            CupertinoActionSheetAction(
-              isDestructiveAction: action.destructive,
-              onPressed: () => Navigator.of(context).pop(action.value),
-              child: Text(action.label),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+      builder: (context) => _CsacBlurredPopup(
+        child: CupertinoActionSheet(
+          title: Text(title),
+          actions: [
+            for (final action in actions)
+              CupertinoActionSheetAction(
+                isDestructiveAction: action.destructive,
+                onPressed: () => Navigator.of(context).pop(action.value),
+                child: Text(strings.text(action.label)),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
         ),
-      ),
+      ).csacPopupEnter(),
     );
   }
   return showCupertinoDialog<T>(
     context: context,
-    builder: (context) => _AdaptiveDesktopActionPanel<T>(
-      title: title,
-      actions: actions,
-    ),
+    builder: (context) =>
+        _AdaptiveDesktopActionPanel<T>(title: title, actions: actions),
   );
 }
 
 class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
-  const _AdaptiveDesktopActionPanel({required this.title, required this.actions});
+  const _AdaptiveDesktopActionPanel({
+    required this.title,
+    required this.actions,
+  });
 
   final String title;
   final List<_AdaptiveSheetAction<T>> actions;
@@ -552,6 +715,7 @@ class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final strings = context.strings;
     return Center(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -563,10 +727,15 @@ class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
             decoration: BoxDecoration(
               color: colors.navBarBackground,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colors.separator.withValues(alpha: 0.35), width: 0.5),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.35),
+                width: 0.5,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: CupertinoColors.black.withValues(alpha: colors.isDark ? 0.36 : 0.12),
+                  color: CupertinoColors.black.withValues(
+                    alpha: colors.isDark ? 0.36 : 0.12,
+                  ),
                   blurRadius: 36,
                   offset: const Offset(0, 18),
                 ),
@@ -580,13 +749,17 @@ class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
                   child: Text(
                     title,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.label),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: colors.label,
+                    ),
                   ),
                 ),
                 for (final action in actions)
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    minSize: 0,
+                    minimumSize: Size.zero,
                     onPressed: () => Navigator.of(context).pop(action.value),
                     child: Container(
                       height: 48,
@@ -599,15 +772,23 @@ class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
                       child: Row(
                         children: [
                           if (action.icon != null) ...[
-                            Icon(action.icon, size: 19, color: action.destructive ? colors.destructive : colors.primaryColor),
+                            Icon(
+                              action.icon,
+                              size: 19,
+                              color: action.destructive
+                                  ? colors.destructive
+                                  : colors.primaryColor,
+                            ),
                             const SizedBox(width: 10),
                           ],
                           Expanded(
                             child: Text(
-                              action.label,
+                              strings.text(action.label),
                               style: TextStyle(
                                 fontSize: 15,
-                                color: action.destructive ? colors.destructive : colors.label,
+                                color: action.destructive
+                                    ? colors.destructive
+                                    : colors.label,
                               ),
                             ),
                           ),
@@ -626,7 +807,12 @@ class _AdaptiveDesktopActionPanel<T> extends StatelessWidget {
 
 /// 徽章图标
 class _BadgeIcon extends StatelessWidget {
-  const _BadgeIcon({required this.icon, required this.count, this.color, this.size = 24});
+  const _BadgeIcon({
+    required this.icon,
+    required this.count,
+    this.color,
+    this.size = 24,
+  });
   final IconData icon;
   final int count;
   final Color? color;
@@ -702,6 +888,8 @@ class _ToastWidgetState extends State<_ToastWidget>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
@@ -710,7 +898,13 @@ class _ToastWidgetState extends State<_ToastWidget>
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    final curve = CurvedAnimation(parent: _ctrl, curve: _csacEaseOut);
+    _opacity = curve;
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.18),
+      end: Offset.zero,
+    ).animate(curve);
+    _scale = Tween<double>(begin: 0.97, end: 1).animate(curve);
     _ctrl.forward();
     Future.delayed(const Duration(milliseconds: 2200), () {
       if (mounted) _ctrl.reverse().then((_) => widget.onDismiss());
@@ -729,27 +923,36 @@ class _ToastWidgetState extends State<_ToastWidget>
       bottom: MediaQuery.of(context).viewInsets.bottom + 72,
       left: 48,
       right: 48,
-      child: FadeTransition(
-        opacity: _opacity,
-        child: Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                decoration: BoxDecoration(
-                  color: const Color(0xE0000000),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  widget.message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.none,
+      child: SlideTransition(
+        position: _slide,
+        child: ScaleTransition(
+          scale: _scale,
+          child: FadeTransition(
+            opacity: _opacity,
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE0000000),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      widget.message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: CupertinoColors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -807,12 +1010,13 @@ class _FloatingTabBar extends StatelessWidget {
                 final item = items[i];
                 final selected = i == selectedIndex;
                 return Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
+                  child: _CsacPressable(
                     onTap: () => onTap(i),
+                    scale: 0.94,
+                    opacity: 0.84,
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
+                      duration: _csacMotionFast,
+                      curve: _csacEaseInOut,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

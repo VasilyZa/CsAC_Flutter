@@ -29,7 +29,7 @@ class CsacApiClient {
     configureApiAssetBaseUrl(_baseUrl);
   }
 
-  static const defaultBaseUrl = 'https://cschat.ccccocccc.cc/rpc/UniCsAC.php';
+  static const defaultBaseUrl = 'http://103.40.14.14:24582/rpc/UniCsAC.php';
   static const _defaultApiPath = '/rpc/UniCsAC.php';
   static const _sessionKey = 'csac.cookies';
 
@@ -646,6 +646,27 @@ class CsacApiClient {
     );
   }
 
+  Future<void> sendFileMessage(
+    Conversation conversation,
+    Uint8List fileBytes,
+    String fileName,
+  ) {
+    final fields = <String, String>{
+      if (conversation.type == ConversationType.group)
+        'room_id': '${conversation.id}',
+      if (conversation.type == ConversationType.private)
+        'friend_id': '${conversation.id}',
+    };
+    return postMultipart(
+      'message/send_file_msg',
+      fields,
+      fileField: 'file',
+      fileBytes: fileBytes,
+      fileName: fileName,
+      contentType: MediaType('application', 'octet-stream'),
+    );
+  }
+
   Future<http.Response> downloadAsset(
     String url, {
     String accept = '*/*',
@@ -816,6 +837,15 @@ class CsacApiClient {
     }
     if (lower.endsWith('.mp3') || lower.endsWith('.mpeg')) {
       return MediaType('audio', 'mpeg');
+    }
+    if (lower.endsWith('.aac')) {
+      return MediaType('audio', 'aac');
+    }
+    if (lower.endsWith('.amr')) {
+      return MediaType('audio', 'amr');
+    }
+    if (lower.endsWith('.3gp')) {
+      return MediaType('audio', '3gpp');
     }
     return MediaType('audio', 'mp4');
   }

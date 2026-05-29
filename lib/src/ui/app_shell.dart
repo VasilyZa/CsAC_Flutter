@@ -9,10 +9,12 @@ CupertinoThemeData buildCupertinoTheme(Brightness brightness, Color seedColor) {
   return CupertinoThemeData(
     brightness: brightness,
     primaryColor: seedColor,
-    scaffoldBackgroundColor:
-        isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
-    barBackgroundColor:
-        isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF9F9F9),
+    scaffoldBackgroundColor: isDark
+        ? const Color(0xFF000000)
+        : const Color(0xFFF2F2F7),
+    barBackgroundColor: isDark
+        ? const Color(0xCC1C1C1E)
+        : const Color(0xCCF9F9F9),
     textTheme: CupertinoTextThemeData(
       primaryColor: seedColor,
       textStyle: TextStyle(
@@ -191,7 +193,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (_username.text.trim().isEmpty || _password.text.isEmpty) {
-      setState(() => _error = context.strings.text('Username and password are required.'));
+      setState(
+        () => _error = context.strings.text(
+          'Username and password are required.',
+        ),
+      );
       return;
     }
     setState(() => _error = null);
@@ -204,19 +210,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _openRegister() async {
     setState(() => _error = null);
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(builder: (_) => RegisterScreen(state: widget.state)),
-    );
+    await _csacPush<void>(context, (_) => RegisterScreen(state: widget.state));
     if (mounted) setState(() {});
   }
 
   Future<void> _openServerSettings() async {
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => SettingsScreen(
-          state: widget.state,
-          initialDeveloperOptionsExpanded: true,
-        ),
+    await _csacPush<void>(
+      context,
+      (_) => SettingsScreen(
+        state: widget.state,
+        initialDeveloperOptionsExpanded: true,
       ),
     );
     if (mounted) setState(() {});
@@ -280,7 +283,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     strings.text('Sign in to continue'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, color: colors.secondaryLabel),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colors.secondaryLabel,
+                    ),
                   ),
                   const SizedBox(height: 36),
 
@@ -315,19 +321,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: colors.destructive.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
                         children: [
-                          Icon(CupertinoIcons.exclamationmark_circle, size: 15, color: colors.destructive),
+                          Icon(
+                            CupertinoIcons.exclamationmark_circle,
+                            size: 15,
+                            color: colors.destructive,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _error!,
-                              style: TextStyle(fontSize: 13, color: colors.destructive),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.destructive,
+                              ),
                             ),
                           ),
                         ],
@@ -362,7 +378,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Center(
                         child: widget.state.loading
-                            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                            ? const CupertinoActivityIndicator(
+                                color: CupertinoColors.white,
+                              )
                             : Text(
                                 strings.text('Login'),
                                 style: const TextStyle(
@@ -406,18 +424,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(CupertinoIcons.globe, size: 13, color: colors.tertiaryLabel),
+                        Icon(
+                          CupertinoIcons.globe,
+                          size: 13,
+                          color: colors.tertiaryLabel,
+                        ),
                         const SizedBox(width: 5),
                         Flexible(
                           child: Text(
                             serverUrl,
-                            style: TextStyle(fontSize: 12, color: colors.tertiaryLabel),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.tertiaryLabel,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(CupertinoIcons.pencil, size: 11, color: colors.tertiaryLabel),
+                        Icon(
+                          CupertinoIcons.pencil,
+                          size: 11,
+                          color: colors.tertiaryLabel,
+                        ),
                       ],
                     ),
                   ),
@@ -503,29 +532,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _chooseAvatar() async {
-    final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
     if (picked == null || !mounted) return;
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
-    setState(() { _avatarBytes = bytes; _avatarFileName = picked.name; });
+    setState(() {
+      _avatarBytes = bytes;
+      _avatarFileName = picked.name;
+    });
   }
 
   String? _validate() {
     final name = _username.text.trim();
     final nick = _nickname.text.trim();
-    if (name.length < 3 || name.length > 32) return context.strings.text('Username must be 3-32 characters.');
-    if (!RegExp(r'^[A-Za-z0-9_@.-]+$').hasMatch(name)) return context.strings.text('Username can only contain letters, numbers, _, @, ., and -.');
+    if (name.length < 3 || name.length > 32) {
+      return context.strings.text('Username must be 3-32 characters.');
+    }
+    if (!RegExp(r'^[A-Za-z0-9_@.-]+$').hasMatch(name)) {
+      return context.strings.text(
+        'Username can only contain letters, numbers, _, @, ., and -.',
+      );
+    }
     if (nick.isEmpty) return context.strings.text('Please enter a nickname.');
-    if (nick.length > 16) return context.strings.text('Nickname can be up to 16 characters.');
-    if (_password.text.length < 6) return context.strings.text('Password must be at least 6 characters.');
-    if (_password.text != _confirmPassword.text) return context.strings.text('Passwords do not match.');
+    if (nick.length > 16) {
+      return context.strings.text('Nickname can be up to 16 characters.');
+    }
+    if (_password.text.length < 6) {
+      return context.strings.text('Password must be at least 6 characters.');
+    }
+    if (_password.text != _confirmPassword.text) {
+      return context.strings.text('Passwords do not match.');
+    }
     return null;
   }
 
   Future<void> _submit() async {
     final err = _validate();
-    if (err != null) { setState(() => _error = err); return; }
-    setState(() { _submitting = true; _error = null; });
+    if (err != null) {
+      setState(() => _error = err);
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
     try {
       await widget.state.register(
         username: _username.text.trim(),
@@ -579,17 +632,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderRadius: BorderRadius.circular(24),
                             gradient: _avatarBytes == null
                                 ? LinearGradient(
-                                    colors: [primary.withValues(alpha: 0.15), primary.withValues(alpha: 0.05)],
+                                    colors: [
+                                      primary.withValues(alpha: 0.15),
+                                      primary.withValues(alpha: 0.05),
+                                    ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   )
                                 : null,
                             image: _avatarBytes != null
-                                ? DecorationImage(image: MemoryImage(_avatarBytes!), fit: BoxFit.cover)
+                                ? DecorationImage(
+                                    image: MemoryImage(_avatarBytes!),
+                                    fit: BoxFit.cover,
+                                  )
                                 : null,
                           ),
                           child: _avatarBytes == null
-                              ? Icon(CupertinoIcons.camera_fill, size: 32, color: primary)
+                              ? Icon(
+                                  CupertinoIcons.camera_fill,
+                                  size: 32,
+                                  color: primary,
+                                )
                               : null,
                         ),
                         Positioned(
@@ -601,9 +664,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             decoration: BoxDecoration(
                               color: primary,
                               shape: BoxShape.circle,
-                              border: Border.all(color: colors.systemBackground, width: 2),
+                              border: Border.all(
+                                color: colors.systemBackground,
+                                width: 2,
+                              ),
                             ),
-                            child: const Icon(CupertinoIcons.pencil, size: 13, color: CupertinoColors.white),
+                            child: const Icon(
+                              CupertinoIcons.pencil,
+                              size: 13,
+                              color: CupertinoColors.white,
+                            ),
                           ),
                         ),
                       ],
@@ -616,22 +686,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _CupertinoGroupedCard(
                   margin: EdgeInsets.zero,
                   children: [
-                    _CupertinoFormField(controller: _username, placeholder: strings.text('Username'), icon: CupertinoIcons.at, enabled: !_submitting, textInputAction: TextInputAction.next),
-                    _CupertinoFormField(controller: _nickname, placeholder: strings.text('Nickname'), icon: CupertinoIcons.person, enabled: !_submitting, textInputAction: TextInputAction.next),
-                    _CupertinoFormField(controller: _password, placeholder: strings.text('Password'), icon: CupertinoIcons.lock, obscureText: true, enabled: !_submitting, textInputAction: TextInputAction.next),
-                    _CupertinoFormField(controller: _confirmPassword, placeholder: strings.text('Confirm password'), icon: CupertinoIcons.lock_rotation, obscureText: true, enabled: !_submitting, textInputAction: TextInputAction.done, onSubmitted: (_) => _submit()),
+                    _CupertinoFormField(
+                      controller: _username,
+                      placeholder: strings.text('Username'),
+                      icon: CupertinoIcons.at,
+                      enabled: !_submitting,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    _CupertinoFormField(
+                      controller: _nickname,
+                      placeholder: strings.text('Nickname'),
+                      icon: CupertinoIcons.person,
+                      enabled: !_submitting,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    _CupertinoFormField(
+                      controller: _password,
+                      placeholder: strings.text('Password'),
+                      icon: CupertinoIcons.lock,
+                      obscureText: true,
+                      enabled: !_submitting,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    _CupertinoFormField(
+                      controller: _confirmPassword,
+                      placeholder: strings.text('Confirm password'),
+                      icon: CupertinoIcons.lock_rotation,
+                      obscureText: true,
+                      enabled: !_submitting,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                    ),
                   ],
                 ),
 
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: colors.destructive.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(_error!, style: TextStyle(fontSize: 13, color: colors.destructive)),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(fontSize: 13, color: colors.destructive),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -648,20 +751,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
-                        BoxShadow(color: primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                        BoxShadow(
+                          color: primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
                       ],
                     ),
                     child: Center(
                       child: _submitting
-                          ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                          : Text(strings.text('Create account'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: CupertinoColors.white)),
+                          ? const CupertinoActivityIndicator(
+                              color: CupertinoColors.white,
+                            )
+                          : Text(
+                              strings.text('Create account'),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: CupertinoColors.white,
+                              ),
+                            ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 CupertinoButton(
                   onPressed: _submitting ? null : () => Navigator.pop(context),
-                  child: Text(strings.text('Back to login'), style: TextStyle(color: primary)),
+                  child: Text(
+                    strings.text('Back to login'),
+                    style: TextStyle(color: primary),
+                  ),
                 ),
               ],
             ),

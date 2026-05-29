@@ -2,7 +2,15 @@ part of '../../main.dart';
 
 enum _PendingSendStatus { sending, failed }
 
-enum _ComposeMenuAction { image, voice, mention }
+enum _ComposeMenuAction {
+  image,
+  recordVoice,
+  audioFile,
+  genericFile,
+  media,
+  export,
+  mention,
+}
 
 class _VoiceFileType {
   const _VoiceFileType(this.extension, this.mimeType);
@@ -20,6 +28,8 @@ class _PendingSend {
     this.voiceBytes,
     this.voiceName = '',
     this.voiceDuration = 0,
+    this.fileBytes,
+    this.fileName = '',
     this.replyTo = 0,
     this.mentionUids = const <int>[],
     this.status = _PendingSendStatus.sending,
@@ -33,6 +43,8 @@ class _PendingSend {
   final Uint8List? voiceBytes;
   final String voiceName;
   final int voiceDuration;
+  final Uint8List? fileBytes;
+  final String fileName;
   final int replyTo;
   final List<int> mentionUids;
   final _PendingSendStatus status;
@@ -40,6 +52,7 @@ class _PendingSend {
 
   bool get hasImage => imageBytes != null;
   bool get hasVoice => voiceBytes != null;
+  bool get hasFile => fileBytes != null;
 
   _PendingSend copyWith({
     String? text,
@@ -48,6 +61,8 @@ class _PendingSend {
     Uint8List? voiceBytes,
     String? voiceName,
     int? voiceDuration,
+    Uint8List? fileBytes,
+    String? fileName,
     int? replyTo,
     List<int>? mentionUids,
     _PendingSendStatus? status,
@@ -61,12 +76,28 @@ class _PendingSend {
       voiceBytes: voiceBytes ?? this.voiceBytes,
       voiceName: voiceName ?? this.voiceName,
       voiceDuration: voiceDuration ?? this.voiceDuration,
+      fileBytes: fileBytes ?? this.fileBytes,
+      fileName: fileName ?? this.fileName,
       replyTo: replyTo ?? this.replyTo,
       mentionUids: mentionUids ?? this.mentionUids,
       status: status ?? this.status,
       error: error ?? this.error,
     );
   }
+}
+
+class _VoiceDraft {
+  const _VoiceDraft({
+    required this.bytes,
+    required this.fileName,
+    required this.durationSeconds,
+    this.sourceLabel = '',
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final int durationSeconds;
+  final String sourceLabel;
 }
 
 class ChatScreen extends StatefulWidget {
@@ -95,7 +126,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final audioRecorder = AudioRecorder();
   final audioPlayer = AudioPlayer();
   StreamSubscription<Object?>? audioErrorSubscription;
+  StreamSubscription<void>? audioCompleteSubscription;
   Timer? chatSearchTimer;
+  Timer? recordingTicker;
   final itemKeys = <int, GlobalKey>{};
   final messages = <ChatMessage>[];
   final pendingSends = <_PendingSend>[];
@@ -113,12 +146,18 @@ class _ChatScreenState extends State<ChatScreen> {
   DateTime? recordingStartedAt;
   String? recordingPath;
   int? playingMessageId;
+  int? voicePreviewToken;
+  int recordingElapsedSeconds = 0;
+  Duration voicePosition = Duration.zero;
+  Duration voiceDuration = Duration.zero;
+  _VoiceDraft? voiceDraft;
   bool loading = true;
   bool refreshing = false;
   bool pickingImage = false;
   bool searchMode = false;
   bool chatSearching = false;
   bool recording = false;
+  bool previewingVoiceDraft = false;
   bool applyingDraft = false;
   bool applyingMentionText = false;
   bool mentionPickerOpen = false;
@@ -129,6 +168,20 @@ class _ChatScreenState extends State<ChatScreen> {
   String? error;
 
   bool get selectionMode => selectedMessageIds.isNotEmpty;
+
+  double get voiceDraftProgress {
+    final draft = voiceDraft;
+    if (draft == null || voicePreviewToken == null) {
+      return 0;
+    }
+    final duration = voiceDuration.inMilliseconds > 0
+        ? voiceDuration
+        : Duration(seconds: draft.durationSeconds);
+    if (duration.inMilliseconds <= 0) {
+      return 0.35;
+    }
+    return voicePosition.inMilliseconds / duration.inMilliseconds;
+  }
 
   List<ChatMessage> get selectedMessages {
     return messages
@@ -160,6 +213,18 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       },
     );
+    audioPlayer.onPositionChanged.listen((position) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => voicePosition = position);
+    }, onError: handleAudioPlaybackError);
+    audioPlayer.onDurationChanged.listen((duration) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => voiceDuration = duration);
+    }, onError: handleAudioPlaybackError);
     timer = Timer.periodic(
       const Duration(seconds: 4),
       (_) => refresh(silent: true),
@@ -171,7 +236,9 @@ class _ChatScreenState extends State<ChatScreen> {
     timer?.cancel();
     draftTimer?.cancel();
     chatSearchTimer?.cancel();
+    recordingTicker?.cancel();
     audioErrorSubscription?.cancel();
+    audioCompleteSubscription?.cancel();
     audioPlayer.dispose();
     audioRecorder.dispose();
     unawaited(ConversationDraftStore.save(widget.conversation, input.text));
@@ -193,6 +260,58 @@ class _ChatScreenState extends State<ChatScreen> {
     if (shouldShow != showJumpToBottom && mounted) {
       setState(() => showJumpToBottom = shouldShow);
     }
+  }
+
+  void handleAudioPlaybackError(Object err) {
+    if (!mounted) {
+      return;
+    }
+    unawaited(audioCompleteSubscription?.cancel());
+    audioCompleteSubscription = null;
+    setState(() {
+      playingMessageId = null;
+      voicePreviewToken = null;
+      previewingVoiceDraft = false;
+      voicePosition = Duration.zero;
+      voiceDuration = Duration.zero;
+    });
+    showSnack(
+      context.strings.format('Playback failed: {error}', {'error': err}),
+    );
+  }
+
+  void listenForAudioComplete({int? messageId, int? previewToken}) {
+    unawaited(audioCompleteSubscription?.cancel());
+    audioCompleteSubscription = audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) {
+        return;
+      }
+      if (previewToken != null) {
+        if (voicePreviewToken != previewToken) {
+          return;
+        }
+        setState(() {
+          voicePreviewToken = null;
+          previewingVoiceDraft = false;
+          voicePosition = Duration.zero;
+        });
+        return;
+      }
+      if (messageId == null || playingMessageId != messageId) {
+        return;
+      }
+      final next = widget.state.preferences.chat.voiceContinuousPlayback
+          ? nextVoiceMessageAfter(messageId)
+          : null;
+      setState(() {
+        playingMessageId = null;
+        voicePosition = Duration.zero;
+        voiceDuration = Duration.zero;
+      });
+      if (next != null) {
+        unawaited(toggleVoicePlayback(next));
+      }
+    }, onError: handleAudioPlaybackError);
   }
 
   int? get firstUnreadMessageId {
@@ -392,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ..addAll(cached);
         loading = cached.isEmpty;
       });
-      if (cached.isNotEmpty) {
+      if (cached.isNotEmpty && focusId != null) {
         scrollAfterLoad();
       }
       final loaded = cached.isEmpty
@@ -411,7 +530,6 @@ class _ChatScreenState extends State<ChatScreen> {
         offline = false;
       });
       await markCurrentConversationRead();
-      scrollAfterLoad();
     } catch (err) {
       if (!mounted) {
         return;
@@ -429,6 +547,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       if (mounted) {
         setState(() => loading = false);
+        if (messages.isNotEmpty) {
+          scrollAfterInitialLoad();
+        }
       }
     }
   }
@@ -619,10 +740,50 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> toggleRecording() async {
     if (recording) {
-      await stopAndSendVoice();
+      await stopRecordingToDraft();
       return;
     }
     await startRecording();
+  }
+
+  void startRecordingTimer() {
+    recordingTicker?.cancel();
+    recordingElapsedSeconds = 0;
+    recordingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      final startedAt = recordingStartedAt;
+      if (!mounted || startedAt == null) {
+        return;
+      }
+      setState(() {
+        recordingElapsedSeconds = DateTime.now()
+            .difference(startedAt)
+            .inSeconds
+            .clamp(0, 600);
+      });
+    });
+  }
+
+  Future<void> cancelRecording() async {
+    if (!recording) {
+      return;
+    }
+    try {
+      await audioRecorder.stop();
+    } catch (_) {}
+    recordingTicker?.cancel();
+    final path = recordingPath;
+    if (path != null && path.isNotEmpty) {
+      unawaited(File(path).delete().then<void>((_) {}).catchError((_) {}));
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      recording = false;
+      recordingPath = null;
+      recordingStartedAt = null;
+      recordingElapsedSeconds = 0;
+    });
   }
 
   Future<void> startRecording() async {
@@ -643,9 +804,8 @@ class _ChatScreenState extends State<ChatScreen> {
         showSnack(permissionMessage);
         return;
       }
-      var encoder = (Platform.isLinux || Platform.isWindows)
-          ? AudioEncoder.wav
-          : AudioEncoder.aacLc;
+      final isMobile = Platform.isAndroid || Platform.isIOS;
+      var encoder = isMobile ? AudioEncoder.aacLc : AudioEncoder.wav;
       var extension = encoder == AudioEncoder.wav ? 'wav' : 'm4a';
       if (!await audioRecorder.isEncoderSupported(encoder)) {
         encoder = AudioEncoder.wav;
@@ -663,8 +823,9 @@ class _ChatScreenState extends State<ChatScreen> {
       await audioRecorder.start(
         RecordConfig(
           encoder: encoder,
-          bitRate: Platform.isAndroid ? 64000 : 128000,
+          bitRate: isMobile ? 64000 : 128000,
           numChannels: 1,
+          sampleRate: isMobile ? 44100 : 0,
         ),
         path: path,
       );
@@ -675,8 +836,10 @@ class _ChatScreenState extends State<ChatScreen> {
         recording = true;
         recordingPath = path;
         recordingStartedAt = DateTime.now();
+        recordingElapsedSeconds = 0;
         error = null;
       });
+      startRecordingTimer();
     } catch (err) {
       if (mounted) {
         showSnack(failedMessage.replaceAll('{error}', '$err'));
@@ -684,7 +847,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> stopAndSendVoice() async {
+  Future<void> stopRecordingToDraft() async {
     final notSavedMessage = context.strings.text(
       'No voice recording was saved.',
     );
@@ -693,6 +856,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final fallbackPath = recordingPath;
       final path = await audioRecorder.stop();
+      recordingTicker?.cancel();
       final startedAt = recordingStartedAt;
       if (!mounted) {
         return;
@@ -701,6 +865,7 @@ class _ChatScreenState extends State<ChatScreen> {
         recording = false;
         recordingPath = null;
         recordingStartedAt = null;
+        recordingElapsedSeconds = 0;
       });
       final resolvedPath = path?.isNotEmpty == true ? path : fallbackPath;
       if (resolvedPath == null || resolvedPath.isEmpty) {
@@ -720,30 +885,270 @@ class _ChatScreenState extends State<ChatScreen> {
         showSnack(tooShortMessage);
         return;
       }
+      setState(() {
+        voiceDraft = _VoiceDraft(
+          bytes: bytes,
+          fileName: p.basename(resolvedPath),
+          durationSeconds: duration,
+          sourceLabel: context.strings.text('Recorded voice'),
+        );
+        error = null;
+      });
+    } catch (err) {
+      if (mounted) {
+        recordingTicker?.cancel();
+        setState(() {
+          recording = false;
+          recordingPath = null;
+          recordingStartedAt = null;
+          recordingElapsedSeconds = 0;
+        });
+        showSnack(failedMessage.replaceAll('{error}', '$err'));
+      }
+    }
+  }
+
+  void discardVoiceDraft() {
+    if (voicePreviewToken != null) {
+      unawaited(audioCompleteSubscription?.cancel());
+      audioCompleteSubscription = null;
+      unawaited(audioPlayer.stop());
+    }
+    setState(() {
+      voiceDraft = null;
+      previewingVoiceDraft = false;
+      voicePreviewToken = null;
+      voicePosition = Duration.zero;
+      voiceDuration = Duration.zero;
+    });
+  }
+
+  Future<void> sendVoiceDraft() async {
+    final draft = voiceDraft;
+    if (draft == null) {
+      return;
+    }
+    if (voicePreviewToken != null) {
+      await audioCompleteSubscription?.cancel();
+      audioCompleteSubscription = null;
+      await audioPlayer.stop();
+    }
+    final pending = _PendingSend(
+      localId: nextPendingId--,
+      text: '',
+      voiceBytes: draft.bytes,
+      voiceName: draft.fileName,
+      voiceDuration: draft.durationSeconds,
+      replyTo: replyTarget?.id ?? 0,
+      mentionUids: mentionTargets.map((member) => member.uid).toList(),
+    );
+    setState(() {
+      voiceDraft = null;
+      previewingVoiceDraft = false;
+      voicePreviewToken = null;
+      voicePosition = Duration.zero;
+      voiceDuration = Duration.zero;
+      pendingSends.add(pending);
+      replyTarget = null;
+      mentionTargets.clear();
+      error = null;
+    });
+    scrollToEnd();
+    unawaited(performPendingSend(pending.localId));
+  }
+
+  Future<void> previewVoiceDraft() async {
+    final draft = voiceDraft;
+    if (draft == null) {
+      return;
+    }
+    final strings = context.strings;
+    try {
+      if (voicePreviewToken != null) {
+        await audioCompleteSubscription?.cancel();
+        audioCompleteSubscription = null;
+        await audioPlayer.stop();
+        if (mounted) {
+          setState(() {
+            voicePreviewToken = null;
+            previewingVoiceDraft = false;
+          });
+        }
+        return;
+      }
+      await audioPlayer.stop();
+      final dir = await getTemporaryDirectory();
+      final fileType = resolveVoiceFileType(draft.bytes, null, draft.fileName);
+      final extension = fileType?.extension ?? voiceExtension(draft.fileName);
+      var file = File(
+        p.join(
+          dir.path,
+          'csac_voice_preview_${DateTime.now().millisecondsSinceEpoch}.$extension',
+        ),
+      );
+      await file.writeAsBytes(draft.bytes, flush: true);
+      file = await linuxPlayableVoiceFile(file, fileType, strings);
+      final token = DateTime.now().microsecondsSinceEpoch;
+      await audioPlayer.play(
+        DeviceFileSource(
+          file.path,
+          mimeType: p.extension(file.path).toLowerCase() == '.wav'
+              ? 'audio/wav'
+              : fileType?.mimeType,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        playingMessageId = null;
+        voicePreviewToken = token;
+        previewingVoiceDraft = true;
+        voicePosition = Duration.zero;
+        voiceDuration = Duration(seconds: draft.durationSeconds);
+      });
+      listenForAudioComplete(previewToken: token);
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          playingMessageId = null;
+          voicePosition = Duration.zero;
+          voiceDuration = Duration.zero;
+        });
+        showSnack(
+          context.strings.format('Playback failed: {error}', {'error': err}),
+        );
+      }
+    }
+  }
+
+  Future<void> pickVoiceFile() async {
+    if (conversationUnavailable) {
+      showSnack(context.strings.text('This group is no longer available.'));
+      return;
+    }
+    final strings = context.strings;
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: <XTypeGroup>[
+          XTypeGroup(
+            label: strings.text('Audio files'),
+            extensions: voiceExtensions,
+            mimeTypes: const ['audio/*'],
+          ),
+        ],
+      );
+      if (file == null) {
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        showSnack(strings.text('No voice recording was saved.'));
+        return;
+      }
+      final fileName = file.name.isEmpty ? p.basename(file.path) : file.name;
+      final estimatedDuration = await estimateVoiceDuration(bytes, fileName);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        voiceDraft = _VoiceDraft(
+          bytes: bytes,
+          fileName: fileName,
+          durationSeconds: estimatedDuration,
+          sourceLabel: strings.text('Audio file'),
+        );
+        error = null;
+      });
+    } catch (err) {
+      if (mounted) {
+        showSnack(strings.format('Update failed: {error}', {'error': err}));
+      }
+    }
+  }
+
+  Future<void> pickAndSendFile() async {
+    if (conversationUnavailable) {
+      showSnack(context.strings.text('This group is no longer available.'));
+      return;
+    }
+    final strings = context.strings;
+    try {
+      final file = await openFile();
+      if (file == null) {
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+      if (bytes.isEmpty) {
+        showSnack(strings.text('Selected file is empty.'));
+        return;
+      }
+      final name = file.name.isEmpty ? p.basename(file.path) : file.name;
+      final confirmed = await _showCupertinoConfirm(
+        context,
+        title: strings.format('Send file: {fileName}', {'fileName': name}),
+        message: strings.text('Send this file to the current chat?'),
+        confirmText: 'Send',
+      );
+      if (!confirmed || !mounted) {
+        return;
+      }
       final pending = _PendingSend(
         localId: nextPendingId--,
         text: '',
-        voiceBytes: bytes,
-        voiceName: p.basename(resolvedPath),
-        voiceDuration: duration,
+        fileBytes: bytes,
+        fileName: name,
       );
       setState(() {
         pendingSends.add(pending);
-        replyTarget = null;
-        mentionTargets.clear();
         error = null;
       });
       scrollToEnd();
       unawaited(performPendingSend(pending.localId));
     } catch (err) {
       if (mounted) {
-        setState(() {
-          recording = false;
-          recordingPath = null;
-          recordingStartedAt = null;
-        });
-        showSnack(failedMessage.replaceAll('{error}', '$err'));
+        showSnack(
+          strings.format('Send failed with error: {error}', {'error': err}),
+        );
       }
+    }
+  }
+
+  Future<int> estimateVoiceDuration(Uint8List bytes, String fileName) async {
+    final strings = context.strings;
+    try {
+      final fileType = resolveVoiceFileType(bytes, null, fileName);
+      final dir = await getTemporaryDirectory();
+      final extension = fileType?.extension ?? voiceExtension(fileName);
+      var file = File(
+        p.join(
+          dir.path,
+          'csac_voice_probe_${DateTime.now().microsecondsSinceEpoch}.$extension',
+        ),
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      file = await linuxPlayableVoiceFile(file, fileType, strings);
+      final player = AudioPlayer();
+      try {
+        await player.setSource(
+          DeviceFileSource(
+            file.path,
+            mimeType: p.extension(file.path).toLowerCase() == '.wav'
+                ? 'audio/wav'
+                : fileType?.mimeType,
+          ),
+        );
+        final duration = await player.getDuration();
+        return duration?.inSeconds.clamp(0, 600) ?? 0;
+      } finally {
+        await player.dispose();
+        unawaited(file.delete().then<void>((_) {}).catchError((_) {}));
+      }
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -765,6 +1170,12 @@ class _ChatScreenState extends State<ChatScreen> {
           pending.voiceBytes!,
           pending.voiceName,
           durationSeconds: pending.voiceDuration,
+        );
+      } else if (pending.hasFile) {
+        await widget.state.client.sendFileMessage(
+          widget.conversation,
+          pending.fileBytes!,
+          pending.fileName,
         );
       } else if (pending.hasImage) {
         await widget.state.client.sendImageMessage(
@@ -837,6 +1248,37 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void openChatSearch() {
     setState(() => searchMode = true);
+  }
+
+  void openMediaDrawer() {
+    _csacPush<void>(
+      context,
+      (_) => ConversationMediaScreen(
+        state: widget.state,
+        conversation: widget.conversation,
+        onOpenMessage: (messageId) {
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          unawaited(
+            ensureMessagesAround(messageId).then((_) {
+              if (mounted) {
+                scrollToMessage(messageId);
+              }
+            }),
+          );
+        },
+      ),
+    );
+  }
+
+  void openChatArchive() {
+    _csacPush<void>(
+      context,
+      (_) => ChatArchiveScreen(
+        state: widget.state,
+        conversation: widget.conversation,
+      ),
+    );
   }
 
   void closeChatSearch() {
@@ -944,25 +1386,41 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     try {
+      if (voicePreviewToken != null) {
+        setState(() {
+          voicePreviewToken = null;
+          previewingVoiceDraft = false;
+        });
+      }
       if (playingMessageId == message.id) {
+        await audioCompleteSubscription?.cancel();
+        audioCompleteSubscription = null;
         await audioPlayer.pause();
         if (mounted) {
-          setState(() => playingMessageId = null);
+          setState(() {
+            playingMessageId = null;
+            voicePosition = Duration.zero;
+            voiceDuration = Duration.zero;
+          });
         }
         return;
       }
+      await audioCompleteSubscription?.cancel();
+      audioCompleteSubscription = null;
       await audioPlayer.stop();
       final source = await localVoiceSource(message.voiceUrl);
       await audioPlayer.play(source);
       if (!mounted) {
         return;
       }
-      setState(() => playingMessageId = message.id);
-      audioPlayer.onPlayerComplete.first.then((_) {
-        if (mounted && playingMessageId == message.id) {
-          setState(() => playingMessageId = null);
-        }
+      setState(() {
+        playingMessageId = message.id;
+        voicePreviewToken = null;
+        previewingVoiceDraft = false;
+        voicePosition = Duration.zero;
+        voiceDuration = Duration(seconds: message.voiceDuration);
       });
+      listenForAudioComplete(messageId: message.id);
     } catch (err) {
       if (mounted) {
         showSnack(
@@ -972,30 +1430,195 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  double activeVoiceProgress(ChatMessage message) {
+    final duration = voiceDuration.inMilliseconds > 0
+        ? voiceDuration
+        : Duration(seconds: message.voiceDuration);
+    if (duration.inMilliseconds <= 0) {
+      return playingMessageId == message.id ? 0.35 : 0;
+    }
+    return voicePosition.inMilliseconds / duration.inMilliseconds;
+  }
+
+  ChatMessage? nextVoiceMessageAfter(int messageId) {
+    final currentIndex = messages.indexWhere(
+      (message) => message.id == messageId,
+    );
+    if (currentIndex < 0) {
+      return null;
+    }
+    for (var i = currentIndex + 1; i < messages.length; i++) {
+      final message = messages[i];
+      if (message.voiceUrl.isNotEmpty) {
+        return message;
+      }
+    }
+    return null;
+  }
+
   Future<Source> localVoiceSource(String url) async {
+    final strings = context.strings;
     final response = await widget.state.client.downloadAsset(
       url,
       accept: 'audio/*, application/octet-stream, */*',
     );
     final bytes = response.bodyBytes;
     if (bytes.isEmpty) {
-      throw Exception('Empty voice file');
+      throw Exception(strings.text('Empty voice file'));
     }
-    final fileType = resolveVoiceFileType(
-      bytes,
-      response.headers['content-type'],
-      url,
-    );
+    final fileType = detectVoiceFileType(bytes);
     if (fileType == null) {
-      throw Exception('Downloaded voice is not a playable audio file.');
+      final fallbackType = resolveVoiceDownloadFallbackType(
+        response,
+        bytes,
+        url,
+      );
+      if (fallbackType != null) {
+        return localVoiceSourceFromBytes(bytes, fallbackType, strings, url);
+      }
+      throw Exception(
+        strings.format(
+          'Downloaded voice is not a playable audio file: {detail}',
+          {'detail': voiceDownloadDiagnostic(response, bytes)},
+        ),
+      );
     }
+    return localVoiceSourceFromBytes(bytes, fileType, strings, url);
+  }
+
+  Future<Source> localVoiceSourceFromBytes(
+    Uint8List bytes,
+    _VoiceFileType fileType,
+    CsacStrings strings,
+    String url,
+  ) async {
     final dir = await getTemporaryDirectory();
     final cacheKey = Object.hash(url, bytes.length).toUnsigned(32);
-    final file = File(
+    var file = File(
       p.join(dir.path, 'csac_voice_play_$cacheKey.${fileType.extension}'),
     );
     await file.writeAsBytes(bytes, flush: true);
-    return DeviceFileSource(file.path, mimeType: fileType.mimeType);
+    file = await linuxPlayableVoiceFile(file, fileType, strings);
+    return DeviceFileSource(
+      file.path,
+      mimeType: p.extension(file.path).toLowerCase() == '.wav'
+          ? 'audio/wav'
+          : fileType.mimeType,
+    );
+  }
+
+  _VoiceFileType? resolveVoiceDownloadFallbackType(
+    http.Response response,
+    Uint8List bytes,
+    String url,
+  ) {
+    if (downloadLooksLikeTextOrHtml(bytes)) {
+      return null;
+    }
+    final fromContentType = voiceFileTypeForMime(
+      response.headers['content-type'],
+    );
+    if (fromContentType != null) {
+      return fromContentType;
+    }
+    final mimeType = voiceMimeType(url);
+    if (mimeType == null) {
+      return null;
+    }
+    final extension = voiceExtension(url);
+    if (extension == 'webm') {
+      return null;
+    }
+    return _VoiceFileType(extension, mimeType);
+  }
+
+  bool downloadLooksLikeTextOrHtml(Uint8List bytes) {
+    final head = bytes.take(256).toList();
+    final sample = utf8.decode(head, allowMalformed: true);
+    final trimmed = sample.trimLeft().toLowerCase();
+    if (trimmed.startsWith('<!doctype html') ||
+        trimmed.startsWith('<html') ||
+        trimmed.startsWith('<script')) {
+      return true;
+    }
+    final mostlyText =
+        head.isNotEmpty &&
+        head.every((byte) {
+          return byte == 0x09 || byte == 0x0a || byte == 0x0d || byte >= 0x20;
+        });
+    return mostlyText &&
+        (trimmed.startsWith('{') ||
+            trimmed.startsWith('[') ||
+            trimmed.contains('<html') ||
+            trimmed.contains('error') ||
+            trimmed.contains('exception'));
+  }
+
+  Future<File> linuxPlayableVoiceFile(
+    File source,
+    _VoiceFileType? type,
+    CsacStrings strings,
+  ) async {
+    if (!Platform.isLinux ||
+        type?.extension == 'wav' ||
+        !widget.state.preferences.chat.linuxFfmpegVoiceFallback) {
+      return source;
+    }
+    final ffmpeg = await findExecutableOnPath('ffmpeg');
+    if (ffmpeg == null) {
+      throw Exception(
+        strings.text('ffmpeg is required to play this voice on Linux.'),
+      );
+    }
+    final target = File('${source.path}.wav');
+    if (await target.exists()) {
+      return target;
+    }
+    final result = await Process.run(ffmpeg, [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      source.path,
+      '-acodec',
+      'pcm_s16le',
+      '-ac',
+      '1',
+      '-ar',
+      '44100',
+      target.path,
+    ]);
+    if (result.exitCode == 0 && await target.exists()) {
+      return target;
+    }
+    final detail = '${result.stderr}'.trim();
+    throw Exception(
+      strings.format('Voice conversion failed: {error}', {
+        'error': detail.isEmpty ? 'ffmpeg exit ${result.exitCode}' : detail,
+      }),
+    );
+  }
+
+  Future<String?> findExecutableOnPath(String executable) async {
+    final directories = <String>{
+      ...?Platform.environment['PATH']?.split(':'),
+      '/usr/bin',
+      '/usr/local/bin',
+      '/bin',
+      '/snap/bin',
+      '/var/lib/flatpak/exports/bin',
+    };
+    for (final directory in directories) {
+      if (directory.trim().isEmpty) {
+        continue;
+      }
+      final candidate = File(p.join(directory, executable));
+      if (await candidate.exists()) {
+        return candidate.path;
+      }
+    }
+    return null;
   }
 
   _VoiceFileType? resolveVoiceFileType(
@@ -1019,6 +1642,15 @@ class _ChatScreenState extends State<ChatScreen> {
     return _VoiceFileType(extension, mimeType);
   }
 
+  String voiceDownloadDiagnostic(http.Response response, Uint8List bytes) {
+    final contentType = response.headers['content-type'] ?? 'unknown';
+    final sample = bytes
+        .take(64)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join(' ');
+    return 'HTTP ${response.statusCode}, content-type: $contentType, bytes: ${bytes.length}, head: $sample';
+  }
+
   _VoiceFileType? detectVoiceFileType(Uint8List bytes) {
     bool startsWith(List<int> header, [int offset = 0]) {
       if (bytes.length < offset + header.length) {
@@ -1035,6 +1667,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (startsWith(const [0x52, 0x49, 0x46, 0x46]) &&
         startsWith(const [0x57, 0x41, 0x56, 0x45], 8)) {
       return const _VoiceFileType('wav', 'audio/wav');
+    }
+    if (startsWith(const [0x66, 0x4c, 0x61, 0x43])) {
+      return const _VoiceFileType('flac', 'audio/flac');
     }
     if (startsWith(const [0x4f, 0x67, 0x67, 0x53])) {
       return const _VoiceFileType('ogg', 'audio/ogg');
@@ -1053,7 +1688,16 @@ class _ChatScreenState extends State<ChatScreen> {
       return const _VoiceFileType('amr', 'audio/amr');
     }
     if (startsWith(const [0x66, 0x74, 0x79, 0x70], 4)) {
+      final brand = String.fromCharCodes(
+        bytes.sublist(8, min(bytes.length, 12)),
+      ).toLowerCase();
+      if (brand.startsWith('3g')) {
+        return const _VoiceFileType('3gp', 'audio/3gpp');
+      }
       return const _VoiceFileType('m4a', 'audio/mp4');
+    }
+    if (startsWith(const [0x63, 0x61, 0x66, 0x66])) {
+      return const _VoiceFileType('caf', 'audio/x-caf');
     }
     return null;
   }
@@ -1070,8 +1714,12 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'audio/vnd.wave':
         return const _VoiceFileType('wav', 'audio/wav');
       case 'audio/ogg':
+      case 'audio/opus':
       case 'application/ogg':
         return const _VoiceFileType('ogg', 'audio/ogg');
+      case 'audio/flac':
+      case 'audio/x-flac':
+        return const _VoiceFileType('flac', 'audio/flac');
       case 'audio/webm':
         return const _VoiceFileType('webm', 'audio/webm');
       case 'audio/mpeg':
@@ -1085,6 +1733,9 @@ class _ChatScreenState extends State<ChatScreen> {
         return const _VoiceFileType('3gp', 'audio/3gpp');
       case 'audio/amr':
         return const _VoiceFileType('amr', 'audio/amr');
+      case 'audio/x-caf':
+      case 'audio/caf':
+        return const _VoiceFileType('caf', 'audio/x-caf');
     }
     return null;
   }
@@ -1112,6 +1763,12 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path.endsWith('.ogg')) {
       return 'audio/ogg';
     }
+    if (path.endsWith('.opus')) {
+      return 'audio/ogg';
+    }
+    if (path.endsWith('.flac')) {
+      return 'audio/flac';
+    }
     if (path.endsWith('.webm')) {
       return 'audio/webm';
     }
@@ -1123,6 +1780,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (path.endsWith('.amr')) {
       return 'audio/amr';
+    }
+    if (path.endsWith('.caf')) {
+      return 'audio/x-caf';
     }
     return null;
   }
@@ -1231,12 +1891,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> openEssenceList() {
-    return Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => EssenceMessagesScreen(
-          state: widget.state,
-          conversation: widget.conversation,
-        ),
+    return _csacPush<void>(
+      context,
+      (_) => EssenceMessagesScreen(
+        state: widget.state,
+        conversation: widget.conversation,
       ),
     );
   }
@@ -1244,11 +1903,13 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> showMessageActions(ChatMessage message, bool mine) async {
     final action = await showCupertinoModalPopup<_MessageAction>(
       context: context,
-      builder: (context) => _MessageActionSheet(
-        message: message,
-        canRecall: message.canRecall || mine,
-        canEssence: widget.conversation.type == ConversationType.group,
-      ),
+      builder: (context) => _CsacBlurredPopup(
+        child: _MessageActionSheet(
+          message: message,
+          canRecall: message.canRecall || mine,
+          canEssence: widget.conversation.type == ConversationType.group,
+        ),
+      ).csacPopupEnter(),
     );
     if (action == null || !mounted) {
       return;
@@ -1267,14 +1928,43 @@ class _ChatScreenState extends State<ChatScreen> {
         _showCupertinoToast(context, context.strings.text('Message copied'));
         break;
       case _MessageAction.copyImage:
-        Clipboard.setData(ClipboardData(text: message.imageUrl));
-        _showCupertinoToast(context, context.strings.text('Image link copied'));
+        final link = message.imageUrl.isNotEmpty
+            ? message.imageUrl
+            : message.voiceUrl.isNotEmpty
+            ? message.voiceUrl
+            : message.fileUrl;
+        Clipboard.setData(ClipboardData(text: link));
+        _showCupertinoToast(context, context.strings.text('Link copied.'));
         break;
       case _MessageAction.openImage:
-        showImagePreview(context, message.imageUrl);
+        if (message.imageUrl.isNotEmpty) {
+          showImagePreview(context, message.imageUrl);
+        } else {
+          final link = message.voiceUrl.isNotEmpty
+              ? message.voiceUrl
+              : message.fileUrl;
+          await launchUrl(
+            Uri.parse(link),
+            mode: LaunchMode.externalApplication,
+          );
+        }
         break;
       case _MessageAction.downloadImage:
-        await downloadImage(context, message.imageUrl);
+        if (message.imageUrl.isNotEmpty) {
+          await downloadImage(context, message.imageUrl);
+        } else {
+          final item = ConversationMediaItem(
+            kind: message.voiceUrl.isNotEmpty
+                ? ConversationMediaKind.voice
+                : ConversationMediaKind.file,
+            message: message,
+            url: message.voiceUrl.isNotEmpty
+                ? message.voiceUrl
+                : message.fileUrl,
+            title: message.fileName,
+          );
+          await saveMediaItem(context, widget.state, item);
+        }
         break;
       case _MessageAction.reply:
         setReplyTarget(message);
@@ -1312,16 +2002,13 @@ class _ChatScreenState extends State<ChatScreen> {
       openUserProfile(context, widget.state, widget.conversation.id);
       return;
     }
-    Navigator.of(context)
-        .push(
-          CupertinoPageRoute<void>(
-            builder: (_) => ConversationDetailScreen(
-              state: widget.state,
-              conversation: widget.conversation,
-            ),
-          ),
-        )
-        .then((_) => loadGroupAnnouncement());
+    _csacPush<void>(
+      context,
+      (_) => ConversationDetailScreen(
+        state: widget.state,
+        conversation: widget.conversation,
+      ),
+    ).then((_) => loadGroupAnnouncement());
   }
 
   void enterSelection(ChatMessage message) {
@@ -1455,6 +2142,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (message.time.isNotEmpty) message.time,
       if (message.body.trim().isNotEmpty) message.body.trim(),
       if (message.imageUrl.isNotEmpty) message.imageUrl,
+      if (message.voiceUrl.isNotEmpty) message.voiceUrl,
+      if (message.fileUrl.isNotEmpty) message.fileUrl,
     ].join('\n');
   }
 
@@ -1464,6 +2153,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (message.body.trim().isNotEmpty) message.body.trim(),
       if (message.imageUrl.isNotEmpty)
         context.strings.format('Image: {url}', {'url': message.imageUrl}),
+      if (message.voiceUrl.isNotEmpty)
+        context.strings.format('Voice: {url}', {'url': message.voiceUrl}),
+      if (message.fileUrl.isNotEmpty)
+        context.strings.format('File: {url}', {'url': message.fileUrl}),
     ].join('\n');
   }
 
@@ -1478,6 +2171,25 @@ class _ChatScreenState extends State<ChatScreen> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  void jumpToEndAfterLayout() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scroll.hasClients) {
+          return;
+        }
+        scroll.jumpTo(scroll.position.maxScrollExtent);
+      });
+    });
+  }
+
+  void scrollAfterInitialLoad() {
+    if (widget.focusMessageId == null) {
+      jumpToEndAfterLayout();
+      return;
+    }
+    scrollAfterLoad();
   }
 
   void scrollAfterLoad() {
@@ -1536,17 +2248,10 @@ class _ChatScreenState extends State<ChatScreen> {
       context,
       title: strings.text('More actions'),
       actions: [
-        _AdaptiveSheetAction(
+        const _AdaptiveSheetAction(
           value: _ComposeMenuAction.image,
-          label: strings.text('Send image'),
+          label: 'Send image',
           icon: CupertinoIcons.photo,
-        ),
-        _AdaptiveSheetAction(
-          value: _ComposeMenuAction.voice,
-          label: recording
-              ? strings.text('Stop recording')
-              : strings.text('Voice message'),
-          icon: recording ? CupertinoIcons.stop_circle : CupertinoIcons.mic,
         ),
         if (widget.conversation.type == ConversationType.group)
           const _AdaptiveSheetAction(
@@ -1554,6 +2259,31 @@ class _ChatScreenState extends State<ChatScreen> {
             label: '@',
             icon: CupertinoIcons.at,
           ),
+        _AdaptiveSheetAction(
+          value: _ComposeMenuAction.recordVoice,
+          label: recording ? 'Stop recording' : 'Record voice',
+          icon: recording ? CupertinoIcons.stop_circle : CupertinoIcons.mic,
+        ),
+        const _AdaptiveSheetAction(
+          value: _ComposeMenuAction.audioFile,
+          label: 'Choose audio file',
+          icon: CupertinoIcons.music_note,
+        ),
+        const _AdaptiveSheetAction(
+          value: _ComposeMenuAction.genericFile,
+          label: 'Send file',
+          icon: CupertinoIcons.doc,
+        ),
+        const _AdaptiveSheetAction(
+          value: _ComposeMenuAction.media,
+          label: 'Media drawer',
+          icon: CupertinoIcons.collections,
+        ),
+        const _AdaptiveSheetAction(
+          value: _ComposeMenuAction.export,
+          label: 'Create chat archive',
+          icon: CupertinoIcons.archivebox_fill,
+        ),
       ],
     );
     if (!mounted || action == null) {
@@ -1563,8 +2293,20 @@ class _ChatScreenState extends State<ChatScreen> {
       case _ComposeMenuAction.image:
         await pickAndSendImage();
         break;
-      case _ComposeMenuAction.voice:
+      case _ComposeMenuAction.recordVoice:
         await toggleRecording();
+        break;
+      case _ComposeMenuAction.audioFile:
+        await pickVoiceFile();
+        break;
+      case _ComposeMenuAction.genericFile:
+        await pickAndSendFile();
+        break;
+      case _ComposeMenuAction.media:
+        openMediaDrawer();
+        break;
+      case _ComposeMenuAction.export:
+        openChatArchive();
         break;
       case _ComposeMenuAction.mention:
         await chooseMentionTargets();
@@ -1589,7 +2331,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final backgroundImagePath = chatPrefs.backgroundImagePath.trim();
     final backgroundColor = chatPrefs.backgroundColorValue == 0
         ? colors.systemBackground
-        : Color(chatPrefs.backgroundColorValue);
+        : Color(0xff000000 | (chatPrefs.backgroundColorValue & 0x00ffffff));
     return CupertinoPageScaffold(
       backgroundColor: backgroundColor,
       navigationBar: CupertinoNavigationBar(
@@ -1693,7 +2435,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
-                      minSize: 28,
+                      minimumSize: const Size.square(28),
                       onPressed: () => setState(() => error = null),
                       child: Text(
                         strings.text('Dismiss'),
@@ -1816,9 +2558,18 @@ class _ChatScreenState extends State<ChatScreen> {
                                         context,
                                         message.imageUrl,
                                       ),
+                                onFileTap: message.fileUrl.isEmpty
+                                    ? null
+                                    : () => launchUrl(
+                                        Uri.parse(message.fileUrl),
+                                        mode: LaunchMode.externalApplication,
+                                      ),
                                 onVoiceTap: message.voiceUrl.isEmpty
                                     ? null
                                     : () => toggleVoicePlayback(message),
+                                voiceProgress: playingMessageId == message.id
+                                    ? activeVoiceProgress(message)
+                                    : 0,
                                 playingVoice: playingMessageId == message.id,
                               );
                             },
@@ -1887,6 +2638,21 @@ class _ChatScreenState extends State<ChatScreen> {
                               onClearMentions: () =>
                                   setState(() => mentionTargets.clear()),
                             ),
+                          if (recording)
+                            _RecordingCapsule(
+                              seconds: recordingElapsedSeconds,
+                              onCancel: cancelRecording,
+                              onDone: stopRecordingToDraft,
+                            ),
+                          if (voiceDraft != null && !recording)
+                            _VoiceDraftCard(
+                              draft: voiceDraft!,
+                              playing: previewingVoiceDraft,
+                              progress: voiceDraftProgress,
+                              onPreview: previewVoiceDraft,
+                              onDiscard: discardVoiceDraft,
+                              onSend: sendVoiceDraft,
+                            ),
                           Row(
                             children: [
                               _ComposeIconButton(
@@ -1934,7 +2700,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               const SizedBox(width: 8),
                               CupertinoButton.filled(
                                 padding: const EdgeInsets.all(8),
-                                minSize: 34,
+                                minimumSize: const Size.square(34),
                                 borderRadius: BorderRadius.circular(17),
                                 onPressed: composeEnabled ? send : null,
                                 child: const Icon(
@@ -1973,7 +2739,9 @@ class _MessageBubble extends StatelessWidget {
     this.onSwipeReply,
     this.onReplyTap,
     this.onImageTap,
+    this.onFileTap,
     this.onVoiceTap,
+    this.voiceProgress = 0,
     this.playingVoice = false,
     this.showReadStatus = false,
     this.displayTime = '',
@@ -1994,7 +2762,9 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback? onSwipeReply;
   final VoidCallback? onReplyTap;
   final VoidCallback? onImageTap;
+  final VoidCallback? onFileTap;
   final VoidCallback? onVoiceTap;
+  final double voiceProgress;
   final bool playingVoice;
   final bool showReadStatus;
   final String displayTime;
@@ -2035,236 +2805,280 @@ class _MessageBubble extends StatelessWidget {
     final bubblePadding = compactLayout
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 7)
         : const EdgeInsets.symmetric(horizontal: 13, vertical: 9);
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: verticalPadding),
-      child: Dismissible(
-        key: ValueKey('swipe-reply-${message.id}'),
-        direction: selectionMode
-            ? DismissDirection.none
-            : mine
-            ? DismissDirection.endToStart
-            : DismissDirection.startToEnd,
-        confirmDismiss: (_) async {
-          onSwipeReply?.call();
-          return false;
-        },
-        background: _SwipeReplyBackground(mine: mine),
-        secondaryBackground: _SwipeReplyBackground(mine: mine),
-        child: SizedBox(
-          width: double.infinity,
-          child: GestureDetector(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: Column(
-              crossAxisAlignment: align,
-              children: [
-                if (showSenderLine || selectionMode)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (selectionMode) ...[
-                        Icon(
-                          selected
-                              ? CupertinoIcons.checkmark_circle_fill
-                              : CupertinoIcons.circle,
-                          size: 18,
-                          color: selected
-                              ? colors.primaryColor
-                              : colors.secondaryLabel,
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      if (showSenderLine)
-                        Flexible(
-                          child: Text(
-                            '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colors.secondaryLabel,
-                            ),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: _csacMotionMedium,
+      curve: _csacEaseOut,
+      builder: (context, value, child) {
+        final offset = Offset(
+          (mine ? 1 : -1) * (1 - value) * 10,
+          (1 - value) * 4,
+        );
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: offset,
+            child: Transform.scale(
+              scale: 0.985 + value * 0.015,
+              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: verticalPadding),
+        child: Dismissible(
+          key: ValueKey('swipe-reply-${message.id}'),
+          direction: selectionMode
+              ? DismissDirection.none
+              : mine
+              ? DismissDirection.endToStart
+              : DismissDirection.startToEnd,
+          confirmDismiss: (_) async {
+            onSwipeReply?.call();
+            return false;
+          },
+          background: _SwipeReplyBackground(mine: mine),
+          secondaryBackground: _SwipeReplyBackground(mine: mine),
+          child: SizedBox(
+            width: double.infinity,
+            child: GestureDetector(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: Column(
+                crossAxisAlignment: align,
+                children: [
+                  if (showSenderLine || selectionMode)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (selectionMode) ...[
+                          Icon(
+                            selected
+                                ? CupertinoIcons.checkmark_circle_fill
+                                : CupertinoIcons.circle,
+                            size: 18,
+                            color: selected
+                                ? colors.primaryColor
+                                : colors.secondaryLabel,
                           ),
-                        ),
-                    ],
-                  ),
-                if (showSenderLine || selectionMode)
-                  SizedBox(height: compactLayout ? 2 : 3),
-                Container(
-                  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                  padding: bubblePadding,
-                  decoration: BoxDecoration(
-                    color: bubbleColor,
-                    borderRadius: borderRadius,
-                    boxShadow: [
-                      BoxShadow(
-                        color: CupertinoColors.black.withValues(alpha: 0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                    border: (selected || focused || searchFocused)
-                        ? Border.all(color: colors.primaryColor, width: 2)
-                        : null,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (message.replyTo > 0) ...[
-                        GestureDetector(
-                          onTap: onReplyTap,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: replyColor,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
+                          const SizedBox(width: 6),
+                        ],
+                        if (showSenderLine)
+                          Flexible(
                             child: Text(
-                              replyMessage == null
-                                  ? strings.format('Reply #{id}', {
-                                      'id': message.replyTo,
-                                    })
-                                  : strings
-                                        .format('Reply {sender}: {message}', {
-                                          'sender': replyMessage!.sender,
-                                          'message': compactMessage(
-                                            replyMessage!.body,
-                                          ),
-                                        }),
-                              maxLines: 2,
+                              '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 12,
-                                color: secondaryTextColor,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                                color: colors.secondaryLabel,
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
                       ],
-                      if (message.isMentioned || message.isEssence) ...[
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            if (message.isMentioned)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: secondaryTextColor.withValues(
-                                    alpha: 0.15,
-                                  ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      CupertinoIcons.at,
-                                      size: 12,
-                                      color: textColor,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      strings.text('Mentioned'),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: textColor,
-                                      ),
-                                    ),
-                                  ],
+                    ),
+                  if (showSenderLine || selectionMode)
+                    SizedBox(height: compactLayout ? 2 : 3),
+                  AnimatedContainer(
+                    duration: _csacMotionFast,
+                    curve: _csacEaseInOut,
+                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                    padding: bubblePadding,
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: borderRadius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: CupertinoColors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      border: (selected || focused || searchFocused)
+                          ? Border.all(color: colors.primaryColor, width: 2)
+                          : null,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (message.replyTo > 0) ...[
+                          GestureDetector(
+                            onTap: onReplyTap,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: replyColor,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                replyMessage == null
+                                    ? strings.format('Reply #{id}', {
+                                        'id': message.replyTo,
+                                      })
+                                    : strings
+                                          .format('Reply {sender}: {message}', {
+                                            'sender': replyMessage!.sender,
+                                            'message': compactMessage(
+                                              replyMessage!.body,
+                                            ),
+                                          }),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: secondaryTextColor,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            if (message.isEssence)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: secondaryTextColor.withValues(
-                                    alpha: 0.15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (message.isMentioned || message.isEssence) ...[
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              if (message.isMentioned)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      CupertinoIcons.star_fill,
-                                      size: 12,
-                                      color: textColor,
+                                  decoration: BoxDecoration(
+                                    color: secondaryTextColor.withValues(
+                                      alpha: 0.15,
                                     ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      strings.text('Essence'),
-                                      style: TextStyle(
-                                        fontSize: 11,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.at,
+                                        size: 12,
                                         color: textColor,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        strings.text('Mentioned'),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: textColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                      ],
-                      if (message.imageUrl.isNotEmpty) ...[
-                        _MessageImage(url: message.imageUrl, onTap: onImageTap),
+                              if (message.isEssence)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: secondaryTextColor.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.star_fill,
+                                        size: 12,
+                                        color: textColor,
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        strings.text('Essence'),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: textColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (message.imageUrl.isNotEmpty) ...[
+                          _MessageImage(
+                            url: message.imageUrl,
+                            onTap: onImageTap,
+                          ),
+                          if (message.body.isNotEmpty &&
+                              !message.body.startsWith('[image]'))
+                            const SizedBox(height: 8),
+                        ],
+                        if (message.voiceUrl.isNotEmpty) ...[
+                          _VoiceMessageControl(
+                            durationSeconds: message.voiceDuration,
+                            playing: playingVoice,
+                            progress: voiceProgress,
+                            onTap: onVoiceTap,
+                            foreground: textColor,
+                            secondary: secondaryTextColor,
+                          ),
+                          if (message.body.isNotEmpty &&
+                              !message.body.startsWith('[voice]'))
+                            const SizedBox(height: 8),
+                        ],
+                        if (message.fileUrl.isNotEmpty) ...[
+                          _FileMessageControl(
+                            fileName: message.fileName.ifEmpty(
+                              fileNameFromUrl(
+                                message.fileUrl,
+                              ).ifEmpty(strings.text('File')),
+                            ),
+                            onTap: onFileTap,
+                            foreground: textColor,
+                            secondary: secondaryTextColor,
+                          ),
+                          if (message.body.isNotEmpty &&
+                              !message.body.startsWith('[file]'))
+                            const SizedBox(height: 8),
+                        ],
                         if (message.body.isNotEmpty &&
-                            !message.body.startsWith('[image]'))
-                          const SizedBox(height: 8),
+                            !message.body.startsWith('[image]') &&
+                            !message.body.startsWith('[voice]') &&
+                            !message.body.startsWith('[file]'))
+                          _HighlightedMessageText(
+                            text: message.body,
+                            query: searchQuery,
+                            color: textColor,
+                            highlightColor: mine
+                                ? CupertinoColors.white.withValues(alpha: 0.22)
+                                : colors.primaryColor.withValues(alpha: 0.18),
+                          ),
                       ],
-                      if (message.voiceUrl.isNotEmpty) ...[
-                        _VoiceMessageControl(
-                          durationSeconds: message.voiceDuration,
-                          playing: playingVoice,
-                          onTap: onVoiceTap,
-                          foreground: textColor,
-                          secondary: secondaryTextColor,
-                        ),
-                        if (message.body.isNotEmpty &&
-                            !message.body.startsWith('[voice]'))
-                          const SizedBox(height: 8),
-                      ],
-                      if (message.body.isNotEmpty &&
-                          !message.body.startsWith('[image]') &&
-                          !message.body.startsWith('[voice]'))
-                        _HighlightedMessageText(
-                          text: message.body,
-                          query: searchQuery,
-                          color: textColor,
-                          highlightColor: mine
-                              ? CupertinoColors.white.withValues(alpha: 0.22)
-                              : colors.primaryColor.withValues(alpha: 0.18),
-                        ),
-                    ],
-                  ),
-                ),
-                if (showReadStatus) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    message.isRead
-                        ? context.strings.text('Read')
-                        : context.strings.text('Unread'),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: message.isRead
-                          ? colors.primaryColor
-                          : colors.tertiaryLabel,
                     ),
                   ),
+                  if (showReadStatus) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      message.isRead
+                          ? context.strings.text('Read')
+                          : context.strings.text('Unread'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: message.isRead
+                            ? colors.primaryColor
+                            : colors.tertiaryLabel,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -2433,19 +3247,19 @@ class _ChatSearchBar extends StatelessWidget {
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 30,
+            minimumSize: const Size.square(30),
             onPressed: total > 0 && current > 1 ? onPrevious : null,
             child: const Icon(CupertinoIcons.chevron_up, size: 18),
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 30,
+            minimumSize: const Size.square(30),
             onPressed: total > 0 && current < total ? onNext : null,
             child: const Icon(CupertinoIcons.chevron_down, size: 18),
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 30,
+            minimumSize: const Size.square(30),
             onPressed: onClose,
             child: const Icon(CupertinoIcons.xmark_circle_fill, size: 19),
           ),
@@ -2473,7 +3287,7 @@ class _ComposeIconButton extends StatelessWidget {
     final colors = CsacColors.of(context);
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minSize: 36,
+      minimumSize: const Size.square(36),
       onPressed: onPressed,
       child: Container(
         width: 34,
@@ -2486,6 +3300,277 @@ class _ComposeIconButton extends StatelessWidget {
         child: busy
             ? const CupertinoActivityIndicator(radius: 9)
             : Icon(icon, size: 19, color: color ?? colors.primaryColor),
+      ),
+    );
+  }
+}
+
+class _RecordingCapsule extends StatelessWidget {
+  const _RecordingCapsule({
+    required this.seconds,
+    required this.onCancel,
+    required this.onDone,
+  });
+
+  final int seconds;
+  final VoidCallback onCancel;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: colors.floatingTabBarBackground,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.35),
+                width: 0.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: colors.destructive,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.destructive.withValues(alpha: 0.45),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  formatVoiceDuration(seconds),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: colors.label,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 24,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        for (final height in voiceWaveformHeights(seconds, 24))
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 3,
+                                height: height,
+                                decoration: BoxDecoration(
+                                  color: colors.primaryColor.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size.square(30),
+                  onPressed: onCancel,
+                  child: Text(
+                    strings.text('Cancel'),
+                    style: TextStyle(fontSize: 13, color: colors.destructive),
+                  ),
+                ),
+                CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size.square(30),
+                  borderRadius: BorderRadius.circular(15),
+                  onPressed: onDone,
+                  child: Text(
+                    strings.text('Preview'),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceDraftCard extends StatelessWidget {
+  const _VoiceDraftCard({
+    required this.draft,
+    required this.playing,
+    required this.progress,
+    required this.onPreview,
+    required this.onDiscard,
+    required this.onSend,
+  });
+
+  final _VoiceDraft draft;
+  final bool playing;
+  final double progress;
+  final VoidCallback onPreview;
+  final VoidCallback onDiscard;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: colors.elevatedBackground,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colors.separator.withValues(alpha: 0.35),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(36),
+              onPressed: onPreview,
+              child: Icon(
+                playing
+                    ? CupertinoIcons.pause_circle_fill
+                    : CupertinoIcons.play_circle_fill,
+                size: 34,
+                color: colors.primaryColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    draft.sourceLabel.isEmpty
+                        ? strings.text('Voice draft')
+                        : draft.sourceLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: colors.label,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _MiniWaveform(
+                    seed: draft.bytes.length + draft.durationSeconds,
+                    progress: progress,
+                    activeColor: colors.primaryColor,
+                    inactiveColor: colors.secondaryLabel.withValues(
+                      alpha: 0.28,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      draft.durationSeconds <= 0
+                          ? strings.text('Unknown duration')
+                          : formatVoiceDuration(draft.durationSeconds),
+                      draft.fileName,
+                    ].where((part) => part.trim().isNotEmpty).join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryLabel,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size.square(32),
+              onPressed: onDiscard,
+              child: Icon(
+                CupertinoIcons.arrow_counterclockwise,
+                size: 20,
+                color: colors.secondaryLabel,
+              ),
+            ),
+            CupertinoButton.filled(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size.square(32),
+              borderRadius: BorderRadius.circular(16),
+              onPressed: onSend,
+              child: Text(strings.text('Send')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniWaveform extends StatelessWidget {
+  const _MiniWaveform({
+    required this.seed,
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+  });
+
+  final int seed;
+  final double progress;
+  final Color activeColor;
+  final Color inactiveColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = voiceWaveformHeights(seed, 22);
+    final activeBars = (bars.length * progress.clamp(0.0, 1.0)).ceil();
+    return SizedBox(
+      height: 22,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (var i = 0; i < bars.length; i++) ...[
+            Expanded(
+              child: Align(
+                alignment: Alignment.center,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 3,
+                  height: bars[i],
+                  decoration: BoxDecoration(
+                    color: i < activeBars ? activeColor : inactiveColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ),
+            if (i != bars.length - 1) const SizedBox(width: 2),
+          ],
+        ],
       ),
     );
   }
@@ -2512,7 +3597,7 @@ class _FloatingChatButton extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: CupertinoButton(
           padding: EdgeInsets.zero,
-          minSize: 0,
+          minimumSize: Size.zero,
           onPressed: onPressed,
           child: Container(
             height: 36,
@@ -2636,9 +3721,30 @@ class _PendingMessageBubble extends StatelessWidget {
                   _VoiceMessageControl(
                     durationSeconds: pending.voiceDuration,
                     playing: false,
+                    progress: 0,
                     onTap: null,
                     foreground: textColor,
                     secondary: textColor.withValues(alpha: 0.72),
+                  ),
+                  if (pending.text.isNotEmpty) const SizedBox(height: 8),
+                ],
+                if (pending.hasFile) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.doc, size: 18, color: textColor),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          pending.fileName,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (pending.text.isNotEmpty) const SizedBox(height: 8),
                 ],
@@ -2672,7 +3778,7 @@ class _PendingMessageBubble extends StatelessWidget {
                           horizontal: 8,
                           vertical: 4,
                         ),
-                        minSize: 0,
+                        minimumSize: Size.zero,
                         onPressed: onRetry,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2702,6 +3808,7 @@ class _VoiceMessageControl extends StatelessWidget {
   const _VoiceMessageControl({
     required this.durationSeconds,
     required this.playing,
+    this.progress = 0,
     required this.onTap,
     required this.foreground,
     required this.secondary,
@@ -2709,18 +3816,23 @@ class _VoiceMessageControl extends StatelessWidget {
 
   final int durationSeconds;
   final bool playing;
+  final double progress;
   final VoidCallback? onTap;
   final Color foreground;
   final Color secondary;
 
   @override
   Widget build(BuildContext context) {
-    final label = formatVoiceDuration(durationSeconds);
+    final label = durationSeconds <= 0
+        ? context.strings.text('Unknown duration')
+        : formatVoiceDuration(durationSeconds);
+    final bars = voiceWaveformHeights(durationSeconds, 18);
+    final clampedProgress = progress.clamp(0.0, 1.0);
     return GestureDetector(
       onTap: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 132, maxWidth: 220),
-        child: Padding(
+        constraints: const BoxConstraints(minWidth: 168, maxWidth: 260),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -2732,23 +3844,30 @@ class _VoiceMessageControl extends StatelessWidget {
                 color: foreground,
                 size: 30,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: secondary.withValues(alpha: 0.24),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    alignment: Alignment.centerLeft,
-                    child: playing
-                        ? const SizedBox.expand(
-                            child: CupertinoActivityIndicator(radius: 2),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final activeBars = (bars.length * clampedProgress).ceil();
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        for (var i = 0; i < bars.length; i++)
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: constraints.maxWidth / bars.length - 2,
+                            height: bars[i],
+                            decoration: BoxDecoration(
+                              color: (playing && i < activeBars)
+                                  ? foreground
+                                  : secondary.withValues(alpha: 0.32),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -2758,6 +3877,63 @@ class _VoiceMessageControl extends StatelessWidget {
                   fontSize: 12,
                   color: foreground,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FileMessageControl extends StatelessWidget {
+  const _FileMessageControl({
+    required this.fileName,
+    required this.onTap,
+    required this.foreground,
+    required this.secondary,
+  });
+
+  final String fileName;
+  final VoidCallback? onTap;
+  final Color foreground;
+  final Color secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.doc_fill, color: foreground, size: 28),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fileName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.strings.text('Tap to open'),
+                      style: TextStyle(fontSize: 11, color: secondary),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -2894,7 +4070,9 @@ class _MessageActionSheet extends StatelessWidget {
             ],
           ),
         ),
-        if (message.imageUrl.isNotEmpty)
+        if (message.imageUrl.isNotEmpty ||
+            message.voiceUrl.isNotEmpty ||
+            message.fileUrl.isNotEmpty)
           CupertinoActionSheetAction(
             onPressed: () =>
                 Navigator.of(context).pop(_MessageAction.copyImage),
@@ -2903,11 +4081,11 @@ class _MessageActionSheet extends StatelessWidget {
               children: [
                 const Icon(CupertinoIcons.link, size: 20),
                 const SizedBox(width: 8),
-                Text(strings.text('Copy image link')),
+                Text(strings.text('Copy link')),
               ],
             ),
           ),
-        if (message.imageUrl.isNotEmpty)
+        if (message.imageUrl.isNotEmpty || message.fileUrl.isNotEmpty)
           CupertinoActionSheetAction(
             onPressed: () =>
                 Navigator.of(context).pop(_MessageAction.openImage),
@@ -2916,11 +4094,17 @@ class _MessageActionSheet extends StatelessWidget {
               children: [
                 const Icon(CupertinoIcons.arrow_up_right_square, size: 20),
                 const SizedBox(width: 8),
-                Text(strings.text('Open image')),
+                Text(
+                  strings.text(
+                    message.imageUrl.isNotEmpty ? 'Open image' : 'Open file',
+                  ),
+                ),
               ],
             ),
           ),
-        if (message.imageUrl.isNotEmpty)
+        if (message.imageUrl.isNotEmpty ||
+            message.voiceUrl.isNotEmpty ||
+            message.fileUrl.isNotEmpty)
           CupertinoActionSheetAction(
             onPressed: () =>
                 Navigator.of(context).pop(_MessageAction.downloadImage),
@@ -2929,7 +4113,7 @@ class _MessageActionSheet extends StatelessWidget {
               children: [
                 const Icon(CupertinoIcons.cloud_download, size: 20),
                 const SizedBox(width: 8),
-                Text(strings.text('Download image')),
+                Text(strings.text('Download')),
               ],
             ),
           ),
@@ -3145,7 +4329,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                   ),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    minSize: 0,
+                    minimumSize: Size.zero,
                     onPressed: () {
                       setState(() {
                         if (selected.length == widget.members.length) {
@@ -3446,13 +4630,12 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
   }
 
   Future<void> openMessage(ChatMessage message) {
-    return Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ChatScreen(
-          state: widget.state,
-          conversation: widget.conversation,
-          focusMessageId: message.id,
-        ),
+    return _csacPush<void>(
+      context,
+      (_) => ChatScreen(
+        state: widget.state,
+        conversation: widget.conversation,
+        focusMessageId: message.id,
       ),
     );
   }
@@ -3470,12 +4653,11 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
             CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 6),
               onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute<void>(
-                    builder: (_) => EssenceStatsScreen(
-                      state: widget.state,
-                      conversation: widget.conversation,
-                    ),
+                _csacPush<void>(
+                  context,
+                  (_) => EssenceStatsScreen(
+                    state: widget.state,
+                    conversation: widget.conversation,
                   ),
                 );
               },
