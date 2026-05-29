@@ -349,11 +349,19 @@ const voiceExtensions = <String>[
   'aac',
   'wav',
   'ogg',
+  'opus',
   'webm',
   'mp3',
   'mpeg',
   'amr',
   '3gp',
+  '3gpp',
+  '3g2',
+  '3gpp2',
+  'flac',
+  'caf',
+  'aif',
+  'aiff',
 ];
 
 const archiveExtensions = <String>['md', 'html', 'json'];
@@ -421,6 +429,7 @@ String mimeTypeForVoiceExtension(String extension) {
     case 'wav':
       return 'audio/wav';
     case 'ogg':
+    case 'opus':
       return 'audio/ogg';
     case 'webm':
       return 'audio/webm';
@@ -432,7 +441,18 @@ String mimeTypeForVoiceExtension(String extension) {
     case 'amr':
       return 'audio/amr';
     case '3gp':
+    case '3gpp':
       return 'audio/3gpp';
+    case '3g2':
+    case '3gpp2':
+      return 'audio/3gpp2';
+    case 'flac':
+      return 'audio/flac';
+    case 'caf':
+      return 'audio/x-caf';
+    case 'aif':
+    case 'aiff':
+      return 'audio/aiff';
     case 'm4a':
     case 'mp4':
     default:

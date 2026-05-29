@@ -122,14 +122,13 @@ const double _csacGroupedCornerRadius = 18;
 const double _csacControlCornerRadius = 16;
 const double _csacListMinHeight = 52;
 
-const Duration _csacMotionFast = Duration(milliseconds: 160);
-const Duration _csacMotionMedium = Duration(milliseconds: 260);
-const Duration _csacMotionSlow = Duration(milliseconds: 420);
-const Duration _csacPageMotion = _csacMotionSlow;
-const Duration _csacPageReverseMotion = Duration(milliseconds: 300);
+const Duration _csacMotionFast = Duration(milliseconds: 150);
+const Duration _csacMotionMedium = Duration(milliseconds: 240);
+const Duration _csacPageMotion = Duration(milliseconds: 340);
+const Duration _csacPageReverseMotion = Duration(milliseconds: 260);
 const Curve _csacEaseOut = Curves.easeOutCubic;
 const Curve _csacEaseInOut = Curves.easeInOutCubic;
-const Curve _csacEmphasizedEaseOut = Curves.easeOutExpo;
+const Curve _csacModernEase = Cubic(0.2, 0.0, 0, 1);
 
 PageRoute<T> _csacPageRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
@@ -139,27 +138,28 @@ PageRoute<T> _csacPageRoute<T>(WidgetBuilder builder) {
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final enter = CurvedAnimation(
         parent: animation,
-        curve: _csacEaseInOut,
+        curve: _csacModernEase,
         reverseCurve: Curves.easeInCubic,
       );
       final exit = CurvedAnimation(
         parent: secondaryAnimation,
-        curve: _csacEaseInOut,
-        reverseCurve: _csacEaseOut,
+        curve: _csacEaseOut,
       );
-      final incoming = SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(enter),
-        child: child,
-      );
-      return SlideTransition(
-        position: Tween<Offset>(
-          begin: Offset.zero,
-          end: const Offset(-0.28, 0),
-        ).animate(exit),
-        child: incoming,
+      return FadeTransition(
+        opacity: Tween<double>(begin: 1, end: 0.96).animate(exit),
+        child: FadeTransition(
+          opacity: Tween<double>(begin: 0, end: 1).animate(enter),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.035, 0.012),
+              end: Offset.zero,
+            ).animate(enter),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.992, end: 1).animate(enter),
+              child: child,
+            ),
+          ),
+        ),
       );
     },
   );
@@ -169,15 +169,65 @@ Future<T?> _csacPush<T>(BuildContext context, WidgetBuilder builder) {
   return Navigator.of(context).push<T>(_csacPageRoute<T>(builder));
 }
 
+PageRoute<T> _csacConversationRoute<T>(WidgetBuilder builder) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 230),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final enter = CurvedAnimation(
+        parent: animation,
+        curve: _csacModernEase,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final exit = CurvedAnimation(
+        parent: secondaryAnimation,
+        curve: _csacEaseOut,
+        reverseCurve: _csacEaseOut,
+      );
+      final incoming = FadeTransition(
+        opacity: Tween<double>(begin: 0, end: 1).animate(enter),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.035),
+            end: Offset.zero,
+          ).animate(enter),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.985, end: 1).animate(enter),
+            child: child,
+          ),
+        ),
+      );
+      return FadeTransition(
+        opacity: Tween<double>(begin: 1, end: 0.94).animate(exit),
+        child: incoming,
+      );
+    },
+  );
+}
+
+Future<T?> _csacPushConversation<T>(
+  BuildContext context,
+  WidgetBuilder builder,
+) {
+  return Navigator.of(context).push<T>(_csacConversationRoute<T>(builder));
+}
+
 extension _CsacMotionWidget on Widget {
-  Widget csacCardEnter({int delayMs = 0, double y = 8}) {
+  Widget csacCardEnter({int delayMs = 0, double y = 5}) {
     return animate(delay: Duration(milliseconds: delayMs))
         .fadeIn(duration: _csacMotionMedium, curve: _csacEaseOut)
         .slideY(
           begin: y / 100,
           end: 0,
           duration: _csacMotionMedium,
-          curve: _csacEaseOut,
+          curve: _csacModernEase,
+        )
+        .scale(
+          begin: const Offset(0.992, 0.992),
+          end: const Offset(1, 1),
+          duration: _csacMotionMedium,
+          curve: _csacModernEase,
         );
   }
 
@@ -185,10 +235,10 @@ extension _CsacMotionWidget on Widget {
     return animate(delay: Duration(milliseconds: delayMs))
         .fadeIn(duration: _csacMotionMedium, curve: _csacEaseOut)
         .scale(
-          begin: const Offset(0.96, 0.96),
+          begin: const Offset(0.975, 0.975),
           end: const Offset(1, 1),
           duration: _csacMotionMedium,
-          curve: _csacEmphasizedEaseOut,
+          curve: _csacModernEase,
         );
   }
 }
@@ -1105,20 +1155,24 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fallback = _buildFallback();
     if (url.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _buildFallback(),
-          loadingBuilder: (_, child, progress) =>
-              progress == null ? child : _buildFallback(),
+      return SizedBox.square(
+        dimension: size,
+        child: ClipOval(
+          child: Image.network(
+            url,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => fallback,
+            loadingBuilder: (_, child, progress) =>
+                progress == null ? child : fallback,
+          ),
         ),
       );
     }
-    return _buildFallback();
+    return fallback;
   }
 
   Widget _buildFallback() {

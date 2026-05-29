@@ -182,13 +182,62 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _username = TextEditingController();
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
+  List<LoginAccountRecord> _accounts = const <LoginAccountRecord>[];
+  bool _loadingAccounts = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccounts();
+  }
 
   @override
   void dispose() {
     _username.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAccounts() async {
+    final loaded = await widget.state.loadLoginAccounts();
+    if (!mounted) return;
+    setState(() {
+      _accounts = loaded;
+      _loadingAccounts = false;
+    });
+  }
+
+  Future<void> _selectAccount(LoginAccountRecord account) async {
+    if (account.hasSession) {
+      setState(() => _error = null);
+      try {
+        await widget.state.loginWithSavedSession(account);
+        if (mounted) await _loadAccounts();
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        await _loadAccounts();
+        setState(
+          () => _error = context.strings.text(
+            'Saved session expired. Please enter password.',
+          ),
+        );
+      }
+    }
+    _username.text = account.username.trim().isEmpty
+        ? '${account.uid}'
+        : account.username.trim();
+    _password.clear();
+    setState(() => _error = null);
+    _passwordFocus.requestFocus();
+  }
+
+  Future<void> _removeAccount(LoginAccountRecord account) async {
+    await widget.state.removeLoginAccount(account);
+    await _loadAccounts();
   }
 
   Future<void> _submit() async {
@@ -203,6 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _error = null);
     try {
       await widget.state.login(_username.text.trim(), _password.text);
+      if (mounted) await _loadAccounts();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -211,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _openRegister() async {
     setState(() => _error = null);
     await _csacPush<void>(context, (_) => RegisterScreen(state: widget.state));
-    if (mounted) setState(() {});
+    if (mounted) await _loadAccounts();
   }
 
   Future<void> _openServerSettings() async {
@@ -222,7 +272,10 @@ class _LoginScreenState extends State<LoginScreen> {
         initialDeveloperOptionsExpanded: true,
       ),
     );
-    if (mounted) setState(() {});
+    if (mounted) {
+      await _loadAccounts();
+      setState(() {});
+    }
   }
 
   @override
@@ -306,6 +359,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Container(height: 0.5, color: colors.separator),
                           _LoginField(
                             controller: _password,
+                            focusNode: _passwordFocus,
                             placeholder: strings.text('Password'),
                             icon: CupertinoIcons.lock,
                             obscureText: true,
@@ -394,28 +448,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── 注册按钮 ──
-                  GestureDetector(
-                    onTap: widget.state.loading ? null : _openRegister,
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: colors.cardBackground,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: colors.separator),
+                  if (_loadingAccounts)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: CupertinoActivityIndicator(radius: 10),
                       ),
-                      child: Center(
-                        child: Text(
-                          strings.text('Create account'),
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w500,
-                            color: primary,
-                          ),
-                        ),
-                      ),
+                    )
+                  else
+                    _RecentAccountsPanel(
+                      accounts: _accounts.take(3).toList(),
+                      onSelect: _selectAccount,
+                      onRemove: _removeAccount,
+                      onAdd: widget.state.loading ? null : _openRegister,
                     ),
-                  ),
                   const SizedBox(height: 24),
 
                   // ── 服务器信息 ──
@@ -466,6 +512,7 @@ class _LoginField extends StatelessWidget {
     required this.controller,
     required this.placeholder,
     required this.icon,
+    this.focusNode,
     this.obscureText = false,
     this.textInputAction,
     this.onSubmitted,
@@ -474,6 +521,7 @@ class _LoginField extends StatelessWidget {
   final TextEditingController controller;
   final String placeholder;
   final IconData icon;
+  final FocusNode? focusNode;
   final bool obscureText;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
@@ -483,6 +531,7 @@ class _LoginField extends StatelessWidget {
     final colors = CsacColors.of(context);
     return CupertinoTextField(
       controller: controller,
+      focusNode: focusNode,
       placeholder: placeholder,
       obscureText: obscureText,
       textInputAction: textInputAction,
@@ -495,6 +544,227 @@ class _LoginField extends StatelessWidget {
       decoration: const BoxDecoration(),
       style: TextStyle(fontSize: 16, color: CsacColors.of(context).label),
       placeholderStyle: TextStyle(fontSize: 16, color: colors.tertiaryLabel),
+    );
+  }
+}
+
+class _RecentAccountsPanel extends StatelessWidget {
+  const _RecentAccountsPanel({
+    required this.accounts,
+    required this.onSelect,
+    this.onRemove,
+    this.onAdd,
+    this.currentUid,
+    this.title,
+  });
+
+  final List<LoginAccountRecord> accounts;
+  final ValueChanged<LoginAccountRecord> onSelect;
+  final ValueChanged<LoginAccountRecord>? onRemove;
+  final VoidCallback? onAdd;
+  final int? currentUid;
+  final String? title;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            strings.text(title ?? 'Recent accounts'),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: colors.secondaryLabel,
+            ),
+          ),
+        ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.35),
+                width: 0.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < accounts.length; i++) ...[
+                  _RecentAccountTile(
+                    account: accounts[i],
+                    current:
+                        currentUid != null && accounts[i].uid == currentUid,
+                    onSelect: () => onSelect(accounts[i]),
+                    onRemove: onRemove == null
+                        ? null
+                        : () => onRemove!(accounts[i]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 64),
+                    child: Container(height: 0.5, color: colors.separator),
+                  ),
+                ],
+                _AccountAddTile(onTap: onAdd),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ).csacCardEnter(delayMs: 40);
+  }
+}
+
+class _RecentAccountTile extends StatelessWidget {
+  const _RecentAccountTile({
+    required this.account,
+    this.current = false,
+    required this.onSelect,
+    this.onRemove,
+  });
+
+  final LoginAccountRecord account;
+  final bool current;
+  final VoidCallback onSelect;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return _CsacPressable(
+      onTap: onSelect,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: [
+            _Avatar(
+              url: account.avatar,
+              fallback: CupertinoIcons.person_fill,
+              size: 38,
+              name: account.displayName,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    account.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: colors.label,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      account.subtitle,
+                      if (account.hasSession) strings.text('Saved session'),
+                      if (current) strings.text('Current'),
+                    ].where((part) => part.trim().isNotEmpty).join(' | '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryLabel,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onRemove != null)
+              CupertinoButton(
+                padding: const EdgeInsets.all(8),
+                minimumSize: Size.zero,
+                onPressed: onRemove,
+                child: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  size: 19,
+                  color: colors.tertiaryLabel,
+                ),
+              )
+            else
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 16,
+                color: colors.tertiaryLabel,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountAddTile extends StatelessWidget {
+  const _AccountAddTile({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return _CsacPressable(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: colors.primaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.person_add,
+                size: 20,
+                color: colors.primaryColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    strings.text('Add account'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: colors.label,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    strings.text('Sign in or create another account'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryLabel,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: colors.tertiaryLabel,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

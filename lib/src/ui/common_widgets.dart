@@ -234,3 +234,121 @@ Future<void> openUserProfile(
         UserProfileScreen(state: state, uid: uid, group: group, member: member),
   );
 }
+
+String _conversationHeroKey(Conversation conversation, String slot) {
+  return 'csac-conversation-$slot-${conversation.type.name}-${conversation.id}';
+}
+
+class _CsacContextRectTween extends RectTween {
+  _CsacContextRectTween({super.begin, super.end});
+
+  @override
+  Rect? lerp(double t) {
+    return Rect.lerp(begin, end, _csacModernEase.transform(t));
+  }
+}
+
+class _ConversationSurfaceHero extends StatelessWidget {
+  const _ConversationSurfaceHero({
+    required this.conversation,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final Conversation conversation;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+    return Hero(
+      tag: _conversationHeroKey(conversation, 'surface'),
+      createRectTween: (begin, end) =>
+          _CsacContextRectTween(begin: begin, end: end),
+      child: Material(type: MaterialType.transparency, child: child),
+    );
+  }
+}
+
+class _CsacHeroText extends StatelessWidget {
+  const _CsacHeroText({
+    required this.tag,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final Object tag;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+    return Hero(
+      tag: tag,
+      createRectTween: (begin, end) =>
+          _CsacContextRectTween(begin: begin, end: end),
+      child: Material(type: MaterialType.transparency, child: child),
+    );
+  }
+}
+
+class _ConversationAvatarHero extends StatelessWidget {
+  const _ConversationAvatarHero({required this.conversation, this.size = 44});
+
+  final Conversation conversation;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final isGroup = conversation.type == ConversationType.group;
+    final avatar = _Avatar(
+      url: conversation.avatar,
+      fallback: isGroup
+          ? CupertinoIcons.person_2_fill
+          : CupertinoIcons.person_fill,
+      size: size,
+      name: conversation.name,
+    );
+    return Hero(
+      tag: _conversationHeroKey(conversation, 'avatar'),
+      createRectTween: (begin, end) =>
+          _CsacContextRectTween(begin: begin, end: end),
+      child: SizedBox.square(
+        dimension: size,
+        child: Material(type: MaterialType.transparency, child: avatar),
+      ),
+    );
+  }
+}
+
+class _ConversationTitleHero extends StatelessWidget {
+  const _ConversationTitleHero({
+    required this.conversation,
+    required this.style,
+    this.enabled = true,
+  });
+
+  final Conversation conversation;
+  final TextStyle style;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CsacHeroText(
+      tag: _conversationHeroKey(conversation, 'title'),
+      enabled: enabled,
+      child: Text(
+        conversation.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+}

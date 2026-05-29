@@ -152,6 +152,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Duration voiceDuration = Duration.zero;
   _VoiceDraft? voiceDraft;
   bool loading = true;
+  bool loadingOlder = false;
+  bool hasMoreOlder = true;
   bool refreshing = false;
   bool pickingImage = false;
   bool searchMode = false;
@@ -161,6 +163,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool applyingDraft = false;
   bool applyingMentionText = false;
   bool mentionPickerOpen = false;
+  bool showEntryHint = true;
   bool offline = false;
   bool showJumpToBottom = false;
   bool conversationUnavailable = false;
@@ -201,6 +204,11 @@ class _ChatScreenState extends State<ChatScreen> {
     loadDraft();
     loadGroupAnnouncement();
     loadInitial();
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() => showEntryHint = false);
+      }
+    });
     audioErrorSubscription = audioPlayer.eventStream.listen(
       (_) {},
       onError: (Object err) {
@@ -259,6 +267,62 @@ class _ChatScreenState extends State<ChatScreen> {
         scroll.position.maxScrollExtent - scroll.position.pixels > 280;
     if (shouldShow != showJumpToBottom && mounted) {
       setState(() => showJumpToBottom = shouldShow);
+    }
+    if (scroll.position.pixels <= 96) {
+      unawaited(loadOlderMessages());
+    }
+  }
+
+  Future<void> loadOlderMessages() async {
+    if (!mounted ||
+        loadingOlder ||
+        loading ||
+        !hasMoreOlder ||
+        messages.isEmpty) {
+      return;
+    }
+    final beforeId = messages.first.id;
+    final previousExtent = scroll.hasClients
+        ? scroll.position.maxScrollExtent
+        : 0.0;
+    setState(() => loadingOlder = true);
+    try {
+      final older = await widget.state.loadOlderMessages(
+        widget.conversation,
+        beforeId: beforeId,
+      );
+      if (!mounted) return;
+      if (older.isEmpty) {
+        setState(() {
+          hasMoreOlder = false;
+          loadingOlder = false;
+        });
+        return;
+      }
+      final current = List<ChatMessage>.of(messages);
+      setState(() {
+        messages
+          ..clear()
+          ..addAll(mergeChatMessages(older, current));
+        loadingOlder = false;
+        offline = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !scroll.hasClients) return;
+        final delta = scroll.position.maxScrollExtent - previousExtent;
+        if (delta > 0) {
+          scroll.jumpTo(scroll.position.pixels + delta);
+        }
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        loadingOlder = false;
+        offline = messages.isNotEmpty;
+        error = context.strings.format('Offline cache: {error}', {
+          'error': err,
+        });
+      });
     }
   }
 
@@ -528,6 +592,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ..clear()
           ..addAll(mergeChatMessages(cached, loaded));
         offline = false;
+        hasMoreOlder = true;
       });
       await markCurrentConversationRead();
     } catch (err) {
@@ -574,8 +639,9 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         messages
           ..clear()
-          ..addAll(loaded);
+          ..addAll(mergeChatMessages(List<ChatMessage>.of(messages), loaded));
         offline = false;
+        hasMoreOlder = true;
       });
       await markCurrentConversationRead();
       scrollAfterLoad();
@@ -614,7 +680,7 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           messages
             ..clear()
-            ..addAll(loaded);
+            ..addAll(mergeChatMessages(List<ChatMessage>.of(messages), loaded));
           offline = false;
         });
         await markCurrentConversationRead();
@@ -1228,6 +1294,25 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> sendPatTo(ChatMessage message) async {
+    if (widget.conversation.type != ConversationType.group ||
+        message.senderId <= 0) {
+      return;
+    }
+    try {
+      await widget.state.sendPatMessage(widget.conversation, message.senderId);
+      if (!mounted) return;
+      await refresh(silent: true);
+      scrollToEnd();
+    } catch (err) {
+      if (mounted) {
+        showSnack(
+          context.strings.format('Send failed: {error}', {'error': err}),
+        );
+      }
+    }
+  }
+
   void replacePendingSend(
     int localId,
     _PendingSend Function(_PendingSend item) update,
@@ -1668,6 +1753,11 @@ class _ChatScreenState extends State<ChatScreen> {
         startsWith(const [0x57, 0x41, 0x56, 0x45], 8)) {
       return const _VoiceFileType('wav', 'audio/wav');
     }
+    if (startsWith(const [0x46, 0x4f, 0x52, 0x4d]) &&
+        (startsWith(const [0x41, 0x49, 0x46, 0x46], 8) ||
+            startsWith(const [0x41, 0x49, 0x46, 0x43], 8))) {
+      return const _VoiceFileType('aiff', 'audio/aiff');
+    }
     if (startsWith(const [0x66, 0x4c, 0x61, 0x43])) {
       return const _VoiceFileType('flac', 'audio/flac');
     }
@@ -1692,6 +1782,9 @@ class _ChatScreenState extends State<ChatScreen> {
         bytes.sublist(8, min(bytes.length, 12)),
       ).toLowerCase();
       if (brand.startsWith('3g')) {
+        if (brand.startsWith('3g2')) {
+          return const _VoiceFileType('3g2', 'audio/3gpp2');
+        }
         return const _VoiceFileType('3gp', 'audio/3gpp');
       }
       return const _VoiceFileType('m4a', 'audio/mp4');
@@ -1731,11 +1824,18 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'audio/3gpp':
       case 'audio/3gp':
         return const _VoiceFileType('3gp', 'audio/3gpp');
+      case 'audio/3gpp2':
+      case 'audio/3g2':
+        return const _VoiceFileType('3g2', 'audio/3gpp2');
       case 'audio/amr':
+      case 'audio/x-amr':
         return const _VoiceFileType('amr', 'audio/amr');
       case 'audio/x-caf':
       case 'audio/caf':
         return const _VoiceFileType('caf', 'audio/x-caf');
+      case 'audio/aiff':
+      case 'audio/x-aiff':
+        return const _VoiceFileType('aiff', 'audio/aiff');
     }
     return null;
   }
@@ -1778,11 +1878,17 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path.endsWith('.3gp') || path.endsWith('.3gpp')) {
       return 'audio/3gpp';
     }
+    if (path.endsWith('.3g2') || path.endsWith('.3gpp2')) {
+      return 'audio/3gpp2';
+    }
     if (path.endsWith('.amr')) {
       return 'audio/amr';
     }
     if (path.endsWith('.caf')) {
       return 'audio/x-caf';
+    }
+    if (path.endsWith('.aif') || path.endsWith('.aiff')) {
+      return 'audio/aiff';
     }
     return null;
   }
@@ -1854,18 +1960,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> recallMessage(ChatMessage message) async {
-    final recalledBody = context.strings.text('[recalled]');
+    final recalledBody = context.strings.text('Message recalled');
     try {
       await widget.state.recallMessage(widget.conversation, message.id);
       final recalled = message.copyWith(
         body: recalledBody,
         imageUrl: '',
+        voiceUrl: '',
+        fileUrl: '',
         canRecall: false,
         isRecalled: true,
+        recallStatus: message.senderId == widget.state.user?.uid ? 1 : 2,
       );
       replaceMessageLocally(recalled);
       await widget.state.cache.saveMessages(widget.conversation, [recalled]);
-      await reloadConversationFromNetwork();
     } catch (err) {
       if (mounted) {
         setState(() => error = err.toString());
@@ -1906,8 +2014,10 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context) => _CsacBlurredPopup(
         child: _MessageActionSheet(
           message: message,
-          canRecall: message.canRecall || mine,
-          canEssence: widget.conversation.type == ConversationType.group,
+          canRecall: !message.isRecalled && (message.canRecall || mine),
+          canEssence:
+              widget.conversation.type == ConversationType.group &&
+              !message.isRecalled,
         ),
       ).csacPopupEnter(),
     );
@@ -2345,15 +2455,41 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: const Icon(CupertinoIcons.xmark),
               )
             : null,
-        middle: Text(
-          selectionMode
-              ? strings.format('{count} messages selected', {
+        middle: selectionMode
+            ? Text(
+                strings.format('{count} messages selected', {
                   'count': selectedMessageIds.length,
-                })
-              : widget.conversation.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+                }),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: openConversationDetails,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!widget.embedded) ...[
+                      _ConversationAvatarHero(
+                        conversation: widget.conversation,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: _ConversationTitleHero(
+                        conversation: widget.conversation,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: colors.label,
+                        ),
+                        enabled: !widget.embedded,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
         trailing: selectionMode
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -2473,9 +2609,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: _ChatBackground(
-                        color: backgroundColor,
-                        imagePath: backgroundImagePath,
+                      child: _ConversationSurfaceHero(
+                        conversation: widget.conversation,
+                        enabled: !widget.embedded,
+                        child: _ChatBackground(
+                          color: backgroundColor,
+                          imagePath: backgroundImagePath,
+                        ),
                       ),
                     ),
                     conversationUnavailable
@@ -2525,12 +2665,23 @@ class _ChatScreenState extends State<ChatScreen> {
                                 message: message,
                                 replyMessage: replyMessage,
                                 mine: mine,
+                                avatarUrl: mine
+                                    ? widget.state.user?.avatar ?? ''
+                                    : message.senderAvatar,
+                                avatarName: mine
+                                    ? widget.state.user?.nickname ??
+                                          widget.state.user?.username ??
+                                          message.sender
+                                    : message.sender,
                                 displayTime: displayMessageTime(
                                   message,
                                   showSeconds: chatPrefs.showSeconds,
                                 ),
                                 compactLayout: chatPrefs.compactBubbles,
                                 showSenderLine: chatPrefs.showSenderName,
+                                showMemberMeta:
+                                    widget.conversation.type ==
+                                    ConversationType.group,
                                 showReadStatus:
                                     widget.conversation.type ==
                                     ConversationType.private,
@@ -2543,6 +2694,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onTap: selectionMode
                                     ? () => toggleMessageSelection(message)
                                     : null,
+                                onDoubleTap: selectionMode
+                                    ? null
+                                    : () => sendPatTo(message),
                                 onLongPress: selectionMode
                                     ? null
                                     : () => showMessageActions(message, mine),
@@ -2575,7 +2729,22 @@ class _ChatScreenState extends State<ChatScreen> {
                             },
                           ),
                     Positioned(
-                      top: 56,
+                      top: 12,
+                      left: compact ? 12 : 28,
+                      right: compact ? 12 : 28,
+                      child: AnimatedSwitcher(
+                        duration: _csacMotionMedium,
+                        child: showEntryHint && !selectionMode
+                            ? _ChatEntryHint(
+                                key: const ValueKey('chat-entry-hint'),
+                                onClose: () =>
+                                    setState(() => showEntryHint = false),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                    Positioned(
+                      top: showEntryHint && !selectionMode ? 72 : 56,
                       right: compact ? 12 : 28,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
@@ -2731,10 +2900,13 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     this.replyMessage,
     required this.mine,
+    required this.avatarUrl,
+    required this.avatarName,
     this.focused = false,
     this.selected = false,
     this.selectionMode = false,
     this.onTap,
+    this.onDoubleTap,
     this.onLongPress,
     this.onSwipeReply,
     this.onReplyTap,
@@ -2749,15 +2921,19 @@ class _MessageBubble extends StatelessWidget {
     this.compactLayout = false,
     this.searchFocused = false,
     this.showSenderLine = true,
+    this.showMemberMeta = false,
   });
 
   final ChatMessage message;
   final ChatMessage? replyMessage;
   final bool mine;
+  final String avatarUrl;
+  final String avatarName;
   final bool focused;
   final bool selected;
   final bool selectionMode;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onSwipeReply;
   final VoidCallback? onReplyTap;
@@ -2772,6 +2948,7 @@ class _MessageBubble extends StatelessWidget {
   final bool compactLayout;
   final bool searchFocused;
   final bool showSenderLine;
+  final bool showMemberMeta;
 
   @override
   Widget build(BuildContext context) {
@@ -2788,6 +2965,55 @@ class _MessageBubble extends StatelessWidget {
         : colors.elevatedBackground;
     final align = mine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final strings = context.strings;
+    final memberTitle = message.memberTitle.trim();
+    final memberBadgeText = showMemberMeta
+        ? 'LV${message.memberLevel.clamp(1, 100)}${memberTitle.isEmpty ? '' : ' $memberTitle'}'
+        : '';
+    final senderLine = [
+      message.sender,
+      if (displayTime.isNotEmpty) displayTime,
+    ].join(' · ');
+    if (message.isRecalled) {
+      final recalledText = strings.format('{sender} recalled a message', {
+        'sender': message.sender,
+      });
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: compactLayout ? 2 : 6),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selectionMode) ...[
+                Icon(
+                  selected
+                      ? CupertinoIcons.checkmark_circle_fill
+                      : CupertinoIcons.circle,
+                  size: 17,
+                  color: selected ? colors.primaryColor : colors.secondaryLabel,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  recalledText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: compactLayout ? 11 : 12,
+                    color: colors.secondaryLabel,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final borderRadius = mine
         ? const BorderRadius.only(
             topLeft: Radius.circular(18),
@@ -2805,6 +3031,15 @@ class _MessageBubble extends StatelessWidget {
     final bubblePadding = compactLayout
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 7)
         : const EdgeInsets.symmetric(horizontal: 13, vertical: 9);
+    final avatar = Padding(
+      padding: EdgeInsets.only(top: showSenderLine ? 18 : 2),
+      child: _Avatar(
+        url: avatarUrl,
+        fallback: CupertinoIcons.person_fill,
+        size: compactLayout ? 28 : 32,
+        name: avatarName,
+      ),
+    );
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: _csacMotionMedium,
@@ -2828,255 +3063,329 @@ class _MessageBubble extends StatelessWidget {
       },
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: verticalPadding),
-        child: Dismissible(
-          key: ValueKey('swipe-reply-${message.id}'),
-          direction: selectionMode
-              ? DismissDirection.none
-              : mine
-              ? DismissDirection.endToStart
-              : DismissDirection.startToEnd,
-          confirmDismiss: (_) async {
-            onSwipeReply?.call();
-            return false;
-          },
-          background: _SwipeReplyBackground(mine: mine),
-          secondaryBackground: _SwipeReplyBackground(mine: mine),
+        child: _SwipeReplyGesture(
+          mine: mine,
+          enabled: !selectionMode && onSwipeReply != null,
+          onReply: onSwipeReply,
           child: SizedBox(
             width: double.infinity,
             child: GestureDetector(
               onTap: onTap,
+              onDoubleTap: onDoubleTap,
               onLongPress: onLongPress,
-              child: Column(
-                crossAxisAlignment: align,
+              child: Row(
+                mainAxisAlignment: mine
+                    ? MainAxisAlignment.end
+                    : MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (showSenderLine || selectionMode)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (selectionMode) ...[
-                          Icon(
-                            selected
-                                ? CupertinoIcons.checkmark_circle_fill
-                                : CupertinoIcons.circle,
-                            size: 18,
-                            color: selected
-                                ? colors.primaryColor
-                                : colors.secondaryLabel,
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        if (showSenderLine)
-                          Flexible(
-                            child: Text(
-                              '${message.sender}${displayTime.isEmpty ? '' : ' · $displayTime'}',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: colors.secondaryLabel,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  if (showSenderLine || selectionMode)
-                    SizedBox(height: compactLayout ? 2 : 3),
-                  AnimatedContainer(
-                    duration: _csacMotionFast,
-                    curve: _csacEaseInOut,
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    padding: bubblePadding,
-                    decoration: BoxDecoration(
-                      color: bubbleColor,
-                      borderRadius: borderRadius,
-                      boxShadow: [
-                        BoxShadow(
-                          color: CupertinoColors.black.withValues(alpha: 0.06),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                      border: (selected || focused || searchFocused)
-                          ? Border.all(color: colors.primaryColor, width: 2)
-                          : null,
-                    ),
+                  if (!mine) ...[avatar, const SizedBox(width: 8)],
+                  Flexible(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: align,
                       children: [
-                        if (message.replyTo > 0) ...[
-                          GestureDetector(
-                            onTap: onReplyTap,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: replyColor,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                replyMessage == null
-                                    ? strings.format('Reply #{id}', {
-                                        'id': message.replyTo,
-                                      })
-                                    : strings
-                                          .format('Reply {sender}: {message}', {
-                                            'sender': replyMessage!.sender,
-                                            'message': compactMessage(
-                                              replyMessage!.body,
-                                            ),
-                                          }),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: secondaryTextColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                        if (message.isMentioned || message.isEssence) ...[
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
+                        if (showSenderLine || selectionMode)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (message.isMentioned)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: secondaryTextColor.withValues(
-                                      alpha: 0.15,
+                              if (selectionMode) ...[
+                                Icon(
+                                  selected
+                                      ? CupertinoIcons.checkmark_circle_fill
+                                      : CupertinoIcons.circle,
+                                  size: 18,
+                                  color: selected
+                                      ? colors.primaryColor
+                                      : colors.secondaryLabel,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              if (showSenderLine) ...[
+                                if (memberBadgeText.isNotEmpty) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1.5,
                                     ),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        CupertinoIcons.at,
-                                        size: 12,
-                                        color: textColor,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        strings.text('Mentioned'),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: textColor,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(7),
+                                      border: Border.all(
+                                        color: colors.secondaryLabel.withValues(
+                                          alpha: 0.28,
                                         ),
+                                        width: 0.6,
                                       ),
-                                    ],
+                                      color: colors.secondaryFill.withValues(
+                                        alpha: 0.28,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      memberBadgeText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        height: 1.1,
+                                        color: colors.secondaryLabel,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    senderLine,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.secondaryLabel,
+                                    ),
                                   ),
                                 ),
-                              if (message.isEssence)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: secondaryTextColor.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        CupertinoIcons.star_fill,
-                                        size: 12,
-                                        color: textColor,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        strings.text('Essence'),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: textColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              ],
                             ],
                           ),
-                          const SizedBox(height: 6),
-                        ],
-                        if (message.imageUrl.isNotEmpty) ...[
-                          _MessageImage(
-                            url: message.imageUrl,
-                            onTap: onImageTap,
+                        if (showSenderLine || selectionMode)
+                          SizedBox(height: compactLayout ? 2 : 3),
+                        AnimatedContainer(
+                          duration: _csacMotionFast,
+                          curve: _csacEaseInOut,
+                          constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                          padding: bubblePadding,
+                          decoration: BoxDecoration(
+                            color: bubbleColor,
+                            borderRadius: borderRadius,
+                            boxShadow: [
+                              BoxShadow(
+                                color: CupertinoColors.black.withValues(
+                                  alpha: 0.06,
+                                ),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                            border: (selected || focused || searchFocused)
+                                ? Border.all(
+                                    color: colors.primaryColor,
+                                    width: 2,
+                                  )
+                                : null,
                           ),
-                          if (message.body.isNotEmpty &&
-                              !message.body.startsWith('[image]'))
-                            const SizedBox(height: 8),
-                        ],
-                        if (message.voiceUrl.isNotEmpty) ...[
-                          _VoiceMessageControl(
-                            durationSeconds: message.voiceDuration,
-                            playing: playingVoice,
-                            progress: voiceProgress,
-                            onTap: onVoiceTap,
-                            foreground: textColor,
-                            secondary: secondaryTextColor,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (message.replyTo > 0) ...[
+                                GestureDetector(
+                                  onTap: onReplyTap,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: replyColor,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      replyMessage == null
+                                          ? strings.format('Reply #{id}', {
+                                              'id': message.replyTo,
+                                            })
+                                          : strings.format(
+                                              'Reply {sender}: {message}',
+                                              {
+                                                'sender': replyMessage!.sender,
+                                                'message': compactMessage(
+                                                  replyMessage!.body,
+                                                ),
+                                              },
+                                            ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: secondaryTextColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                              ],
+                              if (message.isMentioned || message.isEssence) ...[
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (message.isMentioned)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: secondaryTextColor.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              CupertinoIcons.at,
+                                              size: 12,
+                                              color: textColor,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              strings.text('Mentioned'),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: textColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (message.isEssence)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: secondaryTextColor.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              CupertinoIcons.star_fill,
+                                              size: 12,
+                                              color: textColor,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              strings.text('Essence'),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: textColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                              ],
+                              if (message.imageUrl.isNotEmpty) ...[
+                                _MessageImage(
+                                  url: message.imageUrl,
+                                  onTap: onImageTap,
+                                ),
+                                if (message.body.isNotEmpty &&
+                                    !message.body.startsWith('[image]'))
+                                  const SizedBox(height: 8),
+                              ],
+                              if (message.voiceUrl.isNotEmpty) ...[
+                                _VoiceMessageControl(
+                                  durationSeconds: message.voiceDuration,
+                                  playing: playingVoice,
+                                  progress: voiceProgress,
+                                  onTap: onVoiceTap,
+                                  foreground: textColor,
+                                  secondary: secondaryTextColor,
+                                ),
+                                if (message.body.isNotEmpty &&
+                                    !message.body.startsWith('[voice]'))
+                                  const SizedBox(height: 8),
+                              ],
+                              if (message.fileUrl.isNotEmpty) ...[
+                                _FileMessageControl(
+                                  fileName: message.fileName.ifEmpty(
+                                    fileNameFromUrl(
+                                      message.fileUrl,
+                                    ).ifEmpty(strings.text('File')),
+                                  ),
+                                  onTap: onFileTap,
+                                  foreground: textColor,
+                                  secondary: secondaryTextColor,
+                                ),
+                                if (message.body.isNotEmpty &&
+                                    !message.body.startsWith('[file]'))
+                                  const SizedBox(height: 8),
+                              ],
+                              if (message.body.isNotEmpty &&
+                                  !message.body.startsWith('[image]') &&
+                                  !message.body.startsWith('[voice]') &&
+                                  !message.body.startsWith('[file]'))
+                                message.msgType == 4
+                                    ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            CupertinoIcons.hand_thumbsup,
+                                            size: 15,
+                                            color: textColor,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              message.body,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: textColor,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : _HighlightedMessageText(
+                                        text: message.body,
+                                        query: searchQuery,
+                                        color: textColor,
+                                        highlightColor: mine
+                                            ? CupertinoColors.white.withValues(
+                                                alpha: 0.22,
+                                              )
+                                            : colors.primaryColor.withValues(
+                                                alpha: 0.18,
+                                              ),
+                                      ),
+                            ],
                           ),
-                          if (message.body.isNotEmpty &&
-                              !message.body.startsWith('[voice]'))
-                            const SizedBox(height: 8),
-                        ],
-                        if (message.fileUrl.isNotEmpty) ...[
-                          _FileMessageControl(
-                            fileName: message.fileName.ifEmpty(
-                              fileNameFromUrl(
-                                message.fileUrl,
-                              ).ifEmpty(strings.text('File')),
+                        ),
+                        if (showReadStatus) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            message.isRead
+                                ? context.strings.text('Read')
+                                : context.strings.text('Unread'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: message.isRead
+                                  ? colors.primaryColor
+                                  : colors.tertiaryLabel,
                             ),
-                            onTap: onFileTap,
-                            foreground: textColor,
-                            secondary: secondaryTextColor,
                           ),
-                          if (message.body.isNotEmpty &&
-                              !message.body.startsWith('[file]'))
-                            const SizedBox(height: 8),
                         ],
-                        if (message.body.isNotEmpty &&
-                            !message.body.startsWith('[image]') &&
-                            !message.body.startsWith('[voice]') &&
-                            !message.body.startsWith('[file]'))
-                          _HighlightedMessageText(
-                            text: message.body,
-                            query: searchQuery,
-                            color: textColor,
-                            highlightColor: mine
-                                ? CupertinoColors.white.withValues(alpha: 0.22)
-                                : colors.primaryColor.withValues(alpha: 0.18),
-                          ),
                       ],
                     ),
                   ),
-                  if (showReadStatus) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      message.isRead
-                          ? context.strings.text('Read')
-                          : context.strings.text('Unread'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: message.isRead
-                            ? colors.primaryColor
-                            : colors.tertiaryLabel,
-                      ),
-                    ),
-                  ],
+                  if (mine) ...[const SizedBox(width: 8), avatar],
                 ],
               ),
             ),
@@ -3118,23 +3427,195 @@ class _ChatBackground extends StatelessWidget {
   }
 }
 
-class _SwipeReplyBackground extends StatelessWidget {
-  const _SwipeReplyBackground({required this.mine});
+class _ChatEntryHint extends StatelessWidget {
+  const _ChatEntryHint({super.key, required this.onClose});
 
-  final bool mine;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final strings = context.strings;
     return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Icon(
-          CupertinoIcons.reply,
-          size: 22,
-          color: colors.primaryColor.withValues(alpha: 0.8),
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: _CsacPressable(
+          onTap: onClose,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
+                decoration: BoxDecoration(
+                  color: colors.navBarBackground.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: colors.primaryColor.withValues(alpha: 0.18),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: CupertinoColors.black.withValues(
+                        alpha: colors.isDark ? 0.28 : 0.08,
+                      ),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.hand_draw,
+                      size: 18,
+                      color: colors.primaryColor,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        strings.text(
+                          'Swipe a message sideways to reply quickly.',
+                        ),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.label,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.xmark_circle_fill,
+                      size: 18,
+                      color: colors.tertiaryLabel,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
+      ).csacCardEnter(y: 3),
+    );
+  }
+}
+
+class _SwipeReplyGesture extends StatefulWidget {
+  const _SwipeReplyGesture({
+    required this.mine,
+    required this.enabled,
+    required this.child,
+    this.onReply,
+  });
+
+  final bool mine;
+  final bool enabled;
+  final Widget child;
+  final VoidCallback? onReply;
+
+  @override
+  State<_SwipeReplyGesture> createState() => _SwipeReplyGestureState();
+}
+
+class _SwipeReplyGestureState extends State<_SwipeReplyGesture> {
+  static const double _triggerDistance = 46;
+  static const double _maxDrag = 74;
+
+  double drag = 0;
+  bool armed = false;
+
+  double get progress => (drag.abs() / _triggerDistance).clamp(0.0, 1.0);
+
+  void updateDrag(DragUpdateDetails details) {
+    if (!widget.enabled) return;
+    final direction = widget.mine ? -1.0 : 1.0;
+    final raw = drag + details.delta.dx;
+    final directional = raw * direction;
+    final clamped = directional <= 0 ? 0.0 : directional.clamp(0.0, _maxDrag);
+    final next = clamped * direction;
+    final nextArmed = clamped >= _triggerDistance;
+    if (nextArmed != armed) {
+      HapticFeedback.selectionClick();
+    }
+    setState(() {
+      drag = next;
+      armed = nextArmed;
+    });
+  }
+
+  void endDrag([DragEndDetails? details]) {
+    if (armed) {
+      HapticFeedback.mediumImpact();
+      widget.onReply?.call();
+    }
+    setState(() {
+      drag = 0;
+      armed = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final iconAlignment = widget.mine
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
+    final iconPadding = widget.mine
+        ? const EdgeInsets.only(right: 10)
+        : const EdgeInsets.only(left: 10);
+    final visualOffset = drag * 0.48;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: updateDrag,
+      onHorizontalDragEnd: endDrag,
+      onHorizontalDragCancel: endDrag,
+      child: Stack(
+        alignment: iconAlignment,
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: iconPadding,
+              child: Align(
+                alignment: iconAlignment,
+                child: AnimatedScale(
+                  scale: armed ? 1.04 : 0.88 + progress * 0.12,
+                  duration: _csacMotionFast,
+                  curve: _csacEaseOut,
+                  child: AnimatedOpacity(
+                    opacity: progress == 0 ? 0 : 0.24 + progress * 0.66,
+                    duration: _csacMotionFast,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: armed
+                            ? colors.primaryColor
+                            : colors.primaryColor.withValues(alpha: 0.16),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.reply,
+                        size: 17,
+                        color: armed
+                            ? CupertinoColors.white
+                            : colors.primaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedSlide(
+            offset: Offset(visualOffset / 320, 0),
+            duration: drag == 0
+                ? const Duration(milliseconds: 220)
+                : Duration.zero,
+            curve: Curves.easeOutBack,
+            child: widget.child,
+          ),
+        ],
       ),
     );
   }

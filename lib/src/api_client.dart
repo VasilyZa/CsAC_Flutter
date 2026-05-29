@@ -41,6 +41,8 @@ class CsacApiClient {
 
   String get originUrl => apiOriginFromBaseUrl(_baseUrl);
 
+  Map<String, String> get sessionSnapshot => Map<String, String>.from(_cookies);
+
   void setBaseUrl(String value) {
     _baseUrl = normalizeServerUrl(value);
     configureApiAssetBaseUrl(_baseUrl);
@@ -103,6 +105,13 @@ class CsacApiClient {
     _cookies.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
+  }
+
+  Future<void> restoreSession(Map<String, String> cookies) async {
+    _cookies
+      ..clear()
+      ..addAll(cookies);
+    await saveSession();
   }
 
   Future<CsacUser> login(String username, String password) async {
@@ -221,6 +230,20 @@ class CsacApiClient {
       fileBytes: avatarBytes,
       fileName: fileName,
     );
+  }
+
+  Future<void> updateAllowAutoJoin(bool value) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'privacy',
+      'allow_auto_join': value ? '1' : '0',
+    });
+  }
+
+  Future<void> updatePatAction(String value) {
+    return postForm('user/update_profile', <String, String>{
+      'action': 'pat_action',
+      'pat_action': value.trim(),
+    });
   }
 
   Future<UserProfile> userProfile(int uid) async {
@@ -509,6 +532,27 @@ class CsacApiClient {
     });
   }
 
+  Future<void> setGroupMemberTitle(
+    int roomId,
+    int targetUid, {
+    required String title,
+    required int level,
+  }) {
+    return postForm('group/set_member_title', <String, String>{
+      'room_id': '$roomId',
+      'target_uid': '$targetUid',
+      'title': title.trim(),
+      'level': '$level',
+    });
+  }
+
+  Future<void> inviteGroupMember(int roomId, int targetUid) {
+    return postForm('group/invite_member', <String, String>{
+      'room_id': '$roomId',
+      'target_uid': '$targetUid',
+    });
+  }
+
   Future<List<Conversation>> conversations() async {
     final results = await Future.wait<dynamic>(<Future<dynamic>>[
       friends(),
@@ -543,6 +587,7 @@ class CsacApiClient {
   Future<List<ChatMessage>> messages(
     Conversation conversation, {
     int afterId = 0,
+    int beforeId = 0,
   }) async {
     final route = conversation.type == ConversationType.group
         ? 'message/get_group_msg'
@@ -556,7 +601,9 @@ class CsacApiClient {
         'after_id': '$afterId',
       if (afterId > 0 && conversation.type == ConversationType.private)
         'last_id': '$afterId',
+      if (beforeId > 0) 'before_id': '$beforeId',
       if (conversation.type == ConversationType.group) 'limit': '80',
+      if (conversation.type == ConversationType.private) 'limit': '80',
     };
     final data = await get(route, values);
     final messages = _messageList(data).map(ChatMessage.fromJson).toList()
@@ -591,6 +638,18 @@ class CsacApiClient {
     }
     fields['friend_id'] = '${conversation.id}';
     return postForm('message/send_private_msg', fields);
+  }
+
+  Future<void> sendPatMessage(Conversation conversation, int targetUid) {
+    if (conversation.type != ConversationType.group) {
+      throw const CsacApiException(
+        'Pat messages are only available in groups.',
+      );
+    }
+    return postForm('message/send_pat_msg', <String, String>{
+      'room_id': '${conversation.id}',
+      'target_uid': '$targetUid',
+    });
   }
 
   Future<void> sendImageMessage(
@@ -829,7 +888,7 @@ class CsacApiClient {
     if (lower.endsWith('.wav')) {
       return MediaType('audio', 'wav');
     }
-    if (lower.endsWith('.ogg')) {
+    if (lower.endsWith('.ogg') || lower.endsWith('.opus')) {
       return MediaType('audio', 'ogg');
     }
     if (lower.endsWith('.webm')) {
@@ -844,8 +903,20 @@ class CsacApiClient {
     if (lower.endsWith('.amr')) {
       return MediaType('audio', 'amr');
     }
-    if (lower.endsWith('.3gp')) {
+    if (lower.endsWith('.3gp') || lower.endsWith('.3gpp')) {
       return MediaType('audio', '3gpp');
+    }
+    if (lower.endsWith('.3g2') || lower.endsWith('.3gpp2')) {
+      return MediaType('audio', '3gpp2');
+    }
+    if (lower.endsWith('.flac')) {
+      return MediaType('audio', 'flac');
+    }
+    if (lower.endsWith('.caf')) {
+      return MediaType('audio', 'x-caf');
+    }
+    if (lower.endsWith('.aif') || lower.endsWith('.aiff')) {
+      return MediaType('audio', 'aiff');
     }
     return MediaType('audio', 'mp4');
   }

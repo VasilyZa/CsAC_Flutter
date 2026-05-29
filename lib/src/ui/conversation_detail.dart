@@ -422,6 +422,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         case 'removeAdmin':
           await widget.state.setGroupAdmin(profile.id, member.uid, false);
           break;
+        case 'title':
+          await editMemberTitle(member);
+          return;
       }
       if (!mounted) {
         return;
@@ -432,6 +435,73 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     } catch (err) {
       if (mounted) {
         final strings = context.strings;
+        _showCupertinoToast(
+          context,
+          strings.format('Action failed: {error}', {'error': err}),
+        );
+      }
+    }
+  }
+
+  Future<void> editMemberTitle(GroupMember member) async {
+    final title = TextEditingController(text: member.title);
+    final level = TextEditingController(text: '${member.level}');
+    final strings = context.strings;
+    final result = await showCupertinoDialog<(String, int)?>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(strings.text('Member title')),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoTextField(
+                controller: title,
+                maxLength: 16,
+                placeholder: strings.text('Member title'),
+              ),
+              const SizedBox(height: 10),
+              CupertinoTextField(
+                controller: level,
+                keyboardType: TextInputType.number,
+                placeholder: 'LV1-100',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(strings.text('Cancel')),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop((
+              title.text.trim(),
+              (int.tryParse(level.text.trim()) ?? member.level).clamp(1, 100),
+            )),
+            child: Text(strings.text('Save')),
+          ),
+        ],
+      ),
+    );
+    title.dispose();
+    level.dispose();
+    final profile = group;
+    if (result == null || profile == null || !mounted) return;
+    try {
+      await widget.state.setGroupMemberTitle(
+        profile.id,
+        member.uid,
+        title: result.$1,
+        level: result.$2,
+      );
+      if (!mounted) return;
+      _showCupertinoToast(context, strings.text('Member action completed.'));
+      await load();
+    } catch (err) {
+      if (mounted) {
         _showCupertinoToast(
           context,
           strings.format('Action failed: {error}', {'error': err}),
@@ -462,6 +532,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             CupertinoActionSheetAction(
               onPressed: () => Navigator.of(context).pop('removeAdmin'),
               child: Text(strings.text('Remove admin')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('title'),
+              child: Text(strings.text('Member title')),
             ),
             CupertinoActionSheetAction(
               isDestructiveAction: true,

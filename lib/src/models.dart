@@ -11,6 +11,8 @@ class CsacUser {
     this.username = '',
     this.avatar = '',
     this.onlineStatus = '',
+    this.allowAutoJoin = true,
+    this.patAction = '拍了拍',
   });
 
   final int uid;
@@ -18,6 +20,8 @@ class CsacUser {
   final String username;
   final String avatar;
   final String onlineStatus;
+  final bool allowAutoJoin;
+  final String patAction;
 
   factory CsacUser.fromJson(Map<String, dynamic> json) {
     return CsacUser(
@@ -28,6 +32,10 @@ class CsacUser {
       username: asString(json['username']),
       avatar: normalizeApiUrl(asString(json['avatar'])),
       onlineStatus: asString(json['online_status']),
+      allowAutoJoin:
+          !json.containsKey('allow_auto_join') ||
+          asBool(json['allow_auto_join']),
+      patAction: asString(json['pat_action']).ifEmpty('拍了拍'),
     );
   }
 }
@@ -183,7 +191,10 @@ class UserProfile {
     this.remark = '',
     this.onlineStatus = '',
     this.isFriend = false,
+    this.isBlocked = false,
     this.canAddFriend = false,
+    this.allowAutoJoin = true,
+    this.patAction = '拍了拍',
   });
 
   final int uid;
@@ -193,7 +204,10 @@ class UserProfile {
   final String remark;
   final String onlineStatus;
   final bool isFriend;
+  final bool isBlocked;
   final bool canAddFriend;
+  final bool allowAutoJoin;
+  final String patAction;
 
   String get displayName {
     if (remark.trim().isNotEmpty) {
@@ -210,6 +224,7 @@ class UserProfile {
       if (username.isNotEmpty) '@$username',
       if (onlineStatus.isNotEmpty) onlineStatus,
       if (isFriend) 'friend',
+      if (isBlocked) 'blocked',
     ].join(' | ');
   }
 
@@ -223,7 +238,12 @@ class UserProfile {
       remark: asString(json['remark']),
       onlineStatus: asString(json['online_status']),
       isFriend: asBool(json['is_friend']),
+      isBlocked: asBool(json['is_blocked']),
       canAddFriend: asBool(json['can_add_friend']),
+      allowAutoJoin:
+          !json.containsKey('allow_auto_join') ||
+          asBool(json['allow_auto_join']),
+      patAction: asString(json['pat_action']).ifEmpty('拍了拍'),
     );
   }
 }
@@ -384,6 +404,7 @@ class ChatMessage {
     required this.senderId,
     required this.sender,
     required this.body,
+    this.senderAvatar = '',
     this.time = '',
     this.rawTime = '',
     this.imageUrl = '',
@@ -391,6 +412,10 @@ class ChatMessage {
     this.voiceDuration = 0,
     this.fileUrl = '',
     this.fileName = '',
+    this.msgType = 1,
+    this.recallStatus = 0,
+    this.memberTitle = '',
+    this.memberLevel = 1,
     this.canRecall = false,
     this.isRecalled = false,
     this.isEssence = false,
@@ -403,6 +428,7 @@ class ChatMessage {
   final int senderId;
   final String sender;
   final String body;
+  final String senderAvatar;
   final String time;
   final String rawTime;
   final String imageUrl;
@@ -410,6 +436,10 @@ class ChatMessage {
   final int voiceDuration;
   final String fileUrl;
   final String fileName;
+  final int msgType;
+  final int recallStatus;
+  final String memberTitle;
+  final int memberLevel;
   final bool canRecall;
   final bool isRecalled;
   final bool isEssence;
@@ -422,6 +452,7 @@ class ChatMessage {
     int? senderId,
     String? sender,
     String? body,
+    String? senderAvatar,
     String? time,
     String? rawTime,
     String? imageUrl,
@@ -429,6 +460,10 @@ class ChatMessage {
     int? voiceDuration,
     String? fileUrl,
     String? fileName,
+    int? msgType,
+    int? recallStatus,
+    String? memberTitle,
+    int? memberLevel,
     bool? canRecall,
     bool? isRecalled,
     bool? isEssence,
@@ -441,6 +476,7 @@ class ChatMessage {
       senderId: senderId ?? this.senderId,
       sender: sender ?? this.sender,
       body: body ?? this.body,
+      senderAvatar: senderAvatar ?? this.senderAvatar,
       time: time ?? this.time,
       rawTime: rawTime ?? this.rawTime,
       imageUrl: imageUrl ?? this.imageUrl,
@@ -448,6 +484,10 @@ class ChatMessage {
       voiceDuration: voiceDuration ?? this.voiceDuration,
       fileUrl: fileUrl ?? this.fileUrl,
       fileName: fileName ?? this.fileName,
+      msgType: msgType ?? this.msgType,
+      recallStatus: recallStatus ?? this.recallStatus,
+      memberTitle: memberTitle ?? this.memberTitle,
+      memberLevel: memberLevel ?? this.memberLevel,
       canRecall: canRecall ?? this.canRecall,
       isRecalled: isRecalled ?? this.isRecalled,
       isEssence: isEssence ?? this.isEssence,
@@ -462,10 +502,13 @@ class ChatMessage {
         ? asInt(json['id'])
         : asInt(json['msg_id']);
     final senderId = firstInt(json, const ['from_uid', 'uid', 'user_id']);
+    final recallStatus = firstInt(json, const ['was_replied', 'recall_status']);
     final isRecalled =
+        recallStatus > 0 ||
         asBool(json['is_recalled']) ||
         asBool(json['recalled']) ||
         asBool(json['is_revoked']);
+    final msgType = asInt(json['msg_type']);
     final rawImage = firstString(json, const ['image_url', 'image', 'img']);
     final rawVoice = firstString(json, const [
       'voice_url',
@@ -518,7 +561,7 @@ class ChatMessage {
     ]).ifEmpty(fileNameFromUrl(file));
     var body = asString(json['content']).trim();
     if (isRecalled) {
-      body = '[recalled]';
+      body = rawContent.isEmpty ? '[recalled]' : rawContent;
     } else {
       if (image.isNotEmpty && contentLooksLikeImage) {
         body = '';
@@ -555,6 +598,14 @@ class ChatMessage {
           ? 'UID $senderId'
           : firstString(json, const ['nickname', 'sender_name']),
       body: body,
+      senderAvatar: normalizeApiUrl(
+        firstString(json, const [
+          'avatar',
+          'sender_avatar',
+          'user_avatar',
+          'from_avatar',
+        ]),
+      ),
       time: humanReadableTimestamp(rawTime),
       rawTime: rawTime,
       imageUrl: image,
@@ -569,7 +620,14 @@ class ChatMessage {
       ]),
       fileUrl: file,
       fileName: fileName,
-      canRecall: asBool(json['can_recall']),
+      msgType: msgType == 0 ? 1 : msgType,
+      recallStatus: recallStatus,
+      memberTitle: firstString(json, const ['member_title', 'title']),
+      memberLevel: firstInt(json, const [
+        'member_level',
+        'level',
+      ]).clamp(1, 100),
+      canRecall: !isRecalled && asBool(json['can_recall']),
       isRecalled: isRecalled,
       isEssence: asBool(json['is_essence']),
       isMentioned: asBool(json['is_mentioned']),
@@ -586,6 +644,8 @@ class GroupMember {
     this.username = '',
     this.avatar = '',
     this.role = '',
+    this.title = '',
+    this.level = 1,
     this.onlineStatus = '',
     this.isOwner = false,
     this.isAdmin = false,
@@ -596,6 +656,8 @@ class GroupMember {
   final String username;
   final String avatar;
   final String role;
+  final String title;
+  final int level;
   final String onlineStatus;
   final bool isOwner;
   final bool isAdmin;
@@ -603,6 +665,8 @@ class GroupMember {
   String get subtitle {
     return [
       if (username.isNotEmpty) '@$username',
+      'LV$level',
+      if (title.isNotEmpty) title,
       if (roleLabel.isNotEmpty) roleLabel,
       if (onlineStatus.isNotEmpty) onlineStatus,
     ].join(' | ');
@@ -644,6 +708,8 @@ class GroupMember {
         'member_role',
         'identity',
       ]),
+      title: firstString(json, const ['title', 'member_title']),
+      level: firstInt(json, const ['level', 'member_level']).clamp(1, 100),
       onlineStatus: asString(json['online_status']),
       isOwner: firstBool(json, const [
         'is_owner',
@@ -1270,7 +1336,12 @@ List<ChatMessage> mergeChatMessages(
     for (final message in existing) message.id: message,
   };
   for (final message in incoming) {
-    byId[message.id] = message;
+    final existingMessage = byId[message.id];
+    if (existingMessage?.isRecalled == true && !message.isRecalled) {
+      byId[message.id] = existingMessage!;
+    } else {
+      byId[message.id] = message;
+    }
   }
   final merged = byId.values.toList();
   merged.sort((a, b) => a.id.compareTo(b.id));

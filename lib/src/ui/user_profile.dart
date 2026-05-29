@@ -480,18 +480,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     title: strings.text('Add friend'),
                                     onTap: () => addFriend(loaded),
                                   ),
-                                if (!loaded.isFriend && !loaded.canAddFriend)
+                                if (loaded.isBlocked)
+                                  actionTile(
+                                    icon: CupertinoIcons.arrow_counterclockwise,
+                                    title: strings.text('Unblock friend'),
+                                    onTap: () => recoverFriend(loaded),
+                                  ),
+                                if (!loaded.isFriend &&
+                                    !loaded.canAddFriend &&
+                                    !loaded.isBlocked) ...[
                                   actionTile(
                                     icon: CupertinoIcons.person_add,
                                     title: strings.text('Cannot add friend'),
                                     onTap: null,
                                   ),
-                                if (!loaded.isFriend && !loaded.canAddFriend)
                                   actionTile(
                                     icon: CupertinoIcons.arrow_counterclockwise,
                                     title: strings.text('Recover friend'),
                                     onTap: () => recoverFriend(loaded),
                                   ),
+                                ],
                                 actionTile(
                                   icon: CupertinoIcons.person_badge_minus,
                                   title: strings.text('Delete friend'),

@@ -256,31 +256,27 @@ class _AnimatedNarrowPageSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final forward = index >= previousIndex;
     return AnimatedSwitcher(
-      duration: _csacMotionSlow,
-      reverseDuration: const Duration(milliseconds: 300),
-      switchInCurve: _csacEmphasizedEaseOut,
+      duration: const Duration(milliseconds: 300),
+      reverseDuration: const Duration(milliseconds: 220),
+      switchInCurve: _csacModernEase,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
         final incoming = child.key == ValueKey<int>(index);
-        final beginOffset = incoming
-            ? Offset(forward ? 0.09 : -0.09, 0.008)
-            : Offset(forward ? -0.035 : 0.035, 0);
         final curved = CurvedAnimation(
           parent: animation,
-          curve: incoming ? _csacEmphasizedEaseOut : Curves.easeInCubic,
+          curve: incoming ? _csacModernEase : Curves.easeInCubic,
         );
         return FadeTransition(
           opacity: curved,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: beginOffset,
+              begin: incoming ? const Offset(0, 0.018) : Offset.zero,
               end: Offset.zero,
             ).animate(curved),
             child: ScaleTransition(
               scale: Tween<double>(
-                begin: incoming ? 0.986 : 1.006,
+                begin: incoming ? 0.992 : 1,
                 end: 1,
               ).animate(curved),
               child: child,
@@ -719,6 +715,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       result.add(
         _ConversationTile(
           conversation: conversation,
+          index: i,
           muted: widget.state.isConversationMuted(conversation),
           pinned: widget.state.isConversationPinned(conversation),
           selected:
@@ -730,7 +727,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               widget.onConversationSelected!(conversation);
               return;
             }
-            await _csacPush<void>(
+            await _csacPushConversation<void>(
               context,
               (_) =>
                   ChatScreen(state: widget.state, conversation: conversation),
@@ -843,6 +840,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
     required this.conversation,
+    required this.index,
     required this.onTap,
     required this.onLongPress,
     required this.muted,
@@ -851,6 +849,7 @@ class _ConversationTile extends StatelessWidget {
   });
 
   final Conversation conversation;
+  final int index;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final bool muted;
@@ -863,104 +862,133 @@ class _ConversationTile extends StatelessWidget {
     final colors = CsacColors.of(context);
     final strings = context.strings;
 
+    final decoration = BoxDecoration(
+      gradient: selected
+          ? LinearGradient(
+              colors: [
+                colors.primaryColor.withValues(alpha: 0.16),
+                colors.primaryColor.withValues(alpha: 0.06),
+              ],
+            )
+          : null,
+      color: selected ? null : colors.cardBackground,
+    );
+
     return _CsacPressable(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        color: selected
-            ? colors.primaryColor.withValues(alpha: 0.10)
-            : colors.cardBackground,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-        child: Row(
-          children: [
-            // Avatar with gradient fallback
-            _Avatar(
-              url: conversation.avatar,
-              fallback: isGroup
-                  ? CupertinoIcons.person_2_fill
-                  : CupertinoIcons.person_fill,
-              size: 44,
-              name: conversation.name,
-            ),
-            const SizedBox(width: 12),
-            // Name + subtitle
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    conversation.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.label,
-                    ),
+      scale: 0.998,
+      opacity: 0.84,
+      child: Padding(
+        padding: EdgeInsets.zero,
+        child: AnimatedContainer(
+          duration: _csacMotionFast,
+          curve: _csacEaseOut,
+          decoration: decoration,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          child: _ConversationSurfaceHero(
+            conversation: conversation,
+            child: Row(
+              children: [
+                _ConversationAvatarHero(conversation: conversation, size: 44),
+                const SizedBox(width: 12),
+                // Name + subtitle
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ConversationTitleHero(
+                        conversation: conversation,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: colors.label,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        conversation.subtitle.isEmpty
+                            ? strings.text(
+                                isGroup ? 'Group chat' : 'Private chat',
+                              )
+                            : conversation.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.secondaryLabel,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    conversation.subtitle.isEmpty
-                        ? strings.text(isGroup ? 'Group chat' : 'Private chat')
-                        : conversation.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colors.secondaryLabel,
-                    ),
+                ),
+                const SizedBox(width: 8),
+                // Right side: pinned/muted state and unread badge.
+                if (pinned) ...[
+                  Icon(
+                    CupertinoIcons.pin_fill,
+                    size: 14,
+                    color: colors.tertiaryLabel,
                   ),
+                  if (muted || conversation.unreadCount > 0)
+                    const SizedBox(width: 6),
                 ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Right side: pinned/muted state and unread badge.
-            if (pinned) ...[
-              Icon(
-                CupertinoIcons.pin_fill,
-                size: 14,
-                color: colors.tertiaryLabel,
-              ),
-              if (muted || conversation.unreadCount > 0)
-                const SizedBox(width: 6),
-            ],
-            if (muted)
-              Icon(
-                CupertinoIcons.bell_slash_fill,
-                size: 15,
-                color: colors.tertiaryLabel,
-              ),
-            if ((pinned || muted) && conversation.unreadCount > 0)
-              const SizedBox(width: 6),
-            if (conversation.unreadCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: muted
-                      ? colors.secondaryFill
-                      : CupertinoColors.systemRed,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                constraints: const BoxConstraints(minWidth: 20),
-                child: Text(
-                  conversation.unreadCount > 99
-                      ? '99+'
-                      : '${conversation.unreadCount}',
-                  style: TextStyle(
-                    color: muted
-                        ? colors.secondaryLabel
-                        : CupertinoColors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                if (muted)
+                  Icon(
+                    CupertinoIcons.bell_slash_fill,
+                    size: 15,
+                    color: colors.tertiaryLabel,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
+                if ((pinned || muted) && conversation.unreadCount > 0)
+                  const SizedBox(width: 6),
+                if (conversation.unreadCount > 0)
+                  AnimatedContainer(
+                    duration: _csacMotionFast,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: muted
+                          ? null
+                          : const LinearGradient(
+                              colors: [Color(0xFFFF5A5F), Color(0xFFFF2D55)],
+                            ),
+                      color: muted ? colors.secondaryFill : null,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: muted
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: CupertinoColors.systemRed.withValues(
+                                  alpha: 0.24,
+                                ),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                    ),
+                    constraints: const BoxConstraints(minWidth: 20),
+                    child: Text(
+                      conversation.unreadCount > 99
+                          ? '99+'
+                          : '${conversation.unreadCount}',
+                      style: TextStyle(
+                        color: muted
+                            ? colors.secondaryLabel
+                            : CupertinoColors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
-      ),
+      ).csacCardEnter(delayMs: min(index * 18, 180)),
     );
   }
 }

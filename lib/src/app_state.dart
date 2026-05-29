@@ -167,6 +167,12 @@ class CsacAppState extends ChangeNotifier {
     try {
       user = await client.login(username, password);
       await cache.saveUser(user!);
+      await LoginAccountStore.upsert(
+        user: user!,
+        username: username,
+        serverUrl: client.baseUrl,
+        sessionCookies: client.sessionSnapshot,
+      );
       offlineMode = false;
       sessionExpired = false;
       error = null;
@@ -202,6 +208,12 @@ class CsacAppState extends ChangeNotifier {
         avatarFileName: avatarFileName,
       );
       await cache.saveUser(user!);
+      await LoginAccountStore.upsert(
+        user: user!,
+        username: username,
+        serverUrl: client.baseUrl,
+        sessionCookies: client.sessionSnapshot,
+      );
       offlineMode = false;
       sessionExpired = false;
       error = null;
@@ -313,6 +325,38 @@ class CsacAppState extends ChangeNotifier {
     await refreshCurrentUser();
   }
 
+  Future<void> updateAllowAutoJoin(bool value) async {
+    await client.updateAllowAutoJoin(value);
+    if (user != null) {
+      user = CsacUser(
+        uid: user!.uid,
+        nickname: user!.nickname,
+        username: user!.username,
+        avatar: user!.avatar,
+        onlineStatus: user!.onlineStatus,
+        allowAutoJoin: value,
+        patAction: user!.patAction,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> updatePatAction(String value) async {
+    await client.updatePatAction(value);
+    if (user != null) {
+      user = CsacUser(
+        uid: user!.uid,
+        nickname: user!.nickname,
+        username: user!.username,
+        avatar: user!.avatar,
+        onlineStatus: user!.onlineStatus,
+        allowAutoJoin: user!.allowAutoJoin,
+        patAction: value.trim().isEmpty ? '拍了拍' : value.trim(),
+      );
+      notifyListeners();
+    }
+  }
+
   Future<void> updatePassword(
     String oldPassword,
     String newPassword,
@@ -348,6 +392,65 @@ class CsacAppState extends ChangeNotifier {
 
   void _applyPreferredServer() {
     client.setBaseUrl(preferences.serverUrl);
+  }
+
+  Future<List<LoginAccountRecord>> loadLoginAccounts() {
+    return LoginAccountStore.loadForServer(client.baseUrl);
+  }
+
+  Future<void> removeLoginAccount(LoginAccountRecord record) {
+    return LoginAccountStore.remove(record);
+  }
+
+  Future<void> loginWithSavedSession(LoginAccountRecord record) async {
+    if (!record.hasSession) {
+      throw const CsacAuthException('Saved session is not available.');
+    }
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      await client.restoreSession(record.sessionCookies);
+      user = await client.currentUser();
+      await cache.clear();
+      await ConversationDraftStore.clearAll();
+      await cache.saveUser(user!);
+      await LoginAccountStore.upsert(
+        user: user!,
+        username: record.username,
+        serverUrl: client.baseUrl,
+        sessionCookies: client.sessionSnapshot,
+      );
+      offlineMode = false;
+      sessionExpired = false;
+      error = null;
+      await syncConversations();
+      await refreshNotificationCounts();
+    } on CsacAuthException {
+      await client.clearSession();
+      await LoginAccountStore.clearSession(record);
+      rethrow;
+    } catch (err) {
+      error = err.toString();
+      rethrow;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> returnToLoginWithoutInvalidatingSession() async {
+    await client.clearSession();
+    await cache.clear();
+    await ConversationDraftStore.clearAll();
+    user = null;
+    conversations = const <Conversation>[];
+    notificationCounts = const NotificationCounts();
+    activeConversation = null;
+    offlineMode = false;
+    sessionExpired = false;
+    error = null;
+    notifyListeners();
   }
 
   bool isActiveConversation(Conversation conversation) {
@@ -448,7 +551,15 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> syncConversations() async {
+    final previousGroups = {
+      for (final conversation in conversations)
+        if (conversation.type == ConversationType.group) conversation.id,
+    };
     final loaded = await client.conversations();
+    final loadedGroups = {
+      for (final conversation in loaded)
+        if (conversation.type == ConversationType.group) conversation.id,
+    };
     final normalized = <Conversation>[
       for (final conversation in loaded)
         isActiveConversation(conversation)
@@ -457,6 +568,11 @@ class CsacAppState extends ChangeNotifier {
     ];
     conversations = normalized;
     await cache.saveConversations(normalized);
+    for (final roomId in previousGroups.difference(loadedGroups)) {
+      await cache.removeConversation(
+        Conversation(type: ConversationType.group, id: roomId, name: ''),
+      );
+    }
     offlineMode = false;
     notifyListeners();
   }
@@ -884,8 +1000,30 @@ class CsacAppState extends ChangeNotifier {
     return client.setGroupAdmin(roomId, targetUid, set);
   }
 
+  Future<void> setGroupMemberTitle(
+    int roomId,
+    int targetUid, {
+    required String title,
+    required int level,
+  }) {
+    return client.setGroupMemberTitle(
+      roomId,
+      targetUid,
+      title: title,
+      level: level,
+    );
+  }
+
+  Future<void> inviteGroupMember(int roomId, int targetUid) {
+    return client.inviteGroupMember(roomId, targetUid);
+  }
+
   Future<void> recallMessage(Conversation conversation, int msgId) {
     return client.recallMessage(conversation, msgId);
+  }
+
+  Future<void> sendPatMessage(Conversation conversation, int targetUid) {
+    return client.sendPatMessage(conversation, targetUid);
   }
 
   Future<void> toggleEssence(int roomId, int msgId) {
@@ -912,11 +1050,26 @@ class CsacAppState extends ChangeNotifier {
     return cache.filterLocallyDeletedMessages(conversation, loaded);
   }
 
+  Future<List<ChatMessage>> loadOlderMessages(
+    Conversation conversation, {
+    int beforeId = 0,
+  }) async {
+    final baseline = beforeId > 0
+        ? beforeId
+        : await cache.oldestMessageId(conversation);
+    if (baseline <= 0) {
+      return const <ChatMessage>[];
+    }
+    final loaded = await client.messages(conversation, beforeId: baseline);
+    await cache.saveMessages(conversation, loaded);
+    return cache.filterLocallyDeletedMessages(conversation, loaded);
+  }
+
   Future<List<ChatMessage>> loadMessagesFromNetwork(
     Conversation conversation,
   ) async {
     final loaded = await client.messages(conversation);
-    await cache.replaceMessages(conversation, loaded);
+    await cache.saveMessages(conversation, loaded);
     return cache.filterLocallyDeletedMessages(conversation, loaded);
   }
 

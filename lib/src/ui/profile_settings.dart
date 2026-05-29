@@ -264,6 +264,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool updatingNickname = false;
   bool updatingAvatar = false;
   bool updatingPassword = false;
+  bool updatingPrivacy = false;
+  bool updatingPatAction = false;
 
   Future<void> editNickname() async {
     final current = widget.state.user?.nickname ?? '';
@@ -464,6 +466,78 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  Future<void> toggleAllowAutoJoin(bool value) async {
+    if (updatingPrivacy) return;
+    setState(() => updatingPrivacy = true);
+    try {
+      await widget.state.updateAllowAutoJoin(value);
+      if (!mounted) return;
+      _showCupertinoToast(context, context.strings.text('Settings updated.'));
+      setState(() {});
+    } catch (err) {
+      if (mounted) {
+        _showCupertinoToast(
+          context,
+          context.strings.format('Update failed: {error}', {'error': err}),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => updatingPrivacy = false);
+    }
+  }
+
+  Future<void> editPatAction() async {
+    final current = widget.state.user?.patAction ?? '拍了拍';
+    final controller = TextEditingController(text: current);
+    final strings = context.strings;
+    final value = await showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(strings.text('Pat action')),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 16,
+            placeholder: strings.text('Pat action'),
+            onSubmitted: (value) => Navigator.of(context).pop(value),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(strings.text('Save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null || !mounted) return;
+    final trimmed = value.trim().isEmpty ? '拍了拍' : value.trim();
+    setState(() => updatingPatAction = true);
+    try {
+      await widget.state.updatePatAction(trimmed);
+      if (!mounted) return;
+      _showCupertinoToast(context, strings.text('Settings updated.'));
+      setState(() {});
+    } catch (err) {
+      if (mounted) {
+        _showCupertinoToast(
+          context,
+          strings.format('Update failed: {error}', {'error': err}),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => updatingPatAction = false);
+    }
+  }
+
   Widget _progressOrChevron(bool loading, CsacColors colors) {
     if (!loading) {
       return Icon(
@@ -560,6 +634,25 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     subtitle: strings.text('Update your login password'),
                     trailing: _progressOrChevron(updatingPassword, colors),
                     onTap: updatingPassword ? null : changePassword,
+                  ),
+                  _CupertinoListTile(
+                    leading: const Icon(CupertinoIcons.hand_thumbsup, size: 22),
+                    title: strings.text('Pat action'),
+                    subtitle: user?.patAction ?? '拍了拍',
+                    trailing: _progressOrChevron(updatingPatAction, colors),
+                    onTap: updatingPatAction ? null : editPatAction,
+                  ),
+                  _CupertinoListTile(
+                    leading: const Icon(CupertinoIcons.person_2, size: 22),
+                    title: strings.text('Allow auto join'),
+                    subtitle: strings.text(
+                      'Allow invites to join groups directly',
+                    ),
+                    trailing: CupertinoSwitch(
+                      value: user?.allowAutoJoin ?? true,
+                      onChanged: updatingPrivacy ? null : toggleAllowAutoJoin,
+                    ),
+                    showChevron: false,
                   ),
                   _CupertinoListTile(
                     leading: const Icon(CupertinoIcons.shield, size: 22),
@@ -917,7 +1010,7 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.2.0-43';
+const _csacAppVersion = '1.2.1-45';
 const _csacAppBuild = '43';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 
@@ -1305,8 +1398,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController serverUrl;
+  List<LoginAccountRecord> accounts = const <LoginAccountRecord>[];
   bool clearing = false;
   bool refreshing = false;
+  bool loadingAccounts = true;
   bool savingServer = false;
   late bool developerOptionsExpanded;
 
@@ -1326,6 +1421,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     serverUrl = TextEditingController(text: widget.state.preferences.serverUrl);
     developerOptionsExpanded = widget.initialDeveloperOptionsExpanded;
+    loadAccounts();
   }
 
   @override
@@ -1362,6 +1458,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       orElse: () => themeColorOptions.first,
     );
     return context.strings.text(selected.label);
+  }
+
+  Future<void> loadAccounts() async {
+    final loaded = await widget.state.loadLoginAccounts();
+    if (!mounted) return;
+    setState(() {
+      accounts = loaded;
+      loadingAccounts = false;
+    });
   }
 
   Future<void> refreshAll() async {
@@ -1419,6 +1524,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context,
       rootNavigator: true,
     ).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> addAccount() async {
+    await widget.state.returnToLoginWithoutInvalidatingSession();
+    if (!mounted) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> switchAccount(LoginAccountRecord account) async {
+    if (widget.state.user?.uid == account.uid && account.uid > 0) {
+      return;
+    }
+    try {
+      await widget.state.loginWithSavedSession(account);
+      if (!mounted) return;
+      await loadAccounts();
+      if (!mounted) return;
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).popUntil((route) => route.isFirst);
+    } catch (_) {
+      if (!mounted) return;
+      _showCupertinoToast(
+        context,
+        context.strings.text('Saved session expired. Please enter password.'),
+      );
+      await addAccount();
+    }
   }
 
   Future<void> saveServerUrl() async {
@@ -1625,6 +1762,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              if (loadingAccounts)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: CupertinoActivityIndicator(radius: 10),
+                  ),
+                )
+              else
+                _RecentAccountsPanel(
+                  title: 'Switch account',
+                  accounts: accounts,
+                  currentUid: user?.uid,
+                  onSelect: switchAccount,
+                  onAdd: addAccount,
+                ),
               const SizedBox(height: 12),
               _CupertinoGroupedCard(
                 margin: EdgeInsets.zero,

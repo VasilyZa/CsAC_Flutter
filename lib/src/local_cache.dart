@@ -207,6 +207,17 @@ class CsacLocalCache {
         ''');
       for (final row in staleRows) {
         deleteStatement.execute([row['type'], row['remote_id']]);
+        db.execute(
+          'DELETE FROM messages WHERE conversation_type = ? AND conversation_id = ?',
+          [row['type'], row['remote_id']],
+        );
+        db.execute(
+          '''
+          DELETE FROM local_deleted_messages
+          WHERE conversation_type = ? AND conversation_id = ?
+          ''',
+          [row['type'], row['remote_id']],
+        );
       }
       db.execute('COMMIT');
     } catch (_) {
@@ -227,7 +238,8 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ?
       ORDER BY id DESC
@@ -248,7 +260,8 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ?
       ORDER BY id ASC
@@ -270,7 +283,8 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ? AND id <= ?
       ORDER BY id DESC
@@ -282,7 +296,8 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ? AND conversation_id = ? AND id > ?
       ORDER BY id ASC
@@ -312,6 +327,22 @@ class CsacLocalCache {
       return 0;
     }
     return rows.first['last_id'] as int;
+  }
+
+  Future<int> oldestMessageId(Conversation conversation) async {
+    final db = await _database();
+    final rows = db.select(
+      '''
+      SELECT COALESCE(MIN(id), 0) AS first_id
+      FROM messages
+      WHERE conversation_type = ? AND conversation_id = ?
+      ''',
+      [_conversationTypeName(conversation.type), conversation.id],
+    );
+    if (rows.isEmpty) {
+      return 0;
+    }
+    return rows.first['first_id'] as int;
   }
 
   Future<List<MessageSearchResult>> searchMessages(
@@ -377,7 +408,11 @@ class CsacLocalCache {
         m.is_essence,
         m.is_mentioned,
         m.is_read,
-        m.reply_to
+        m.reply_to,
+        m.msg_type,
+        m.recall_status,
+        m.member_title,
+        m.member_level
       FROM messages m
       JOIN conversations c
         ON c.type = m.conversation_type AND c.remote_id = m.conversation_id
@@ -412,7 +447,8 @@ class CsacLocalCache {
       r'''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ?
         AND conversation_id = ?
@@ -441,7 +477,8 @@ class CsacLocalCache {
       '''
       SELECT id, sender_id, sender, body, time, raw_time, image_url, voice_url,
         voice_duration, file_url, file_name, can_recall, is_recalled,
-        is_essence, is_mentioned, is_read, reply_to
+        is_essence, is_mentioned, is_read, reply_to, msg_type, recall_status,
+        member_title, member_level
       FROM messages
       WHERE conversation_type = ?
         AND conversation_id = ?
@@ -520,9 +557,10 @@ class CsacLocalCache {
       INSERT INTO messages (
         conversation_type, conversation_id, id, sender_id, sender, body, time, raw_time,
         image_url, voice_url, voice_duration, file_url, file_name, can_recall,
-        is_recalled, is_essence, is_mentioned, is_read, reply_to
+        is_recalled, is_essence, is_mentioned, is_read, reply_to,
+        msg_type, recall_status, member_title, member_level
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(conversation_type, conversation_id, id) DO UPDATE SET
         sender_id = excluded.sender_id,
         sender = excluded.sender,
@@ -539,7 +577,11 @@ class CsacLocalCache {
         is_essence = excluded.is_essence,
         is_mentioned = excluded.is_mentioned,
         is_read = excluded.is_read,
-        reply_to = excluded.reply_to
+        reply_to = excluded.reply_to,
+        msg_type = excluded.msg_type,
+        recall_status = excluded.recall_status,
+        member_title = excluded.member_title,
+        member_level = excluded.member_level
       ''');
     try {
       db.execute('BEGIN IMMEDIATE');
@@ -569,6 +611,10 @@ class CsacLocalCache {
           message.isMentioned ? 1 : 0,
           message.isRead ? 1 : 0,
           message.replyTo,
+          message.msgType,
+          message.recallStatus,
+          message.memberTitle,
+          message.memberLevel,
         ]);
       }
       db.execute('COMMIT');
@@ -783,6 +829,30 @@ class CsacLocalCache {
       'reply_to',
       'INTEGER NOT NULL DEFAULT 0',
     );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'msg_type',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'recall_status',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'member_title',
+      "TEXT NOT NULL DEFAULT ''",
+    );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'member_level',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
     db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
       ON messages(conversation_type, conversation_id, id)
@@ -814,6 +884,11 @@ class CsacLocalCache {
     final voiceUrl = row['voice_url'] as String;
     final fileUrl = row['file_url'] as String? ?? '';
     var body = row['body'] as String;
+    final recallStatus = row['recall_status'] as int? ?? 0;
+    final isRecalled = recallStatus > 0 || (row['is_recalled'] as int) != 0;
+    if (isRecalled && body == '[已撤回]') {
+      body = '消息已撤回';
+    }
     if (imageUrl.isNotEmpty &&
         (body.startsWith('[image]') || looksLikeImagePath(body))) {
       body = '[image]';
@@ -838,8 +913,12 @@ class CsacLocalCache {
       voiceDuration: row['voice_duration'] as int,
       fileUrl: fileUrl,
       fileName: row['file_name'] as String? ?? '',
-      canRecall: (row['can_recall'] as int) != 0,
-      isRecalled: (row['is_recalled'] as int) != 0,
+      msgType: row['msg_type'] as int? ?? 1,
+      recallStatus: recallStatus,
+      memberTitle: row['member_title'] as String? ?? '',
+      memberLevel: row['member_level'] as int? ?? 1,
+      canRecall: !isRecalled && (row['can_recall'] as int) != 0,
+      isRecalled: isRecalled,
       isEssence: (row['is_essence'] as int) != 0,
       isMentioned: (row['is_mentioned'] as int) != 0,
       isRead: (row['is_read'] as int? ?? 0) != 0,
