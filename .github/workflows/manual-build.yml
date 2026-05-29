@@ -21,6 +21,11 @@ on:
         required: true
         default: false
         type: boolean
+      release_notes:
+        description: GitHub Release notes
+        required: false
+        default: ''
+        type: string
 
 permissions:
   actions: read
@@ -422,5 +427,6 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: CsAC ${{ steps.version.outputs.release_version }}
+          body: ${{ inputs.release_notes }}
           files: release-upload/*
           fail_on_unmatched_files: true

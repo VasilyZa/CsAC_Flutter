@@ -2973,10 +2973,12 @@ class _MessageBubble extends StatelessWidget {
       message.sender,
       if (displayTime.isNotEmpty) displayTime,
     ].join(' · ');
-    if (message.isRecalled) {
-      final recalledText = strings.format('{sender} recalled a message', {
-        'sender': message.sender,
-      });
+    if (message.isRecalled || message.msgType == 4) {
+      final systemText = message.isRecalled
+          ? strings.format('{sender} recalled a message', {
+              'sender': message.sender,
+            })
+          : message.body;
       return Padding(
         padding: EdgeInsets.symmetric(vertical: compactLayout ? 2 : 6),
         child: GestureDetector(
@@ -2999,7 +3001,7 @@ class _MessageBubble extends StatelessWidget {
               ],
               Flexible(
                 child: Text(
-                  recalledText,
+                  systemText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
