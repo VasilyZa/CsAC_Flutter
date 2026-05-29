@@ -172,8 +172,8 @@ Future<T?> _csacPush<T>(BuildContext context, WidgetBuilder builder) {
 PageRoute<T> _csacConversationRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
     pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 230),
+    transitionDuration: const Duration(milliseconds: 420),
+    reverseTransitionDuration: const Duration(milliseconds: 360),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final enter = CurvedAnimation(
         parent: animation,

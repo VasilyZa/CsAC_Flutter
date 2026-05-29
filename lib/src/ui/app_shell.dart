@@ -583,16 +583,20 @@ class _RecentAccountsPanel extends StatelessWidget {
             ),
           ),
         ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            decoration: BoxDecoration(
-              color: colors.cardBackground,
-              border: Border.all(
+        DecoratedBox(
+          decoration: ShapeDecoration(
+            color: colors.cardBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
                 color: colors.separator.withValues(alpha: 0.35),
                 width: 0.5,
               ),
             ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 for (var i = 0; i < accounts.length; i++) ...[

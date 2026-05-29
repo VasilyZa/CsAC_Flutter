@@ -273,31 +273,6 @@ class _ConversationSurfaceHero extends StatelessWidget {
   }
 }
 
-class _CsacHeroText extends StatelessWidget {
-  const _CsacHeroText({
-    required this.tag,
-    required this.child,
-    this.enabled = true,
-  });
-
-  final Object tag;
-  final Widget child;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!enabled) {
-      return child;
-    }
-    return Hero(
-      tag: tag,
-      createRectTween: (begin, end) =>
-          _CsacContextRectTween(begin: begin, end: end),
-      child: Material(type: MaterialType.transparency, child: child),
-    );
-  }
-}
-
 class _ConversationAvatarHero extends StatelessWidget {
   const _ConversationAvatarHero({required this.conversation, this.size = 44});
 
@@ -323,6 +298,40 @@ class _ConversationAvatarHero extends StatelessWidget {
         dimension: size,
         child: Material(type: MaterialType.transparency, child: avatar),
       ),
+    );
+  }
+}
+
+class _CsacHeroText extends StatelessWidget {
+  const _CsacHeroText({
+    required this.tag,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final Object tag;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+    return Hero(
+      tag: tag,
+      createRectTween: (begin, end) =>
+          _CsacContextRectTween(begin: begin, end: end),
+      placeholderBuilder: (context, heroSize, child) =>
+          SizedBox(width: heroSize.width, height: heroSize.height),
+      flightShuttleBuilder:
+          (context, animation, direction, fromContext, toContext) {
+            final shuttle = direction == HeroFlightDirection.push
+                ? toContext.widget
+                : fromContext.widget;
+            return Material(type: MaterialType.transparency, child: shuttle);
+          },
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }
