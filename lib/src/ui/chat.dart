@@ -12,6 +12,8 @@ enum _ComposeMenuAction {
   mention,
 }
 
+enum _ChatBarMenuAction { search, refresh, essence, details }
+
 class _VoiceFileType {
   const _VoiceFileType(this.extension, this.mimeType);
 
@@ -164,6 +166,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool applyingMentionText = false;
   bool mentionPickerOpen = false;
   bool showEntryHint = true;
+  bool animateMessageEntries = false;
   bool offline = false;
   bool showJumpToBottom = false;
   bool conversationUnavailable = false;
@@ -204,6 +207,11 @@ class _ChatScreenState extends State<ChatScreen> {
     loadDraft();
     loadGroupAnnouncement();
     loadInitial();
+    Future<void>.delayed(const Duration(milliseconds: 360), () {
+      if (mounted) {
+        setState(() => animateMessageEntries = true);
+      }
+    });
     Future<void>.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() => showEntryHint = false);
@@ -2121,6 +2129,63 @@ class _ChatScreenState extends State<ChatScreen> {
     ).then((_) => loadGroupAnnouncement());
   }
 
+  Future<void> showChatBarMenu() async {
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<_ChatBarMenuAction>(
+      context: context,
+      builder: (context) => _CsacBlurredPopup(
+        child: CupertinoActionSheet(
+          title: Text(strings.text('More actions')),
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ChatBarMenuAction.search),
+              child: Text(strings.text('Search')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ChatBarMenuAction.refresh),
+              child: Text(strings.text('Refresh')),
+            ),
+            if (widget.conversation.type == ConversationType.group)
+              CupertinoActionSheetAction(
+                onPressed: () =>
+                    Navigator.of(context).pop(_ChatBarMenuAction.essence),
+                child: Text(strings.text('Essence')),
+              ),
+            CupertinoActionSheetAction(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ChatBarMenuAction.details),
+              child: Text(strings.text('Details')),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Cancel')),
+          ),
+        ),
+      ).csacPopupEnter(),
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _ChatBarMenuAction.search:
+        openChatSearch();
+        break;
+      case _ChatBarMenuAction.refresh:
+        await reloadConversationFromNetwork(showLoading: true);
+        break;
+      case _ChatBarMenuAction.essence:
+        await openEssenceList();
+        break;
+      case _ChatBarMenuAction.details:
+        openConversationDetails();
+        break;
+    }
+  }
+
   void enterSelection(ChatMessage message) {
     setState(() {
       selectedMessageIds
@@ -2523,26 +2588,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Icon(CupertinoIcons.wifi_slash, size: 20),
                     ),
                   CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    onPressed: openChatSearch,
-                    child: const Icon(CupertinoIcons.search, size: 20),
-                  ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    onPressed: () =>
-                        reloadConversationFromNetwork(showLoading: true),
-                    child: const Icon(CupertinoIcons.refresh, size: 20),
-                  ),
-                  if (widget.conversation.type == ConversationType.group)
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      onPressed: openEssenceList,
-                      child: const Icon(CupertinoIcons.star, size: 20),
-                    ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    onPressed: openConversationDetails,
-                    child: const Icon(CupertinoIcons.info, size: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    onPressed: showChatBarMenu,
+                    child: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
                   ),
                 ],
               ),
@@ -2611,7 +2659,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Positioned.fill(
                       child: _ConversationSurfaceHero(
                         conversation: widget.conversation,
-                        enabled: !widget.embedded,
+                        enabled: false,
                         child: _ChatBackground(
                           color: backgroundColor,
                           imagePath: backgroundImagePath,
@@ -2682,6 +2730,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 showMemberMeta:
                                     widget.conversation.type ==
                                     ConversationType.group,
+                                animateEntry: animateMessageEntries,
                                 showReadStatus:
                                     widget.conversation.type ==
                                     ConversationType.private,
@@ -2922,6 +2971,7 @@ class _MessageBubble extends StatelessWidget {
     this.searchFocused = false,
     this.showSenderLine = true,
     this.showMemberMeta = false,
+    this.animateEntry = true,
   });
 
   final ChatMessage message;
@@ -2949,6 +2999,7 @@ class _MessageBubble extends StatelessWidget {
   final bool searchFocused;
   final bool showSenderLine;
   final bool showMemberMeta;
+  final bool animateEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -3043,8 +3094,8 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: _csacMotionMedium,
+      tween: Tween(begin: animateEntry ? 0 : 1, end: 1),
+      duration: animateEntry ? _csacMotionMedium : Duration.zero,
       curve: _csacEaseOut,
       builder: (context, value, child) {
         final offset = Offset(

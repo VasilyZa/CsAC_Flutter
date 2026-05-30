@@ -1010,7 +1010,7 @@ class _ThemeColorButton extends StatelessWidget {
 
 const _csacAppName = 'CsAC';
 const _csacAppBranch = 'XiaoBai';
-const _csacAppVersion = '1.2.1-45';
+const _csacAppVersion = '1.2.2-46';
 const _csacAppBuild = '43';
 const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter';
 

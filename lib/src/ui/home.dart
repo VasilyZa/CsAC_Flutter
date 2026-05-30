@@ -888,6 +888,7 @@ class _ConversationTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: _ConversationSurfaceHero(
             conversation: conversation,
+            enabled: false,
             child: Row(
               children: [
                 _ConversationAvatarHero(conversation: conversation, size: 44),

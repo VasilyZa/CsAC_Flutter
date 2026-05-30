@@ -307,11 +307,13 @@ class _CsacHeroText extends StatelessWidget {
     required this.tag,
     required this.child,
     this.enabled = true,
+    this.flightChild,
   });
 
   final Object tag;
   final Widget child;
   final bool enabled;
+  final Widget? flightChild;
 
   @override
   Widget build(BuildContext context) {
@@ -326,10 +328,20 @@ class _CsacHeroText extends StatelessWidget {
           SizedBox(width: heroSize.width, height: heroSize.height),
       flightShuttleBuilder:
           (context, animation, direction, fromContext, toContext) {
-            final shuttle = direction == HeroFlightDirection.push
-                ? toContext.widget
-                : fromContext.widget;
-            return Material(type: MaterialType.transparency, child: shuttle);
+            final shuttle =
+                flightChild ??
+                (direction == HeroFlightDirection.push
+                    ? toContext.widget
+                    : fromContext.widget);
+            return Material(
+              type: MaterialType.transparency,
+              child: OverflowBox(
+                minWidth: 0,
+                maxWidth: double.infinity,
+                alignment: Alignment.centerLeft,
+                child: shuttle,
+              ),
+            );
           },
       child: Material(type: MaterialType.transparency, child: child),
     );
@@ -352,6 +364,14 @@ class _ConversationTitleHero extends StatelessWidget {
     return _CsacHeroText(
       tag: _conversationHeroKey(conversation, 'title'),
       enabled: enabled,
+      flightChild: Text(
+        conversation.name,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.visible,
+        textWidthBasis: TextWidthBasis.longestLine,
+        style: style,
+      ),
       child: Text(
         conversation.name,
         maxLines: 1,

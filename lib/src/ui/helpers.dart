@@ -172,8 +172,8 @@ Future<T?> _csacPush<T>(BuildContext context, WidgetBuilder builder) {
 PageRoute<T> _csacConversationRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
     pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-    transitionDuration: const Duration(milliseconds: 420),
-    reverseTransitionDuration: const Duration(milliseconds: 360),
+    transitionDuration: const Duration(milliseconds: 380),
+    reverseTransitionDuration: const Duration(milliseconds: 320),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final enter = CurvedAnimation(
         parent: animation,
@@ -189,17 +189,14 @@ PageRoute<T> _csacConversationRoute<T>(WidgetBuilder builder) {
         opacity: Tween<double>(begin: 0, end: 1).animate(enter),
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, 0.035),
+            begin: const Offset(0.08, 0),
             end: Offset.zero,
           ).animate(enter),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.985, end: 1).animate(enter),
-            child: child,
-          ),
+          child: child,
         ),
       );
       return FadeTransition(
-        opacity: Tween<double>(begin: 1, end: 0.94).animate(exit),
+        opacity: Tween<double>(begin: 1, end: 0.98).animate(exit),
         child: incoming,
       );
     },
