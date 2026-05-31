@@ -1,0 +1,432 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact:
+        description: Artifact to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - windows-exe
+          - windows-installer
+          - linux-executable
+          - linux-appimage
+          - android-apk
+          - ios-unsigned-ipa
+      upload_release:
+        description: Upload built artifacts to GitHub Release
+        required: true
+        default: false
+        type: boolean
+      release_notes:
+        description: GitHub Release notes
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  APP_NAME: csac
+  FLUTTER_VERSION: "3.44.0"
+  FLUTTER_LINUX_URL: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.0-stable.tar.xz
+  FLUTTER_WINDOWS_URL: https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.0-stable.zip
+
+jobs:
+  windows:
+    name: Windows
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-exe' || github.event.inputs.artifact == 'windows-installer' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install aria2
+        run: choco install aria2 --no-progress -y
+
+      - name: Download Flutter SDK
+        shell: pwsh
+        run: |
+          $downloadDir = Join-Path $env:RUNNER_TEMP "downloads"
+          $sdkDir = Join-Path $env:RUNNER_TEMP "flutter-sdk"
+          New-Item -ItemType Directory -Force -Path $downloadDir, $sdkDir | Out-Null
+          aria2c -s16 -x16 -k1M `
+            --dir="$downloadDir" `
+            --out="flutter-windows.zip" `
+            "${env:FLUTTER_WINDOWS_URL}"
+          Expand-Archive `
+            -Path (Join-Path $downloadDir "flutter-windows.zip") `
+            -DestinationPath $sdkDir `
+            -Force
+          $flutterBin = Join-Path $sdkDir "flutter\bin"
+          $flutterRoot = Join-Path $sdkDir "flutter"
+          $flutterBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "FLUTTER_ROOT=$flutterRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Check Flutter
+        run: flutter --version
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows portable bundle
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-exe' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build/artifacts | Out-Null
+          Compress-Archive `
+            -Path build/windows/x64/runner/Release/* `
+            -DestinationPath build/artifacts/${{ env.APP_NAME }}-windows-x64.zip `
+            -Force
+
+      - name: Upload Windows portable bundle
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-exe' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-windows-x64
+          path: build/artifacts/${{ env.APP_NAME }}-windows-x64.zip
+          if-no-files-found: error
+
+      - name: Install Inno Setup
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-installer' }}
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows installer
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-installer' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build/installer | Out-Null
+          $buildDir = Join-Path $PWD "build\windows\x64\runner\Release"
+          $outputDir = Join-Path $PWD "build\installer"
+          $installerIcon = Join-Path $PWD "icon\installer.ico"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DBuildDir=$buildDir" `
+            "/DOutputDir=$outputDir" `
+            "/DInstallerIcon=$installerIcon" `
+            ".github\installer\windows\csac.iss"
+
+      - name: Upload Windows installer
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'windows-installer' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-windows-x64-setup
+          path: build/installer/${{ env.APP_NAME }}-windows-x64-setup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' || github.event.inputs.artifact == 'linux-appimage' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            aria2 \
+            clang \
+            cmake \
+            gstreamer1.0-libav \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            libfuse2 \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgtk-3-dev \
+            liblzma-dev \
+            ninja-build \
+            pkg-config
+
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-linux.tar.xz" \
+            "$FLUTTER_LINUX_URL"
+          tar -xf "$RUNNER_TEMP/downloads/flutter-linux.tar.xz" -C "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
+
+      - name: Check Flutter
+        run: flutter --version
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Linux release
+        run: flutter build linux --release
+
+      - name: Package Linux self-contained executable
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' }}
+        run: |
+          chmod +x .github/scripts/make-linux-executable.sh
+          .github/scripts/make-linux-executable.sh \
+            build/linux/x64/release/bundle \
+            build/artifacts/${APP_NAME}-linux-x64
+
+      - name: Upload Linux self-contained executable
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-executable' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-linux-x64-executable
+          path: build/artifacts/${{ env.APP_NAME }}-linux-x64
+          if-no-files-found: error
+
+      - name: Download appimagetool
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/tools"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="appimagetool-x86_64.AppImage" \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          install -m 0755 "$RUNNER_TEMP/downloads/appimagetool-x86_64.AppImage" "$RUNNER_TEMP/tools/appimagetool"
+          cd "$RUNNER_TEMP/tools"
+          ./appimagetool --appimage-extract
+          ln -sf "$RUNNER_TEMP/tools/squashfs-root/AppRun" "$RUNNER_TEMP/tools/appimagetool-extracted"
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Package Linux AppImage
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        run: |
+          mkdir -p build/artifacts
+          appdir="build/appimage/${APP_NAME}.AppDir"
+          rm -rf "$appdir"
+          mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/256x256/apps" "$appdir/usr/share/icons/hicolor/scalable/apps"
+          cp -a build/linux/x64/release/bundle/. "$appdir/usr/bin/"
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            'set -e' \
+            'this_dir="$(dirname "$(readlink -f "$0")")"' \
+            'export LD_LIBRARY_PATH="$this_dir/usr/bin/lib:${LD_LIBRARY_PATH:-}"' \
+            "exec \"\$this_dir/usr/bin/${APP_NAME}\" \"\$@\"" \
+            > "$appdir/AppRun"
+          chmod +x "$appdir/AppRun"
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Type=Application' \
+            'Name=CsAC' \
+            "Exec=${APP_NAME}" \
+            "Icon=${APP_NAME}" \
+            'Categories=Network;Chat;' \
+            > "$appdir/${APP_NAME}.desktop"
+          cp "$appdir/${APP_NAME}.desktop" "$appdir/usr/share/applications/${APP_NAME}.desktop"
+          if [[ -f linux/runner/resources/app_icon.png ]]; then
+            cp linux/runner/resources/app_icon.png "$appdir/${APP_NAME}.png"
+            cp "$appdir/${APP_NAME}.png" "$appdir/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+          elif [[ -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]]; then
+            cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$appdir/${APP_NAME}.png"
+            cp "$appdir/${APP_NAME}.png" "$appdir/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+          else
+            printf '%s\n' \
+              '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">' \
+              '<rect width="256" height="256" rx="48" fill="#1f8a70"/>' \
+              '<text x="128" y="148" text-anchor="middle" font-size="74" font-family="sans-serif" fill="#ffffff">Cs</text>' \
+              '</svg>' \
+              > "$appdir/${APP_NAME}.svg"
+            cp "$appdir/${APP_NAME}.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/${APP_NAME}.svg"
+          fi
+          ARCH=x86_64 appimagetool-extracted "$appdir" "build/artifacts/${APP_NAME}-linux-x64.AppImage"
+
+      - name: Upload Linux AppImage
+        if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'linux-appimage' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-linux-x64-appimage
+          path: build/artifacts/${{ env.APP_NAME }}-linux-x64.AppImage
+          if-no-files-found: error
+
+  android:
+    name: Android
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'android-apk' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install aria2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2
+
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-linux.tar.xz" \
+            "$FLUTTER_LINUX_URL"
+          tar -xf "$RUNNER_TEMP/downloads/flutter-linux.tar.xz" -C "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
+
+      - name: Check Flutter
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name secret is required for reproducible Android APK signing."
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+          mkdir -p android/app/signing
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/signing/release.jks
+          cat > android/key.properties <<EOF
+          storeFile=app/signing/release.jks
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
+      - name: Build Android APK
+        env:
+          ORG_GRADLE_PROJECT_csacDisableAliyunMaven: "true"
+        run: flutter build apk --release
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-android-release-apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha1
+          if-no-files-found: error
+
+  ios:
+    name: iOS unsigned IPA
+    if: ${{ github.event.inputs.artifact == 'all' || github.event.inputs.artifact == 'ios-unsigned-ipa' }}
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install aria2
+        run: brew install aria2
+
+      - name: Download Flutter SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/flutter-sdk"
+          arch="$(uname -m)"
+          if [[ "$arch" == "arm64" ]]; then
+            flutter_url="https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_${FLUTTER_VERSION}-stable.zip"
+          else
+            flutter_url="https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_${FLUTTER_VERSION}-stable.zip"
+          fi
+          aria2c -s16 -x16 -k1M \
+            --dir="$RUNNER_TEMP/downloads" \
+            --out="flutter-macos.zip" \
+            "$flutter_url"
+          unzip -q "$RUNNER_TEMP/downloads/flutter-macos.zip" -d "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/flutter/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter-sdk/flutter" >> "$GITHUB_ENV"
+
+      - name: Check Flutter
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ios/ipa/Payload build/artifacts
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          (cd build/ios/ipa && zip -qry "../../artifacts/${APP_NAME}-ios-unsigned.ipa" Payload)
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-ios-unsigned-ipa
+          path: build/artifacts/${{ env.APP_NAME }}-ios-unsigned.ipa
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: ${{ always() && inputs.upload_release && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    needs:
+      - windows
+      - linux
+      - android
+      - ios
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          release_version="${version/+/-}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-upload
+          while IFS= read -r -d '' artifact_dir; do
+            while IFS= read -r -d '' file_path; do
+              cp "$file_path" "release-upload/$(basename "$file_path")"
+            done < <(find "$artifact_dir" -type f -print0)
+          done < <(find release-assets -mindepth 1 -maxdepth 1 -type d -print0)
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: CsAC ${{ steps.version.outputs.release_version }}
+          body: ${{ inputs.release_notes }}
+          files: release-upload/*
+          fail_on_unmatched_files: true
