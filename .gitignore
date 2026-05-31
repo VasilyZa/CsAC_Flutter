@@ -47,3 +47,7 @@ android/key.properties
 
 # Backend source (not for public repo)
 后端core/
+
+# Local upstream/source snapshots
+上游/
+csac-terminal/

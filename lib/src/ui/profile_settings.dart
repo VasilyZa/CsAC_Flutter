@@ -10,123 +10,186 @@ class ProfileScreen extends StatelessWidget {
     final user = state.user;
     final counts = state.notificationCounts;
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(strings.text('Me'))),
+      backgroundColor: colors.systemBackground,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            if (state.sessionExpired)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: MaterialBanner(
-                  content: Text(
-                    strings.text(
-                      'Session expired. Log in again to sync latest data.',
+        child: _AdaptivePageFrame(
+          maxWidth: 680,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            children: [
+              if (state.sessionExpired)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemYellow.withValues(
+                        alpha: 0.15,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        _csacControlCornerRadius,
+                      ),
+                      border: Border.all(
+                        color: CupertinoColors.systemYellow.withValues(
+                          alpha: 0.35,
+                        ),
+                      ),
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => confirmLogout(context, state),
-                      child: Text(strings.text('Login')),
-                    ),
-                  ],
-                ),
-              ),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ListTile(
-                  leading: _Avatar(
-                    url: user?.avatar ?? '',
-                    fallback: Icons.person_rounded,
-                  ),
-                  title: Text(user?.nickname ?? strings.text('Not logged in')),
-                  subtitle: Text(
-                    [
-                      if (user?.username.isNotEmpty == true)
-                        '@${user!.username}',
-                      if (user != null) 'UID ${user.uid}',
-                      if (user?.onlineStatus.isNotEmpty == true)
-                        user!.onlineStatus,
-                    ].join(' | '),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: user == null
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  AccountSettingsScreen(state: state),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            strings.text(
+                              'Session expired. Log in again to sync latest data.',
                             ),
-                          );
-                        },
+                            style: TextStyle(color: colors.label, fontSize: 14),
+                          ),
+                        ),
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          minimumSize: Size.zero,
+                          onPressed: () => confirmLogout(context, state),
+                          child: Text(strings.text('Login')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              _CsacPressable(
+                onTap: user == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                        CsacPageRoute<void>(
+                          builder: (_) => AccountSettingsScreen(state: state),
+                        ),
+                      ),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+                  decoration: BoxDecoration(
+                    color: colors.cardBackground,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: colors.separator.withValues(alpha: 0.25),
+                      width: 0.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: CupertinoColors.black.withValues(
+                          alpha: colors.isDark ? 0 : 0.05,
+                        ),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      _Avatar(
+                        url: user?.avatar ?? '',
+                        fallback: CupertinoIcons.person_fill,
+                        radius: 27,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.nickname ?? strings.text('Not logged in'),
+                              style: TextStyle(
+                                color: colors.label,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              [
+                                if (user?.username.isNotEmpty == true)
+                                  '@${user!.username}',
+                                if (user != null) 'UID ${user.uid}',
+                                if (user?.onlineStatus.isNotEmpty == true)
+                                  user!.onlineStatus,
+                              ].join(' | '),
+                              style: TextStyle(
+                                color: colors.secondaryLabel,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 16,
+                        color: colors.tertiaryLabel,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: Column(
+              const SizedBox(height: 12),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.notifications_none),
-                    title: Text(strings.text('Unread notices')),
+                  _CupertinoListTile(
+                    title: strings.text('Unread notices'),
+                    leading: const Icon(CupertinoIcons.bell),
                     trailing: Badge(label: Text('${counts.notices}')),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.alternate_email),
-                    title: Text(strings.text('Mentions and replies')),
+                  _CupertinoListTile(
+                    title: strings.text('Mentions and replies'),
+                    leading: const Icon(CupertinoIcons.at),
                     trailing: Badge(label: Text('${counts.mentions}')),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.manage_accounts_outlined),
-                    title: Text(strings.text('Friend changes')),
+                  _CupertinoListTile(
+                    title: strings.text('Friend changes'),
+                    leading: const Icon(CupertinoIcons.person_2),
                     trailing: Badge(label: Text('${counts.friendChanges}')),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.person_add_alt),
-                    title: Text(strings.text('Friend requests')),
+                  _CupertinoListTile(
+                    title: strings.text('Friend requests'),
+                    leading: const Icon(CupertinoIcons.person_add),
                     trailing: Badge(label: Text('${counts.friendRequests}')),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.group_add_outlined),
-                    title: Text(strings.text('Group reviews')),
+                  _CupertinoListTile(
+                    title: strings.text('Group reviews'),
+                    leading: const Icon(CupertinoIcons.group),
                     trailing: Badge(label: Text('${counts.groupApplications}')),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: state.refreshHome,
-              icon: const Icon(Icons.sync),
-              label: Text(strings.text('Refresh all')),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => SettingsScreen(state: state),
+              const SizedBox(height: 12),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
+                children: [
+                  _CupertinoListTile(
+                    title: strings.text('Refresh all'),
+                    leading: const Icon(CupertinoIcons.arrow_2_circlepath),
+                    onTap: state.refreshHome,
                   ),
-                );
-              },
-              icon: const Icon(Icons.settings_outlined),
-              label: Text(strings.text('Settings')),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => confirmLogout(context, state),
-              icon: const Icon(Icons.logout),
-              label: Text(strings.text('Logout')),
-            ),
-          ],
+                  _CupertinoListTile(
+                    title: strings.text('Settings'),
+                    leading: const Icon(CupertinoIcons.settings),
+                    onTap: () => Navigator.of(context).push(
+                      CsacPageRoute<void>(
+                        builder: (_) => SettingsScreen(state: state),
+                      ),
+                    ),
+                  ),
+                  _CupertinoListTile(
+                    title: strings.text('Logout'),
+                    leading: const Icon(CupertinoIcons.square_arrow_left),
+                    titleColor: colors.destructive,
+                    onTap: () => confirmLogout(context, state),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -352,7 +415,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   Widget progressOrChevron(bool loading) {
     if (!loading) {
-      return const Icon(Icons.chevron_right);
+      return const Icon(CupertinoIcons.chevron_right, size: 14);
     }
     return const SizedBox(
       width: 20,
@@ -365,21 +428,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Widget build(BuildContext context) {
     final user = widget.state.user;
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(strings.text('Account settings'))),
+      backgroundColor: colors.systemBackground,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+        child: _AdaptivePageFrame(
+          maxWidth: 680,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: colors.cardBackground,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: colors.separator.withValues(alpha: 0.25),
+                    width: 0.5,
+                  ),
+                ),
                 child: Row(
                   children: [
                     _Avatar(
                       url: user?.avatar ?? '',
-                      fallback: Icons.person_rounded,
+                      fallback: CupertinoIcons.person_fill,
+                      radius: 30,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -388,8 +462,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         children: [
                           Text(
                             user?.nickname ?? strings.text('Not logged in'),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              color: colors.label,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -398,12 +475,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                 '@${user!.username}',
                               if (user != null) 'UID ${user.uid}',
                             ].join(' | '),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
+                            style: TextStyle(
+                              color: colors.secondaryLabel,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -411,92 +486,68 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.badge_outlined),
-                      title: Text(strings.text('Change nickname')),
-                      subtitle: Text(user?.nickname ?? ''),
-                      trailing: progressOrChevron(updatingNickname),
-                      onTap: updatingNickname ? null : editNickname,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.add_a_photo_outlined),
-                      title: Text(strings.text('Change avatar')),
-                      subtitle: Text(
-                        strings.text('Choose a new profile image'),
-                      ),
-                      trailing: progressOrChevron(updatingAvatar),
-                      onTap: updatingAvatar ? null : changeAvatar,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.waving_hand_outlined),
-                      title: Text(strings.text('Pat action')),
-                      subtitle: Text(user?.patAction ?? defaultPatAction),
-                      trailing: progressOrChevron(updatingPatAction),
-                      onTap: updatingPatAction ? null : editPatAction,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.lock_reset_outlined),
-                      title: Text(strings.text('Change password')),
-                      subtitle: Text(
-                        strings.text('Update your login password'),
-                      ),
-                      trailing: progressOrChevron(updatingPassword),
-                      onTap: updatingPassword ? null : changePassword,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              strings.text('Danger zone'),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              child: _RoundedInkClip(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.delete_forever_outlined,
-                    color: Theme.of(context).colorScheme.error,
+              const SizedBox(height: 12),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
+                children: [
+                  _CupertinoListTile(
+                    title: strings.text('Change nickname'),
+                    subtitle: user?.nickname ?? '',
+                    leading: const Icon(CupertinoIcons.person_crop_circle),
+                    trailing: progressOrChevron(updatingNickname),
+                    onTap: updatingNickname ? null : editNickname,
                   ),
-                  title: Text(
-                    strings.text('Delete account'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  _CupertinoListTile(
+                    title: strings.text('Change avatar'),
+                    subtitle: strings.text('Choose a new profile image'),
+                    leading: const Icon(CupertinoIcons.camera),
+                    trailing: progressOrChevron(updatingAvatar),
+                    onTap: updatingAvatar ? null : changeAvatar,
                   ),
-                  subtitle: Text(
-                    strings.text(
+                  _CupertinoListTile(
+                    title: strings.text('Pat action'),
+                    subtitle: user?.patAction ?? defaultPatAction,
+                    leading: const Icon(CupertinoIcons.hand_raised),
+                    trailing: progressOrChevron(updatingPatAction),
+                    onTap: updatingPatAction ? null : editPatAction,
+                  ),
+                  _CupertinoListTile(
+                    title: strings.text('Change password'),
+                    subtitle: strings.text('Update your login password'),
+                    leading: const Icon(CupertinoIcons.lock_rotation),
+                    trailing: progressOrChevron(updatingPassword),
+                    onTap: updatingPassword ? null : changePassword,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
+                header: strings.text('Danger zone'),
+                children: [
+                  _CupertinoListTile(
+                    title: strings.text('Delete account'),
+                    subtitle: strings.text(
                       'Permanently delete this account and owned groups.',
                     ),
+                    leading: Icon(
+                      CupertinoIcons.delete,
+                      color: colors.destructive,
+                    ),
+                    titleColor: colors.destructive,
+                    trailing: deletingAccount
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: deletingAccount ? null : deleteAccount,
                   ),
-                  trailing: deletingAccount
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.chevron_right),
-                  onTap: deletingAccount ? null : deleteAccount,
-                ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -842,8 +893,7 @@ class _ThemeColorButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: context.strings.text(option.label),
-      child: InkWell(
-        customBorder: const CircleBorder(),
+      child: _CsacPressable(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -865,8 +915,7 @@ class _FollowThemeColorButton extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Tooltip(
       message: context.strings.text('Follow theme'),
-      child: InkWell(
-        customBorder: const CircleBorder(),
+      child: _CsacPressable(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -1073,9 +1122,8 @@ class _CacheMetricTile extends StatelessWidget {
 }
 
 const _csacAppName = 'CsAC';
-const _csacAppBranch = 'Leon';
-const _csacSourceUrl =
-    'https://github.com/Leonmmcoset/csac-terminal/tree/main/flutter/csac';
+const _csacAppBranch = 'XiaoBai';
+const _csacSourceUrl = 'https://github.com/VasilyZa/CsAC_Flutter.git';
 
 class AppInfoScreen extends StatefulWidget {
   const AppInfoScreen({super.key, required this.state});
@@ -1238,17 +1286,7 @@ class _AppInfoScreenState extends State<AppInfoScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.chat_bubble_outline,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onPrimaryContainer,
-                          ),
-                        ),
+                        const _AppIconImage(size: 44, borderRadius: 11),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
@@ -1389,7 +1427,9 @@ class _AppInfoSubtitle extends StatelessWidget {
         final packageInfo = snapshot.data;
         final version = packageInfo == null
             ? '-'
-            : '${packageInfo.version}+${packageInfo.buildNumber}';
+            : VersionUpdateChecker.displayVersion(
+                '${packageInfo.version}+${packageInfo.buildNumber}',
+              );
         return Text('CsAC $version | $_csacAppBranch');
       },
     );
@@ -1615,7 +1655,7 @@ class _AppLogsScreenState extends State<AppLogsScreen> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute<void>(
+                          CsacPageRoute<void>(
                             builder: (_) => AppLogDetailScreen(
                               state: widget.state,
                               log: log,
@@ -1692,22 +1732,60 @@ class _AppLogDetailScreenState extends State<AppLogDetailScreen> {
             if (text.isEmpty) {
               return _EmptyPanel(message: strings.text('This log is empty.'));
             }
+            final csacColors = CsacColors.of(context);
             return Column(
               children: [
-                Material(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.info_outline),
-                    title: SelectableText(widget.log.path),
-                    subtitle: Text(
-                      strings.text('Showing the latest part of this log.'),
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(14, 11, 8, 11),
+                  decoration: BoxDecoration(
+                    color: csacColors.cardBackground,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: csacColors.separator.withValues(alpha: 0.34),
+                      width: 0.5,
                     ),
-                    trailing: IconButton(
-                      tooltip: strings.text('Copy'),
-                      onPressed: () => copyLog(text),
-                      icon: const Icon(Icons.copy),
-                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: CupertinoTheme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SelectableText(
+                              widget.log.path,
+                              style: TextStyle(
+                                color: csacColors.label,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              strings.text(
+                                'Showing the latest part of this log.',
+                              ),
+                              style: TextStyle(
+                                color: csacColors.secondaryLabel,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.all(8),
+                        minimumSize: Size.zero,
+                        onPressed: () => copyLog(text),
+                        child: const Icon(Icons.copy, size: 21),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
@@ -3606,7 +3684,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    settingsScroll = _desktopSmoothScrollController();
+    settingsScroll = ScrollController();
     serverUrl = TextEditingController(text: widget.state.preferences.serverUrl);
     settingsSearch = TextEditingController()..addListener(handleSearchChanged);
     developerOptionsExpanded = widget.initialDeveloperOptionsExpanded;
@@ -4026,8 +4104,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       VersionUpdateInfo result;
       try {
         result = await checker.check(
-          currentVersion: '${packageInfo.version}+${packageInfo.buildNumber}'
-              .trim(),
+          currentVersion: VersionUpdateChecker.displayVersion(
+            '${packageInfo.version}+${packageInfo.buildNumber}',
+          ),
           timeout: const Duration(seconds: 8),
         );
       } finally {
@@ -4169,18 +4248,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.fingerprint),
-                title: Text(context.strings.text('Biometric unlock')),
-                subtitle: Text(
-                  context.strings.text('Use device biometrics when available'),
+              if (supportsLocalAuth) ...[
+                SwitchListTile(
+                  secondary: const Icon(Icons.fingerprint),
+                  title: Text(context.strings.text('Biometric unlock')),
+                  subtitle: Text(
+                    context.strings.text(
+                      'Use device biometrics when available',
+                    ),
+                  ),
+                  value: widget.state.preferences.appLockBiometricEnabled,
+                  onChanged: (value) => Navigator.of(
+                    context,
+                  ).pop(value ? 'biometricOn' : 'biometricOff'),
                 ),
-                value: widget.state.preferences.appLockBiometricEnabled,
-                onChanged: (value) => Navigator.of(
-                  context,
-                ).pop(value ? 'biometricOn' : 'biometricOff'),
-              ),
-              const Divider(height: 1),
+                const Divider(height: 1),
+              ],
               ListTile(
                 leading: const Icon(Icons.pin_outlined),
                 title: Text(context.strings.text('Change PIN')),
@@ -4316,35 +4399,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.strings.text('Theme color'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+        child: _RoundedInkClip(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final option in themeColorOptions)
-                    _ThemeColorButton(
-                      option: option,
-                      selected:
-                          option.color.toARGB32() ==
-                          widget.state.preferences.themeColorValue,
-                      onTap: () =>
-                          Navigator.of(context).pop(option.color.toARGB32()),
+                  Text(
+                    context.strings.text('Theme color'),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final option in themeColorOptions)
+                        _ThemeColorButton(
+                          option: option,
+                          selected:
+                              option.color.toARGB32() ==
+                              widget.state.preferences.themeColorValue,
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop(option.color.toARGB32()),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -4555,38 +4644,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.strings.text(title),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+        child: _RoundedInkClip(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _FollowThemeColorButton(
-                    selected: current == defaultChatBubbleColorValue,
-                    onTap: () =>
-                        Navigator.of(context).pop(defaultChatBubbleColorValue),
-                  ),
-                  for (final option in chatBubbleColorOptions)
-                    _ThemeColorButton(
-                      option: option,
-                      selected: option.color.toARGB32() == current,
-                      onTap: () =>
-                          Navigator.of(context).pop(option.color.toARGB32()),
+                  Text(
+                    context.strings.text(title),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _FollowThemeColorButton(
+                        selected: current == defaultChatBubbleColorValue,
+                        onTap: () => Navigator.of(
+                          context,
+                        ).pop(defaultChatBubbleColorValue),
+                      ),
+                      for (final option in chatBubbleColorOptions)
+                        _ThemeColorButton(
+                          option: option,
+                          selected: option.color.toARGB32() == current,
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop(option.color.toARGB32()),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -4611,6 +4707,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseChatBackground() async {
+    if (isWebPlatform) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.strings.text(
+              'Chat background files are not supported on Web.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -4755,6 +4863,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'App logs',
       'View app logs',
       'Diagnostics',
+      'System notifications',
+      'Local notifications',
+      'New message alerts',
       'Low performance mode',
       'Cache',
       'Cached conversations and message history',
@@ -4832,7 +4943,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? null
                         : () {
                             Navigator.of(context).push(
-                              MaterialPageRoute<void>(
+                              CsacPageRoute<void>(
                                 builder: (_) =>
                                     AccountSettingsScreen(state: widget.state),
                               ),
@@ -4850,13 +4961,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.info_outline),
+                        leading: const _AppIconImage(size: 28, borderRadius: 7),
                         title: Text(strings.text('App information')),
                         subtitle: const _AppInfoSubtitle(),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CsacPageRoute<void>(
                               builder: (_) =>
                                   AppInfoScreen(state: widget.state),
                             ),
@@ -4907,7 +5018,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CsacPageRoute<void>(
                               builder: (_) => const OpenSourceLicensesScreen(),
                             ),
                           );
@@ -5080,7 +5191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           ).colorScheme.onSurfaceVariant,
                                         ),
                                   ),
-                                  Slider(
+                                  CupertinoSlider(
                                     value: widget
                                         .state
                                         .preferences
@@ -5088,7 +5199,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     min: 0.45,
                                     max: 1,
                                     divisions: 11,
-                                    label: chatBubbleOpacityLabel,
                                     onChanged: updateChatBubbleOpacity,
                                   ),
                                 ],
@@ -5322,6 +5432,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onTap: refreshing ? null : refreshAll,
                       ),
                       const Divider(height: 1),
+                      SwitchListTile(
+                        secondary: const Icon(
+                          Icons.notifications_active_outlined,
+                        ),
+                        title: Text(strings.text('System notifications')),
+                        subtitle: Text(
+                          strings.text(
+                            'Show local system alerts for new messages',
+                          ),
+                        ),
+                        value: widget
+                            .state
+                            .preferences
+                            .localSystemNotificationsEnabled,
+                        onChanged: widget.state.updateLocalSystemNotifications,
+                      ),
+                      const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.network_check_outlined),
                         title: Text(strings.text('Connection diagnostics')),
@@ -5333,7 +5460,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CsacPageRoute<void>(
                               builder: (_) =>
                                   NetworkDiagnosticsScreen(state: widget.state),
                             ),
@@ -5350,7 +5477,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CsacPageRoute<void>(
                               builder: (_) =>
                                   AppLogsScreen(state: widget.state),
                             ),
@@ -5461,7 +5588,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            CsacPageRoute<void>(
                               builder: (_) =>
                                   ApiExplorerScreen(state: widget.state),
                             ),

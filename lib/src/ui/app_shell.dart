@@ -75,7 +75,7 @@ Future<void> openVersionUpdateRelease(
   VersionUpdateInfo result,
 ) async {
   final url = result.releaseUrl.trim().isEmpty
-      ? 'https://github.com/Leonmmcoset/csac-terminal/releases/latest'
+      ? 'https://github.com/VasilyZa/CsAC_Flutter/releases/latest'
       : result.releaseUrl.trim();
   final opened = await launchUrl(
     Uri.parse(url),
@@ -102,8 +102,10 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     with WidgetsBindingObserver {
   late final CsacAppState state;
   final updateChecker = VersionUpdateChecker();
+  final localNotifications = CsacLocalNotificationService.instance;
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<Conversation>? notificationTapSub;
   bool locked = false;
   bool wasBackgrounded = false;
   bool appLockSessionUnlocked = false;
@@ -119,6 +121,8 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     state = CsacAppState();
     state.addListener(handleStateChanged);
     unawaited(state.initialize());
+    unawaited(localNotifications.initialize());
+    notificationTapSub = localNotifications.taps.listen(openNotificationChat);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       maybeCheckForUpdatesOnStartup();
     });
@@ -128,8 +132,33 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   void dispose() {
     state.removeListener(handleStateChanged);
     WidgetsBinding.instance.removeObserver(this);
+    notificationTapSub?.cancel();
     updateChecker.close();
     super.dispose();
+  }
+
+  Future<void> openNotificationChat(Conversation tapped) async {
+    final context = navigatorKey.currentContext;
+    if (context == null || !context.mounted || state.user == null) {
+      return;
+    }
+    final conversation = state.conversations
+        .where((item) => item.type == tapped.type && item.id == tapped.id)
+        .firstOrNull;
+    if (conversation == null) {
+      return;
+    }
+    if (state.isActiveConversation(conversation)) {
+      return;
+    }
+    await navigatorKey.currentState?.push(
+      CsacPageRoute<void>(
+        builder: (_) => ChatScreen(
+          state: state,
+          conversation: conversation.copyWith(unreadCount: 0),
+        ),
+      ),
+    );
   }
 
   @override
@@ -196,8 +225,9 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final result = await updateChecker.check(
-        currentVersion: '${packageInfo.version}+${packageInfo.buildNumber}'
-            .trim(),
+        currentVersion: VersionUpdateChecker.displayVersion(
+          '${packageInfo.version}+${packageInfo.buildNumber}',
+        ),
       );
       if (!mounted || !result.hasUpdate) {
         return;
@@ -274,32 +304,55 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
-        return MaterialApp(
-          title: CsacStrings(
-            localeForLanguage(state.preferences.language),
-          ).text('CsAC Mobile'),
-          scaffoldMessengerKey: scaffoldMessengerKey,
+        final appTitle = CsacStrings(
+          localeForLanguage(state.preferences.language),
+        ).text('CsAC Mobile');
+        final platformBrightness = MediaQuery.maybePlatformBrightnessOf(
+          context,
+        );
+        final effectiveBrightness = switch (state.preferences.themeMode) {
+          ThemeMode.light => Brightness.light,
+          ThemeMode.dark => Brightness.dark,
+          ThemeMode.system => platformBrightness ?? Brightness.light,
+        };
+        final seedColor = Color(state.preferences.themeColorValue);
+        return CupertinoApp(
+          title: appTitle,
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           locale: localeForLanguage(state.preferences.language),
           supportedLocales: const [Locale('en'), Locale('zh', 'CN')],
           localizationsDelegates: const [
             CsacStringsDelegate(),
-            GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
-          theme: buildCsacTheme(
-            Brightness.light,
-            Color(state.preferences.themeColorValue),
+          theme: buildCsacCupertinoTheme(
+            effectiveBrightness,
+            seedColor,
             state.preferences.fontStyle,
           ),
-          darkTheme: buildCsacTheme(
-            Brightness.dark,
-            Color(state.preferences.themeColorValue),
-            state.preferences.fontStyle,
-          ),
-          themeMode: state.preferences.themeMode,
+          builder: (context, child) {
+            return _DesktopCommandPaletteHost(
+              state: state,
+              navigatorKey: navigatorKey,
+              scaffoldMessengerKey: scaffoldMessengerKey,
+              enabled:
+                  isDesktopPlatform &&
+                  !locked &&
+                  !state.bootstrapping &&
+                  state.user != null,
+              child: CsacThemeBridge(
+                brightness: effectiveBrightness,
+                seedColor: seedColor,
+                fontStyle: state.preferences.fontStyle,
+                child: CsacToastHost(
+                  key: scaffoldMessengerKey,
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
+            );
+          },
           home: _MotionPreference(
             reduceMotion: state.preferences.reduceMotion,
             child: Stack(
@@ -474,16 +527,60 @@ ThemeData buildCsacTheme(
   );
 }
 
+CupertinoThemeData buildCsacCupertinoTheme(
+  Brightness brightness,
+  Color seedColor,
+  CsacFontStyle fontStyle,
+) {
+  final isDark = brightness == Brightness.dark;
+  final fontFamily = fontFamilyForStyle(fontStyle);
+  final fontFamilyFallback = fontFamilyFallbackForStyle(fontStyle);
+  final baseText = TextStyle(
+    fontFamily: fontFamily,
+    fontFamilyFallback: fontFamilyFallback,
+    color: CupertinoColors.label,
+    fontSize: 17,
+    letterSpacing: -0.22,
+  );
+  return CupertinoThemeData(
+    brightness: brightness,
+    primaryColor: seedColor,
+    primaryContrastingColor: CupertinoColors.white,
+    scaffoldBackgroundColor: isDark
+        ? CupertinoColors.black
+        : const Color(0xFFF2F2F7),
+    barBackgroundColor: isDark
+        ? const Color(0xCC1C1C1E)
+        : const Color(0xCCF9F9F9),
+    textTheme: CupertinoTextThemeData(
+      primaryColor: seedColor,
+      textStyle: baseText,
+      actionTextStyle: baseText.copyWith(color: seedColor),
+      navActionTextStyle: baseText.copyWith(color: seedColor, fontSize: 17),
+      navTitleTextStyle: baseText.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 17,
+      ),
+      navLargeTitleTextStyle: baseText.copyWith(
+        fontWeight: FontWeight.w800,
+        fontSize: 34,
+        letterSpacing: -0.7,
+      ),
+      tabLabelTextStyle: baseText.copyWith(fontSize: 11),
+    ),
+  );
+}
+
 String? fontFamilyForStyle(CsacFontStyle style) {
   switch (style) {
     case CsacFontStyle.system:
       return null;
     case CsacFontStyle.serif:
-      return Platform.isIOS || Platform.isMacOS ? 'Times New Roman' : 'serif';
+      return isApplePlatform ? 'Times New Roman' : 'serif';
     case CsacFontStyle.rounded:
-      return Platform.isIOS || Platform.isMacOS ? 'SF Pro Rounded' : null;
+      return isApplePlatform ? 'SF Pro Rounded' : null;
     case CsacFontStyle.monospace:
-      return Platform.isIOS || Platform.isMacOS ? 'Menlo' : 'monospace';
+      return isApplePlatform ? 'Menlo' : 'monospace';
   }
 }
 
@@ -518,25 +615,50 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     return Scaffold(
+      backgroundColor: colors.systemBackground,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.forum_rounded,
-              size: 54,
-              color: Theme.of(context).colorScheme.primary,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primary, primary.withValues(alpha: 0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: primary.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const _AppIconImage(size: 80, borderRadius: 20),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             Text(
               context.strings.text('CsAC Mobile'),
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: colors.label,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(status),
-            const SizedBox(height: 18),
-            const CircularProgressIndicator(),
+            const SizedBox(height: 8),
+            Text(
+              status,
+              style: TextStyle(color: colors.secondaryLabel, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            CupertinoActivityIndicator(radius: 12, color: primary),
           ],
         ),
       ),
@@ -640,7 +762,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> openServerSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => SettingsScreen(
           state: widget.state,
           initialDeveloperOptionsExpanded: true,
@@ -655,162 +777,182 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> openRegister() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => RegisterScreen(state: widget.state),
-      ),
+      CsacPageRoute<void>(builder: (_) => RegisterScreen(state: widget.state)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     final serverUrl = widget.state.preferences.serverUrl.trim().isEmpty
         ? strings.text('Default server')
         : widget.state.preferences.serverUrl.trim();
     return Scaffold(
+      backgroundColor: colors.systemBackground,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.forum_rounded,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.primary,
+                  Center(
+                    child: Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primary, primary.withValues(alpha: 0.65)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primary.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const _AppIconImage(size: 88, borderRadius: 22),
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 28),
                   Text(
                     strings.text('CsAC Mobile'),
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    style: TextStyle(
+                      color: colors.label,
+                      fontSize: 30,
                       fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: username,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: strings.text('Username'),
-                      prefixIcon: const Icon(Icons.person_outline),
-                      border: const OutlineInputBorder(),
+                  const SizedBox(height: 6),
+                  Text(
+                    strings.text('Sign in to continue'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.secondaryLabel,
+                      fontSize: 15,
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: password,
-                    focusNode: passwordFocus,
-                    obscureText: true,
-                    onSubmitted: (_) => submit(),
-                    decoration: InputDecoration(
-                      labelText: strings.text('Password'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
+                  const SizedBox(height: 36),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      color: colors.cardBackground,
+                      child: Column(
+                        children: [
+                          _LoginField(
+                            controller: username,
+                            placeholder: strings.text('Username'),
+                            icon: CupertinoIcons.person,
+                            textInputAction: TextInputAction.next,
+                          ),
+                          Container(height: 0.5, color: colors.separator),
+                          _LoginField(
+                            controller: password,
+                            focusNode: passwordFocus,
+                            placeholder: strings.text('Password'),
+                            icon: CupertinoIcons.lock,
+                            obscureText: true,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => submit(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   if (error != null) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.destructive.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.exclamationmark_circle,
+                            size: 15,
+                            color: colors.destructive,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              error!,
+                              style: TextStyle(
+                                color: colors.destructive,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                   const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: widget.state.loading ? null : submit,
-                    icon: widget.state.loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.login),
-                    label: Text(strings.text('Login')),
+                  _AuthPrimaryButton(
+                    label: strings.text('Login'),
+                    loading: widget.state.loading,
+                    onTap: submit,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   if (loadingAccounts)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                        child: CupertinoActivityIndicator(radius: 10),
                       ),
                     )
-                  else if (accounts.isNotEmpty) ...[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        strings.text('Recent accounts'),
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                  else
+                    _RecentAccountsPanel(
+                      accounts: accounts.take(3).toList(),
+                      onSelect: selectAccount,
+                      onRemove: removeAccount,
+                      onAdd: widget.state.loading ? null : openRegister,
                     ),
-                    const SizedBox(height: 8),
-                    for (final account in accounts.take(3))
-                      Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: _RoundedInkClip(
-                          child: ListTile(
-                            leading: _Avatar(
-                              url: account.avatar,
-                              fallback: Icons.person_rounded,
-                              radius: 20,
+                  const SizedBox(height: 24),
+                  _CsacPressable(
+                    onTap: openServerSettings,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.globe,
+                          size: 13,
+                          color: colors.tertiaryLabel,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            serverUrl,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.tertiaryLabel,
+                              fontSize: 12,
                             ),
-                            title: Text(
-                              account.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              [
-                                account.subtitle,
-                                if (account.hasSession)
-                                  strings.text('Saved session'),
-                              ].join(' | '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: IconButton(
-                              tooltip: strings.text('Remove login record'),
-                              onPressed: () => removeAccount(account),
-                              icon: const Icon(Icons.close),
-                            ),
-                            onTap: () => selectAccount(account),
                           ),
                         ),
-                      ),
-                    const SizedBox(height: 2),
-                  ],
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: widget.state.loading ? null : openRegister,
-                    icon: const Icon(Icons.person_add_alt),
-                    label: Text(strings.text('Register account')),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: openServerSettings,
-                    icon: const Icon(Icons.developer_mode_outlined),
-                    label: Text(strings.text('Developer options')),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    strings.format('Current server: {server}', {
-                      'server': serverUrl,
-                    }),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
+                        const SizedBox(width: 4),
+                        Icon(
+                          CupertinoIcons.pencil,
+                          size: 11,
+                          color: colors.tertiaryLabel,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -837,6 +979,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
   XFile? avatar;
+  Uint8List? avatarBytes;
   bool submitting = false;
   String? error;
 
@@ -859,7 +1002,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ],
     );
     if (picked != null && mounted) {
-      setState(() => avatar = picked);
+      final bytes = await picked.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        avatar = picked;
+        avatarBytes = bytes;
+      });
     }
   }
 
@@ -888,21 +1038,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       error = null;
     });
     try {
-      final selectedAvatar = avatar;
-      final avatarBytes = selectedAvatar == null
-          ? null
-          : await selectedAvatar.readAsBytes();
       await widget.state.register(
         username: username.text,
         nickname: nickname.text,
         password: password.text,
         confirmPassword: confirmPassword.text,
         avatarBytes: avatarBytes,
-        avatarFileName: selectedAvatar?.name ?? '',
+        avatarFileName: avatar?.name ?? '',
       );
       if (!mounted) {
         return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.text('Account created.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
@@ -918,84 +1067,500 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     return Scaffold(
+      backgroundColor: colors.systemBackground,
       appBar: AppBar(title: Text(strings.text('Register account'))),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: _CsacPressable(
+                      onTap: submitting ? null : chooseAvatar,
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              gradient: avatarBytes == null
+                                  ? LinearGradient(
+                                      colors: [
+                                        primary.withValues(alpha: 0.15),
+                                        primary.withValues(alpha: 0.05),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              image: avatarBytes == null
+                                  ? null
+                                  : DecorationImage(
+                                      image: MemoryImage(avatarBytes!),
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                            child: avatarBytes == null
+                                ? Icon(
+                                    CupertinoIcons.camera_fill,
+                                    size: 32,
+                                    color: primary,
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colors.systemBackground,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                CupertinoIcons.pencil,
+                                size: 13,
+                                color: CupertinoColors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _CupertinoGroupedCard(
+                    margin: EdgeInsets.zero,
+                    children: [
+                      _CupertinoFormField(
+                        controller: username,
+                        placeholder: strings.text('Username'),
+                        icon: CupertinoIcons.at,
+                        enabled: !submitting,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: nickname,
+                        placeholder: strings.text('Nickname'),
+                        icon: CupertinoIcons.person,
+                        enabled: !submitting,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: password,
+                        placeholder: strings.text('Password'),
+                        icon: CupertinoIcons.lock,
+                        obscureText: true,
+                        enabled: !submitting,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: confirmPassword,
+                        placeholder: strings.text('Confirm password'),
+                        icon: CupertinoIcons.lock_rotation,
+                        obscureText: true,
+                        enabled: !submitting,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => submit(),
+                      ),
+                    ],
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.destructive.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          color: colors.destructive,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _AuthPrimaryButton(
+                    label: strings.text('Create account'),
+                    loading: submitting,
+                    onTap: submit,
+                  ),
+                  const SizedBox(height: 12),
+                  CupertinoButton(
+                    onPressed: submitting ? null : () => Navigator.pop(context),
+                    child: Text(strings.text('Back to login')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginField extends StatelessWidget {
+  const _LoginField({
+    required this.controller,
+    required this.placeholder,
+    required this.icon,
+    this.focusNode,
+    this.obscureText = false,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final IconData icon;
+  final FocusNode? focusNode;
+  final bool obscureText;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CupertinoTextField(
+      controller: controller,
+      focusNode: focusNode,
+      placeholder: placeholder,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      prefix: Padding(
+        padding: const EdgeInsets.only(left: 16),
+        child: Icon(icon, size: 18, color: colors.secondaryLabel),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 16, 16, 16),
+      decoration: const BoxDecoration(),
+      style: TextStyle(fontSize: 16, color: colors.label),
+      placeholderStyle: TextStyle(fontSize: 16, color: colors.tertiaryLabel),
+    );
+  }
+}
+
+class _CupertinoFormField extends StatelessWidget {
+  const _CupertinoFormField({
+    required this.controller,
+    required this.placeholder,
+    required this.icon,
+    this.obscureText = false,
+    this.enabled = true,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final IconData icon;
+  final bool obscureText;
+  final bool enabled;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CupertinoTextField(
+      controller: controller,
+      enabled: enabled,
+      placeholder: placeholder,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      prefix: Padding(
+        padding: const EdgeInsets.only(left: 16),
+        child: Icon(icon, size: 18, color: colors.secondaryLabel),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 15, 16, 15),
+      decoration: const BoxDecoration(),
+      style: TextStyle(fontSize: 16, color: colors.label),
+      placeholderStyle: TextStyle(fontSize: 16, color: colors.tertiaryLabel),
+    );
+  }
+}
+
+class _AuthPrimaryButton extends StatelessWidget {
+  const _AuthPrimaryButton({
+    required this.label,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CsacPressable(
+      onTap: loading ? null : onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: loading
+                ? [colors.tertiaryFill, colors.tertiaryFill]
+                : [primary, primary.withValues(alpha: 0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: loading
+              ? []
+              : [
+                  BoxShadow(
+                    color: primary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        alignment: Alignment.center,
+        child: loading
+            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+            : Text(
+                label,
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _RecentAccountsPanel extends StatelessWidget {
+  const _RecentAccountsPanel({
+    required this.accounts,
+    required this.onSelect,
+    this.onRemove,
+    this.onAdd,
+  });
+
+  final List<LoginAccountRecord> accounts;
+  final ValueChanged<LoginAccountRecord> onSelect;
+  final ValueChanged<LoginAccountRecord>? onRemove;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return _MotionPane(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 8),
+            child: Text(
+              strings.text('Recent accounts'),
+              style: TextStyle(
+                color: colors.secondaryLabel,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.35),
+                width: 0.5,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Column(
+                children: [
+                  for (var i = 0; i < accounts.length; i++) ...[
+                    _RecentAccountTile(
+                      account: accounts[i],
+                      onSelect: () => onSelect(accounts[i]),
+                      onRemove: onRemove == null
+                          ? null
+                          : () => onRemove!(accounts[i]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 64),
+                      child: Container(height: 0.5, color: colors.separator),
+                    ),
+                  ],
+                  _AccountAddTile(onTap: onAdd),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentAccountTile extends StatelessWidget {
+  const _RecentAccountTile({
+    required this.account,
+    required this.onSelect,
+    this.onRemove,
+  });
+
+  final LoginAccountRecord account;
+  final VoidCallback onSelect;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return _CsacPressable(
+      onTap: onSelect,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
           children: [
-            TextField(
-              controller: username,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: strings.text('Username'),
-                helperText: strings.text('3-32 letters, numbers, _@.-'),
-                prefixIcon: const Icon(Icons.person_outline),
-                border: const OutlineInputBorder(),
+            _Avatar(
+              url: account.avatar,
+              fallback: Icons.person_rounded,
+              radius: 19,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    account.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.label,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      account.subtitle,
+                      if (account.hasSession) strings.text('Saved session'),
+                    ].where((part) => part.trim().isNotEmpty).join(' | '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.secondaryLabel,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: nickname,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: strings.text('Nickname'),
-                prefixIcon: const Icon(Icons.badge_outlined),
-                border: const OutlineInputBorder(),
+            if (onRemove != null)
+              CupertinoButton(
+                padding: const EdgeInsets.all(8),
+                minimumSize: Size.zero,
+                onPressed: onRemove,
+                child: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  color: colors.tertiaryLabel,
+                  size: 19,
+                ),
+              )
+            else
+              Icon(
+                CupertinoIcons.chevron_right,
+                color: colors.tertiaryLabel,
+                size: 16,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountAddTile extends StatelessWidget {
+  const _AccountAddTile({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return _CsacPressable(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: colors.primaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.person_add,
+                color: colors.primaryColor,
+                size: 20,
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: strings.text('Password'),
-                prefixIcon: const Icon(Icons.lock_outline),
-                border: const OutlineInputBorder(),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    strings.text('Add account'),
+                    style: TextStyle(
+                      color: colors.label,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    strings.text('Sign in or create another account'),
+                    style: TextStyle(
+                      color: colors.secondaryLabel,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmPassword,
-              obscureText: true,
-              onSubmitted: (_) => submit(),
-              decoration: InputDecoration(
-                labelText: strings.text('Confirm password'),
-                prefixIcon: const Icon(Icons.lock_reset),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: submitting ? null : chooseAvatar,
-              icon: const Icon(Icons.image_outlined),
-              label: Text(
-                avatar == null
-                    ? strings.text('Choose avatar')
-                    : strings.format('Selected: {name}', {
-                        'name': avatar!.name,
-                      }),
-              ),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: submitting ? null : submit,
-              icon: submitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_add_alt),
-              label: Text(strings.text('Register')),
+            Icon(
+              CupertinoIcons.chevron_right,
+              color: colors.tertiaryLabel,
+              size: 16,
             ),
           ],
         ),

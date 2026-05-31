@@ -32,7 +32,7 @@ class VersionUpdateChecker {
     : client = client ?? http.Client();
 
   static const latestReleaseUrl =
-      'https://api.github.com/repos/Leonmmcoset/csac-terminal/releases/latest';
+      'https://api.github.com/repos/VasilyZa/CsAC_Flutter/releases/latest';
 
   final http.Client client;
 
@@ -118,7 +118,7 @@ class VersionUpdateChecker {
     }
     final base = match.group(1) ?? '';
     final build = match.group(2) ?? '';
-    return (base: base, full: build.isEmpty ? base : '$base+$build');
+    return (base: base, full: build.isEmpty ? base : '$base-$build');
   }
 
   static String _stringValue(Object? value) {

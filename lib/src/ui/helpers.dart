@@ -8,6 +8,35 @@ String compactMessage(String text, {int max = 80}) {
   return '${value.substring(0, max - 3)}...';
 }
 
+double chatBubbleMaxWidth(BuildContext context, {bool showAvatar = false}) {
+  final screenWidth = MediaQuery.sizeOf(context).width;
+  final reservedWidth = showAvatar ? 64.0 : 24.0;
+  final available = math.max(180.0, screenWidth - reservedWidth);
+  return math.min(360.0, math.max(176.0, available * 0.72));
+}
+
+String chatMessagePlainText(ChatMessage message, CsacStrings strings) {
+  if (message.isRecalled) {
+    return strings.text('[recalled]');
+  }
+  if (message.emojiAddress.isNotEmpty || message.messageType == 5) {
+    final name = message.emojiAbbr.trim();
+    return name.isEmpty
+        ? strings.text('[emoji]')
+        : strings.format('[emoji] {abbr}', {'abbr': name});
+  }
+  if (message.imageUrl.isNotEmpty && message.body.startsWith('[image]')) {
+    return strings.text('[image]');
+  }
+  if (message.voiceUrl.isNotEmpty && message.body.startsWith('[voice]')) {
+    return strings.text('[voice]');
+  }
+  if (message.fileUrl.isNotEmpty && message.body.startsWith('[file]')) {
+    return strings.text('[file]');
+  }
+  return message.body;
+}
+
 CsacTimestampPattern timestampPatternForPreference(MessageTimeFormat format) {
   switch (format) {
     case MessageTimeFormat.slash:
@@ -100,6 +129,285 @@ String fontStyleDescriptionFor(BuildContext context, CsacFontStyle style) {
   }
 }
 
+class CsacColors {
+  const CsacColors._(this.brightness, this.primaryColor);
+
+  factory CsacColors.of(BuildContext context) {
+    final theme = CupertinoTheme.of(context);
+    return CsacColors._(
+      theme.brightness ?? Brightness.light,
+      theme.primaryColor,
+    );
+  }
+
+  final Brightness brightness;
+  final Color primaryColor;
+
+  bool get isDark => brightness == Brightness.dark;
+  Color get systemBackground =>
+      isDark ? CupertinoColors.black : const Color(0xFFF2F2F7);
+  Color get cardBackground =>
+      isDark ? const Color(0xFF1C1C1E) : CupertinoColors.white;
+  Color get elevatedBackground =>
+      isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF9F9FB);
+  Color get tertiaryBackground =>
+      isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF4);
+  Color get label => isDark ? CupertinoColors.white : CupertinoColors.black;
+  Color get secondaryLabel =>
+      isDark ? const Color(0x99EBEBF5) : const Color(0x993C3C43);
+  Color get tertiaryLabel =>
+      isDark ? const Color(0x4DEBEBF5) : const Color(0x4C3C3C43);
+  Color get separator =>
+      isDark ? const Color(0x5C545458) : const Color(0x4A3C3C43);
+  Color get fill => isDark ? const Color(0x5C787880) : const Color(0x33787880);
+  Color get tertiaryFill =>
+      isDark ? const Color(0x3D787880) : const Color(0x1F787880);
+  Color get destructive => CupertinoColors.systemRed;
+  Color get navBarBackground =>
+      isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF9F9F9);
+}
+
+class _AppIconImage extends StatelessWidget {
+  const _AppIconImage({this.size = 40, this.borderRadius});
+
+  final double size;
+  final double? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius ?? size * 0.22),
+      child: Image.asset(
+        'assets/icons/app_icon.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
+const double _csacPageHorizontalPadding = 16;
+const double _csacGroupedCornerRadius = 18;
+const double _csacControlCornerRadius = 16;
+const double _csacListMinHeight = 52;
+
+class _AdaptivePageFrame extends StatelessWidget {
+  const _AdaptivePageFrame({required this.child, this.maxWidth = 720});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 700) {
+      return child;
+    }
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _CsacPressable extends StatefulWidget {
+  const _CsacPressable({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<_CsacPressable> createState() => _CsacPressableState();
+}
+
+class _CsacPressableState extends State<_CsacPressable> {
+  bool pressed = false;
+
+  void setPressed(bool value) {
+    if (pressed == value || widget.onTap == null) {
+      return;
+    }
+    setState(() => pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => setPressed(true),
+      onTapUp: (_) => setPressed(false),
+      onTapCancel: () => setPressed(false),
+      child: AnimatedScale(
+        scale: enabled && pressed ? 0.985 : 1,
+        duration: 150.ms,
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: enabled && pressed ? 0.72 : 1,
+          duration: 150.ms,
+          curve: Curves.easeOutCubic,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _CupertinoGroupedCard extends StatelessWidget {
+  const _CupertinoGroupedCard({
+    required this.children,
+    this.margin,
+    this.header,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry? margin;
+  final String? header;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding:
+          margin ??
+          const EdgeInsets.symmetric(
+            horizontal: _csacPageHorizontalPadding,
+            vertical: 7,
+          ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (header != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: Text(
+                header!.toUpperCase(),
+                style: TextStyle(
+                  color: colors.secondaryLabel,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.35,
+                ),
+              ),
+            ),
+          Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
+            child: Column(children: _separated(children, colors.separator)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static List<Widget> _separated(List<Widget> children, Color color) {
+    final result = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      result.add(children[i]);
+      if (i != children.length - 1) {
+        result.add(
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.only(left: 60),
+            color: color.withValues(alpha: 0.55),
+          ),
+        );
+      }
+    }
+    return result;
+  }
+}
+
+class _CupertinoListTile extends StatelessWidget {
+  const _CupertinoListTile({
+    required this.title,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.titleColor,
+  });
+
+  final String title;
+  final Widget? leading;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color? titleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return _CsacPressable(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: _csacListMinHeight),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            if (leading != null) ...[leading!, const SizedBox(width: 12)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: titleColor ?? colors.label,
+                      fontSize: 16,
+                      height: 1.18,
+                    ),
+                  ),
+                  if (subtitle?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.secondaryLabel,
+                          fontSize: 13,
+                          height: 1.22,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing!,
+            ] else if (onTap != null) ...[
+              const SizedBox(width: 8),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 14,
+                color: colors.tertiaryLabel,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String pickedImageFileName(XFile picked, ImageSource source) {
   final name = picked.name.trim();
   final extension = p.extension(name).toLowerCase();
@@ -112,23 +420,7 @@ String pickedImageFileName(XFile picked, ImageSource source) {
 }
 
 Future<String> persistChatBackground(XFile picked) async {
-  final support = await getApplicationSupportDirectory();
-  final directory = Directory(p.join(support.path, 'backgrounds'));
-  if (!directory.existsSync()) {
-    directory.createSync(recursive: true);
-  }
-  final extension = p.extension(picked.name).trim().isEmpty
-      ? '.jpg'
-      : p.extension(picked.name);
-  final target = File(
-    p.join(
-      directory.path,
-      'chat_background_${DateTime.now().millisecondsSinceEpoch}$extension',
-    ),
-  );
-  final bytes = await picked.readAsBytes();
-  await target.writeAsBytes(bytes, flush: true);
-  return target.path;
+  return persistChatBackgroundFile(picked);
 }
 
 extension FirstOrNullExtension<T> on Iterable<T> {

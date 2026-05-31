@@ -423,6 +423,57 @@ class CommonGroup {
   }
 }
 
+class EmojiSticker {
+  const EmojiSticker({
+    required this.fullName,
+    required this.address,
+    required this.abbr,
+  });
+
+  final String fullName;
+  final String address;
+  final String abbr;
+
+  factory EmojiSticker.fromJson(Map<String, dynamic> json) {
+    final abbr = firstString(json, const [
+      'abbr',
+      'emoji_abbr',
+      'code',
+      'name',
+      'id',
+    ]);
+    final fullName = firstString(json, const [
+      'full_name',
+      'fullName',
+      'display_name',
+      'title',
+      'name',
+    ]);
+    return EmojiSticker(
+      fullName: fullName.isEmpty ? abbr : fullName,
+      address: normalizeApiUrl(
+        firstString(json, const [
+          'address',
+          'emoji_address',
+          'emojiAddress',
+          'url',
+          'image_url',
+          'preview',
+        ]),
+      ),
+      abbr: abbr,
+    );
+  }
+
+  Map<String, String> toJson() {
+    return <String, String>{
+      'full_name': fullName,
+      'address': address,
+      'abbr': abbr,
+    };
+  }
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -441,6 +492,8 @@ class ChatMessage {
     this.voiceDuration = 0,
     this.fileUrl = '',
     this.fileName = '',
+    this.emojiAddress = '',
+    this.emojiAbbr = '',
     this.canRecall = false,
     this.isRecalled = false,
     this.isEssence = false,
@@ -464,6 +517,8 @@ class ChatMessage {
   final int voiceDuration;
   final String fileUrl;
   final String fileName;
+  final String emojiAddress;
+  final String emojiAbbr;
   final bool canRecall;
   final bool isRecalled;
   final bool isEssence;
@@ -487,6 +542,8 @@ class ChatMessage {
     int? voiceDuration,
     String? fileUrl,
     String? fileName,
+    String? emojiAddress,
+    String? emojiAbbr,
     bool? canRecall,
     bool? isRecalled,
     bool? isEssence,
@@ -510,6 +567,8 @@ class ChatMessage {
       voiceDuration: voiceDuration ?? this.voiceDuration,
       fileUrl: fileUrl ?? this.fileUrl,
       fileName: fileName ?? this.fileName,
+      emojiAddress: emojiAddress ?? this.emojiAddress,
+      emojiAbbr: emojiAbbr ?? this.emojiAbbr,
       canRecall: canRecall ?? this.canRecall,
       isRecalled: isRecalled ?? this.isRecalled,
       isEssence: isEssence ?? this.isEssence,
@@ -524,6 +583,7 @@ class ChatMessage {
         : asInt(json['msg_id']);
     final senderId = firstInt(json, const ['from_uid', 'uid', 'user_id']);
     final messageType = firstInt(json, const ['msg_type', 'message_type']);
+    final normalizedMessageType = messageType <= 0 ? 1 : messageType;
     final isRecalled =
         asBool(json['is_recalled']) ||
         asBool(json['recalled']) ||
@@ -557,6 +617,27 @@ class ChatMessage {
       'attachment_name',
       'document_name',
     ]);
+    final emojiAbbr = normalizedMessageType == 5
+        ? firstString(json, const [
+            'abbr',
+            'emoji_abbr',
+            'emojiAbbr',
+            'content',
+          ])
+        : '';
+    final emojiAddress = isRecalled || normalizedMessageType != 5
+        ? ''
+        : normalizeApiUrl(
+            firstString(json, const [
+              'emoji_address',
+              'emojiAddress',
+              'address',
+              'emoji_url',
+              'emoji',
+              'image_url',
+              'url',
+            ]),
+          );
     final duration = firstInt(json, const [
       'duration',
       'voice_duration',
@@ -564,7 +645,7 @@ class ChatMessage {
     ]);
     var body = asString(json['content']).trim();
     if (isRecalled) {
-      body = '[recalled]';
+      body = body.isEmpty ? '[recalled]' : body;
     } else {
       if (image.isNotEmpty && contentLooksLikeImage) {
         body = '';
@@ -577,6 +658,9 @@ class ChatMessage {
       }
       if (body.isEmpty && file.isNotEmpty) {
         body = '[file]';
+      }
+      if (normalizedMessageType == 5) {
+        body = '[emoji]';
       }
       if (body.isEmpty) {
         body = '[empty]';
@@ -603,7 +687,7 @@ class ChatMessage {
           'from_avatar',
         ]),
       ),
-      messageType: messageType <= 0 ? 1 : messageType,
+      messageType: normalizedMessageType,
       isRead:
           firstBool(json, const [
             'is_read',
@@ -622,6 +706,8 @@ class ChatMessage {
       voiceDuration: duration,
       fileUrl: file,
       fileName: fileName,
+      emojiAddress: emojiAddress,
+      emojiAbbr: emojiAbbr,
       canRecall: asBool(json['can_recall']),
       isRecalled: isRecalled,
       isEssence: asBool(json['is_essence']),
@@ -766,6 +852,9 @@ String essenceCategoryForMessage(ChatMessage message) {
   }
   if (message.fileUrl.isNotEmpty) {
     return 'file';
+  }
+  if (message.emojiAddress.isNotEmpty || message.messageType == 5) {
+    return 'emoji';
   }
   return 'text';
 }

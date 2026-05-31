@@ -31,7 +31,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
   }
 
   Future<void> checkBiometric() async {
-    if (!widget.state.preferences.appLockBiometricEnabled) {
+    if (!supportsLocalAuth ||
+        !widget.state.preferences.appLockBiometricEnabled) {
       return;
     }
     try {
@@ -52,7 +53,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
   }
 
   Future<void> unlockWithBiometric() async {
-    if (checkingBiometric) {
+    if (!supportsLocalAuth || checkingBiometric) {
       return;
     }
     setState(() {
@@ -109,8 +110,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surface,
+    final colors = CsacColors.of(context);
+    return ColoredBox(
+      color: colors.systemBackground,
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -145,7 +147,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
                     label: strings.text('PIN'),
                     helperText: strings.text('4-8 digits'),
                     leadingIcon:
-                        widget.state.preferences.appLockBiometricEnabled &&
+                        supportsLocalAuth &&
+                            widget.state.preferences.appLockBiometricEnabled &&
                             biometricAvailable
                         ? Icons.fingerprint
                         : null,

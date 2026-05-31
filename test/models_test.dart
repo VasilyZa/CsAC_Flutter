@@ -92,11 +92,12 @@ void main() {
   });
 
   test('release version display normalizes action tags', () {
-    expect(VersionUpdateChecker.displayVersion('v1.2.5-46'), '1.2.5+46');
+    expect(VersionUpdateChecker.displayVersion('v1.2.5-46'), '1.2.5-46');
     expect(
       VersionUpdateChecker.displayVersion('refs/tags/v1.2.5-46'),
-      '1.2.5+46',
+      '1.2.5-46',
     );
-    expect(VersionUpdateChecker.displayVersion('1.2.5+46'), '1.2.5+46');
+    expect(VersionUpdateChecker.displayVersion('1.2.5+46'), '1.2.5-46');
+    expect(VersionUpdateChecker.displayVersion('1.3.0+50'), '1.3.0-50');
   });
 }

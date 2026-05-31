@@ -35,13 +35,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool get isSelf => widget.state.user?.uid == widget.uid;
 
   bool get canManageMember {
+    if (widget.state.debugMode) {
+      return true;
+    }
     final group = widget.group;
     final member = widget.member;
     if (group == null || member == null || isSelf || member.isOwner) {
       return false;
-    }
-    if (widget.state.debugMode) {
-      return true;
     }
     return group.isOwner || group.isAdmin;
   }
@@ -323,6 +323,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Future<void> recoverFriend(UserProfile target) async {
+    await runAction(
+      () => widget.state.recoverFriend(target.uid),
+      'Friend recovered.',
+    );
+  }
+
   Future<void> banUser(UserProfile target) async {
     final strings = context.strings;
     final ok = await confirm(
@@ -338,13 +345,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> unbanUser(UserProfile target) async {
     await runAction(() => widget.state.unbanUser(target.uid), 'User unbanned.');
-  }
-
-  Future<void> recoverFriend(UserProfile target) async {
-    await runAction(
-      () => widget.state.recoverFriend(target.uid),
-      'Friend recovered.',
-    );
   }
 
   Future<void> memberAction(String action) async {
@@ -382,7 +382,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
     final result = await showDialog<_MemberTitleChange>(
       context: context,
-      builder: (context) => _MemberTitleDialog(member: member),
+      builder: (context) =>
+          _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
     );
     if (result == null || !mounted) {
       return;
@@ -397,7 +398,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
       return;
     }
-    if (result.level < 1 || result.level > 100) {
+    if (result.level < 1 || (!widget.state.debugMode && result.level > 100)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -431,7 +432,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void openPrivateChat(UserProfile target) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -448,7 +449,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void openCommonGroup(CommonGroup group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -464,7 +465,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void openCreatedGroup(GroupProfile group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ConversationDetailScreen(
           state: widget.state,
           conversation: Conversation(
@@ -481,7 +482,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void openReport(UserProfile target) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ReportScreen(
           state: widget.state,
           type: 'user',

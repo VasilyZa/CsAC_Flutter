@@ -10,14 +10,15 @@ class _MessageImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final width = math.min(260.0, chatBubbleMaxWidth(context) - 24);
     final image = Image.network(
       url,
-      width: 260,
+      width: width,
       height: 180,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return Container(
-          width: 260,
+          width: width,
           height: 120,
           color: colors.surfaceContainerHighest,
           alignment: Alignment.center,
@@ -33,24 +34,18 @@ class _MessageImage extends StatelessWidget {
           return child;
         }
         return Container(
-          width: 260,
+          width: width,
           height: 120,
           alignment: Alignment.center,
           child: const CircularProgressIndicator(strokeWidth: 2),
         );
       },
     );
-    return InkWell(
+    return _CsacPressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: heroTag == null
-            ? image
-            : Hero(
-                tag: heroTag!,
-                child: Material(type: MaterialType.transparency, child: image),
-              ),
+        child: heroTag == null ? image : Hero(tag: heroTag!, child: image),
       ),
     );
   }
@@ -238,118 +233,133 @@ class _ImageSendPreviewScreenState extends State<_ImageSendPreviewScreen> {
                 ),
               ),
             ),
-            Material(
-              color: colors.surface,
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Scrollbar(
-                      controller: toolbarScrollController,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: toolbarScrollController,
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
+              ),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: CsacColors.of(
+                      context,
+                    ).cardBackground.withValues(alpha: 0.92),
+                    border: Border(
+                      top: BorderSide(
+                        color: CsacColors.of(
+                          context,
+                        ).separator.withValues(alpha: 0.26),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SingleChildScrollView(
+                          controller: toolbarScrollController,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                child: drawing
+                                    ? FilledButton.tonalIcon(
+                                        key: const ValueKey('draw-on'),
+                                        onPressed: () =>
+                                            setState(() => drawing = false),
+                                        icon: const Icon(Icons.brush),
+                                        label: Text(strings.text('Draw')),
+                                      )
+                                    : OutlinedButton.icon(
+                                        key: const ValueKey('draw-off'),
+                                        onPressed: () =>
+                                            setState(() => drawing = true),
+                                        icon: const Icon(Icons.draw_outlined),
+                                        label: Text(strings.text('Draw')),
+                                      ),
+                              ),
+                              const SizedBox(width: 8),
+                              for (final color in [
+                                colors.primary,
+                                colors.error,
+                                Colors.white,
+                                Colors.black,
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _DrawColorButton(
+                                    color: color,
+                                    selected: drawColor == color,
+                                    onTap: () =>
+                                        setState(() => drawColor = color),
+                                  ),
+                                ),
+                              const SizedBox(width: 6),
+                              SegmentedButton<_ImageCropMode>(
+                                segments: [
+                                  ButtonSegment(
+                                    value: _ImageCropMode.original,
+                                    label: Text(strings.text('Original')),
+                                  ),
+                                  ButtonSegment(
+                                    value: _ImageCropMode.square,
+                                    label: Text(strings.text('Square')),
+                                  ),
+                                  ButtonSegment(
+                                    value: _ImageCropMode.portrait,
+                                    label: Text(strings.text('Portrait')),
+                                  ),
+                                  ButtonSegment(
+                                    value: _ImageCropMode.landscape,
+                                    label: Text(strings.text('Landscape')),
+                                  ),
+                                ],
+                                selected: {cropMode},
+                                onSelectionChanged: (value) =>
+                                    setState(() => cropMode = value.first),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
                           children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 180),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              child: drawing
-                                  ? FilledButton.tonalIcon(
-                                      key: const ValueKey('draw-on'),
-                                      onPressed: () =>
-                                          setState(() => drawing = false),
-                                      icon: const Icon(Icons.brush),
-                                      label: Text(strings.text('Draw')),
-                                    )
-                                  : OutlinedButton.icon(
-                                      key: const ValueKey('draw-off'),
-                                      onPressed: () =>
-                                          setState(() => drawing = true),
-                                      icon: const Icon(Icons.draw_outlined),
-                                      label: Text(strings.text('Draw')),
-                                    ),
-                            ),
-                            const SizedBox(width: 8),
-                            for (final color in [
-                              colors.primary,
-                              colors.error,
-                              Colors.white,
-                              Colors.black,
-                            ])
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _DrawColorButton(
-                                  color: color,
-                                  selected: drawColor == color,
-                                  onTap: () =>
-                                      setState(() => drawColor = color),
+                            Expanded(
+                              child: TextField(
+                                controller: caption,
+                                minLines: 1,
+                                maxLines: 3,
+                                decoration: InputDecoration(
+                                  labelText: strings.text('Caption'),
+                                  border: const OutlineInputBorder(),
                                 ),
                               ),
-                            const SizedBox(width: 6),
-                            SegmentedButton<_ImageCropMode>(
-                              segments: [
-                                ButtonSegment(
-                                  value: _ImageCropMode.original,
-                                  label: Text(strings.text('Original')),
-                                ),
-                                ButtonSegment(
-                                  value: _ImageCropMode.square,
-                                  label: Text(strings.text('Square')),
-                                ),
-                                ButtonSegment(
-                                  value: _ImageCropMode.portrait,
-                                  label: Text(strings.text('Portrait')),
-                                ),
-                                ButtonSegment(
-                                  value: _ImageCropMode.landscape,
-                                  label: Text(strings.text('Landscape')),
-                                ),
-                              ],
-                              selected: {cropMode},
-                              onSelectionChanged: (value) =>
-                                  setState(() => cropMode = value.first),
+                            ),
+                            const SizedBox(width: 10),
+                            FilledButton.icon(
+                              onPressed: sending ? null : send,
+                              icon: sending
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send),
+                              label: Text(strings.text('Send')),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: caption,
-                            minLines: 1,
-                            maxLines: 3,
-                            decoration: InputDecoration(
-                              labelText: strings.text('Caption'),
-                              border: const OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: sending ? null : send,
-                          icon: sending
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.send),
-                          label: Text(strings.text('Send')),
-                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -418,9 +428,8 @@ class _DrawColorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return InkWell(
+    return _CsacPressable(
       onTap: onTap,
-      customBorder: const CircleBorder(),
       child: AnimatedContainer(
         duration: 150.ms,
         width: 34,
@@ -597,21 +606,15 @@ class _ImagePreviewRoute extends StatelessWidget {
                   maxScale: 5,
                   child: heroTag == null
                       ? image
-                      : Hero(
-                          tag: heroTag!,
-                          child: Material(
-                            type: MaterialType.transparency,
-                            child: image,
-                          ),
-                        ),
+                      : Hero(tag: heroTag!, child: image),
                 ),
               ),
               Positioned(
                 top: 8,
                 left: 8,
-                child: IconButton.filledTonal(
+                child: _PreviewIconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                  icon: CupertinoIcons.xmark,
                 ),
               ),
               Positioned(
@@ -619,7 +622,7 @@ class _ImagePreviewRoute extends StatelessWidget {
                 right: 8,
                 child: Row(
                   children: [
-                    IconButton.filledTonal(
+                    _PreviewIconButton(
                       tooltip: strings.text('Copy link'),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: url));
@@ -629,22 +632,22 @@ class _ImagePreviewRoute extends StatelessWidget {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.copy),
+                      icon: CupertinoIcons.doc_on_doc,
                     ),
                     const SizedBox(width: 8),
-                    IconButton.filledTonal(
+                    _PreviewIconButton(
                       tooltip: strings.text('Open'),
                       onPressed: () => launchUrl(
                         Uri.parse(url),
                         mode: LaunchMode.externalApplication,
                       ),
-                      icon: const Icon(Icons.open_in_new),
+                      icon: CupertinoIcons.arrow_up_right_square,
                     ),
                     const SizedBox(width: 8),
-                    IconButton.filledTonal(
+                    _PreviewIconButton(
                       tooltip: strings.text('Download'),
                       onPressed: () => downloadImage(context, url),
-                      icon: const Icon(Icons.download_outlined),
+                      icon: CupertinoIcons.arrow_down_circle,
                     ),
                   ],
                 ),
@@ -654,6 +657,46 @@ class _ImagePreviewRoute extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _PreviewIconButton extends StatelessWidget {
+  const _PreviewIconButton({
+    required this.onPressed,
+    required this.icon,
+    this.tooltip,
+  });
+
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(38, 38),
+      onPressed: onPressed,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: CupertinoColors.black.withValues(alpha: 0.34),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: CupertinoColors.white.withValues(alpha: 0.18),
+                width: 0.5,
+              ),
+            ),
+            child: Icon(icon, color: CupertinoColors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -676,6 +719,16 @@ Future<void> downloadUrl(
   List<String> extensions = const <String>[],
 }) async {
   final strings = context.strings;
+  if (isWebPlatform) {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(strings.text('Link copied'))));
+    return;
+  }
   try {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode < 200 || response.statusCode >= 300) {

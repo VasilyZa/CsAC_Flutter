@@ -1,73 +1,84 @@
 part of '../../main.dart';
 
-class NoticeCenterScreen extends StatelessWidget {
+class NoticeCenterScreen extends StatefulWidget {
   const NoticeCenterScreen({super.key, required this.state});
 
   final CsacAppState state;
 
   @override
+  State<NoticeCenterScreen> createState() => _NoticeCenterScreenState();
+}
+
+class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
+  int index = 0;
+
+  @override
   Widget build(BuildContext context) {
-    final counts = state.notificationCounts;
+    final counts = widget.state.notificationCounts;
     final strings = context.strings;
-    return DefaultTabController(
-      length: 5,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(strings.text('Notices')),
-          actions: [
-            IconButton(
-              tooltip: strings.text('Refresh'),
-              onPressed: state.refreshNotificationCounts,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-          bottom: TabBar(
-            tabs: [
-              Tab(
-                icon: _TabBadgeIcon(
-                  icon: Icons.notifications_none,
-                  count: counts.notices,
-                ),
-                text: strings.text('Notices'),
-              ),
-              Tab(
-                icon: _TabBadgeIcon(
-                  icon: Icons.alternate_email,
-                  count: counts.mentions,
-                ),
-                text: strings.text('Mentions'),
-              ),
-              Tab(
-                icon: _TabBadgeIcon(
-                  icon: Icons.manage_accounts_outlined,
-                  count: counts.friendChanges,
-                ),
-                text: strings.text('Friend changes'),
-              ),
-              Tab(
-                icon: _TabBadgeIcon(
-                  icon: Icons.person_add_alt,
-                  count: counts.friendRequests,
-                ),
-                text: strings.text('Friends'),
-              ),
-              Tab(
-                icon: _TabBadgeIcon(
-                  icon: Icons.group_add_outlined,
-                  count: counts.groupApplications,
-                ),
-                text: strings.text('Groups'),
-              ),
-            ],
+    final colors = CsacColors.of(context);
+    final pages = [
+      NoticesPage(state: widget.state),
+      MentionNoticesPage(state: widget.state),
+      FriendChangeNoticesPage(state: widget.state),
+      FriendRequestsPage(state: widget.state),
+      GroupApplicationsPage(state: widget.state),
+    ];
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(strings.text('Notices')),
+        actions: [
+          IconButton(
+            tooltip: strings.text('Refresh'),
+            onPressed: widget.state.refreshNotificationCounts,
+            icon: const Icon(CupertinoIcons.arrow_clockwise),
           ),
-        ),
-        body: TabBarView(
+        ],
+      ),
+      backgroundColor: colors.systemBackground,
+      body: SafeArea(
+        top: false,
+        child: Column(
           children: [
-            NoticesPage(state: state),
-            MentionNoticesPage(state: state),
-            FriendChangeNoticesPage(state: state),
-            FriendRequestsPage(state: state),
-            GroupApplicationsPage(state: state),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              child: CupertinoSlidingSegmentedControl<int>(
+                groupValue: index,
+                onValueChanged: (value) {
+                  if (value != null) {
+                    setState(() => index = value);
+                  }
+                },
+                children: {
+                  0: _NoticeSegment(
+                    icon: CupertinoIcons.bell,
+                    count: counts.notices,
+                    label: strings.text('Notices'),
+                  ),
+                  1: _NoticeSegment(
+                    icon: CupertinoIcons.at,
+                    count: counts.mentions,
+                    label: strings.text('Mentions'),
+                  ),
+                  2: _NoticeSegment(
+                    icon: CupertinoIcons.person_2,
+                    count: counts.friendChanges,
+                    label: strings.text('Friend changes'),
+                  ),
+                  3: _NoticeSegment(
+                    icon: CupertinoIcons.person_add,
+                    count: counts.friendRequests,
+                    label: strings.text('Friends'),
+                  ),
+                  4: _NoticeSegment(
+                    icon: CupertinoIcons.group,
+                    count: counts.groupApplications,
+                    label: strings.text('Groups'),
+                  ),
+                },
+              ),
+            ),
+            Expanded(child: pages[index]),
           ],
         ),
       ),
@@ -75,15 +86,37 @@ class NoticeCenterScreen extends StatelessWidget {
   }
 }
 
-class _TabBadgeIcon extends StatelessWidget {
-  const _TabBadgeIcon({required this.icon, required this.count});
+class _NoticeSegment extends StatelessWidget {
+  const _NoticeSegment({
+    required this.icon,
+    required this.count,
+    required this.label,
+  });
 
   final IconData icon;
   final int count;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return _BadgeIcon(icon: icon, count: count);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _BadgeIcon(icon: icon, count: count, size: 16),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -134,7 +167,7 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
     final navigator = Navigator.of(context);
     await widget.state.markMentionNoticeRead(notice);
     await navigator.push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: notice.conversation,
@@ -173,7 +206,12 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
@@ -419,7 +457,12 @@ class _FriendChangeNoticesPageState extends State<FriendChangeNoticesPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
@@ -626,7 +669,12 @@ class _NoticesPageState extends State<NoticesPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           Row(
             children: [
@@ -769,7 +817,12 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),
@@ -950,7 +1003,12 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           if (loading) const LinearProgressIndicator(minHeight: 2),
           if (error != null) _InlineError(message: error!, onRetry: load),

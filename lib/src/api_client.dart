@@ -265,24 +265,6 @@ class CsacApiClient {
     return CsacUser.fromJson(user);
   }
 
-  Future<SessionExtensionStatus> activateSessionExtension(String key) async {
-    final data = await postForm('utils/session_extend', <String, String>{
-      'key': key,
-    });
-    await saveSession();
-    return SessionExtensionStatus.fromJson(data);
-  }
-
-  Future<void> resetSessionExtension() async {
-    await postForm('utils/session_reset');
-    await saveSession();
-  }
-
-  Future<SessionExtensionStatus> sessionExtensionStatus() async {
-    final data = await get('utils/session_info');
-    return SessionExtensionStatus.fromJson(data);
-  }
-
   Future<NetworkDiagnosticReport> runNetworkDiagnostics({
     String? imageUrl,
   }) async {
@@ -875,6 +857,26 @@ class CsacApiClient {
     return messages;
   }
 
+  Future<List<EmojiSticker>> emojis() async {
+    final data = await get('emoji/get_list');
+    final rows = _firstList(data, const [
+      'emojis',
+      'emoji',
+      'emoji_list',
+      'list',
+      'data',
+    ]);
+    final stickers = rows
+        .map(EmojiSticker.fromJson)
+        .where((emoji) => emoji.abbr.trim().isNotEmpty)
+        .toList();
+    final seen = <String>{};
+    return <EmojiSticker>[
+      for (final sticker in stickers)
+        if (seen.add(sticker.abbr)) sticker,
+    ];
+  }
+
   Future<void> markRead(Conversation conversation, {int lastMsgId = 0}) {
     return postForm('message/mark_read', <String, String>{
       if (conversation.type == ConversationType.group)
@@ -902,6 +904,20 @@ class CsacApiClient {
     }
     fields['friend_id'] = '${conversation.id}';
     return postForm('message/send_private_msg', fields);
+  }
+
+  Future<void> sendEmojiMessage(Conversation conversation, EmojiSticker emoji) {
+    final abbr = emoji.abbr.trim();
+    if (abbr.isEmpty) {
+      throw const CsacApiException('Emoji abbr is empty.');
+    }
+    return postForm('message/send_emoji_msg', <String, String>{
+      if (conversation.type == ConversationType.group)
+        'room_id': '${conversation.id}',
+      if (conversation.type == ConversationType.private)
+        'friend_id': '${conversation.id}',
+      'abbr': abbr,
+    });
   }
 
   Future<void> sendImageMessage(
@@ -1002,6 +1018,24 @@ class CsacApiClient {
       'type': type,
     });
     return EssenceStats.fromJson(data, type: type);
+  }
+
+  Future<SessionExtensionStatus> activateSessionExtension(String key) async {
+    final data = await postForm('utils/session_extend', <String, String>{
+      'key': key,
+    });
+    await saveSession();
+    return SessionExtensionStatus.fromJson(data);
+  }
+
+  Future<void> resetSessionExtension() async {
+    await postForm('utils/session_reset');
+    await saveSession();
+  }
+
+  Future<SessionExtensionStatus> sessionExtensionStatus() async {
+    final data = await get('utils/session_info');
+    return SessionExtensionStatus.fromJson(data);
   }
 
   Future<String> generateAdminToken() async {

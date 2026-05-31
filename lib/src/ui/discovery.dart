@@ -295,7 +295,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
   void openGroupDetail(GroupProfile group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ConversationDetailScreen(
           state: widget.state,
           conversation: Conversation(
@@ -491,7 +491,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         ),
       );
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
+        CsacPageRoute<void>(
           builder: (_) => ConversationDetailScreen(
             state: widget.state,
             conversation: Conversation(
@@ -642,7 +642,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 
   Future<void> openResult(MessageSearchResult result) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: result.conversation,
@@ -716,14 +716,12 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
         ),
         if (loading) const LinearProgressIndicator(minHeight: 2),
         if (error != null)
-          MaterialBanner(
-            content: Text(error!),
-            actions: [
-              TextButton(
-                onPressed: () => setState(() => error = null),
-                child: Text(strings.text('Dismiss')),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+            child: _InlineError(
+              message: error!,
+              onRetry: () => setState(() => error = null),
+            ),
           ),
         Expanded(
           child: results.isEmpty
@@ -777,10 +775,10 @@ class _ScopeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
+      child: _CupertinoMiniPill(
+        label: label,
         selected: selected,
-        onSelected: (_) => onSelected(),
+        onTap: onSelected,
       ),
     );
   }
@@ -802,50 +800,85 @@ class _SearchResultTile extends StatelessWidget {
     final isGroup = result.conversation.type == ConversationType.group;
     final message = result.message;
     final time = displayMessageTime(message, preferences);
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      child: _RoundedInkClip(
-        child: ListTile(
-          onTap: onTap,
-          leading: CircleAvatar(
-            backgroundColor: isGroup
-                ? colors.secondaryContainer
-                : colors.primaryContainer,
-            child: Icon(
-              isGroup ? Icons.groups_rounded : Icons.person_rounded,
-              color: isGroup
-                  ? colors.onSecondaryContainer
-                  : colors.onPrimaryContainer,
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: _CsacPressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colors.separator.withValues(alpha: 0.24),
+              width: 0.5,
             ),
           ),
-          title: Text(
-            result.conversation.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(
-                '${message.sender}${time.isEmpty ? '' : ' · $time'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: CupertinoTheme.of(
+                    context,
+                  ).primaryColor.withValues(alpha: 0.13),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isGroup
+                      ? CupertinoIcons.group_solid
+                      : CupertinoIcons.person_fill,
+                  color: CupertinoTheme.of(context).primaryColor,
+                ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                result.snippet,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.conversation.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.label,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${message.sender}${time.isEmpty ? '' : ' · $time'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.secondaryLabel,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      result.snippet,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.secondaryLabel),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                message.imageUrl.isNotEmpty
+                    ? CupertinoIcons.photo
+                    : message.isEssence
+                    ? CupertinoIcons.star
+                    : CupertinoIcons.chevron_right,
+                color: colors.tertiaryLabel,
+                size: 18,
               ),
             ],
           ),
-          trailing: message.imageUrl.isNotEmpty
-              ? const Icon(Icons.image_outlined)
-              : message.isEssence
-              ? const Icon(Icons.star_outline)
-              : const Icon(Icons.chevron_right),
         ),
       ),
     );

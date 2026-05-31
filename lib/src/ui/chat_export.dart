@@ -55,11 +55,15 @@ extension _ChatExport on _ChatScreenState {
     if (!mounted || options == null) {
       return;
     }
-    final directory = await getDirectoryPath(
-      confirmButtonText: context.strings.text('Choose export folder'),
-      canCreateDirectories: true,
-    );
-    if (!mounted || directory == null || directory.trim().isEmpty) {
+    var directory = '';
+    if (!isWebPlatform) {
+      final pickedDirectory = await getDirectoryPath(
+        confirmButtonText: context.strings.text('Choose export folder'),
+        canCreateDirectories: true,
+      );
+      directory = pickedDirectory ?? '';
+    }
+    if (!mounted || (!isWebPlatform && directory.trim().isEmpty)) {
       return;
     }
     setExporting(true);
@@ -130,18 +134,14 @@ extension _ChatExport on _ChatScreenState {
                 },
               ),
               const SizedBox(height: 12),
-              CheckboxListTile(
+              _DialogCheckRow(
                 value: includeMedia,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(context.strings.text('Download media files')),
-                subtitle: Text(
-                  context.strings.text(
-                    'Images, voices and files will be saved beside the export.',
-                  ),
+                title: context.strings.text('Download media files'),
+                subtitle: context.strings.text(
+                  'Images, voices and files will be saved beside the export.',
                 ),
                 onChanged: (value) {
-                  setDialogState(() => includeMedia = value ?? false);
+                  setDialogState(() => includeMedia = value);
                 },
               ),
             ],
@@ -153,7 +153,10 @@ extension _ChatExport on _ChatScreenState {
             ),
             FilledButton.icon(
               onPressed: () => Navigator.of(context).pop(
-                ChatExportOptions(format: format, includeMedia: includeMedia),
+                ChatExportOptions(
+                  format: format,
+                  includeMedia: includeMedia && supportsLocalFiles,
+                ),
               ),
               icon: const Icon(Icons.ios_share_outlined),
               label: Text(context.strings.text('Export')),
@@ -181,37 +184,35 @@ extension _ChatExport on _ChatScreenState {
     final baseName =
         'csac_${widget.conversation.type.name}_${widget.conversation.id}_'
         '${_exportTimestamp()}';
-    final exportDirectory = Directory(directory);
-    if (!exportDirectory.existsSync()) {
-      exportDirectory.createSync(recursive: true);
-    }
-    final mediaDir = Directory(
-      p.join(exportDirectory.path, '${baseName}_media'),
-    );
-    final mediaRefs = <int, List<_ChatExportMediaRef>>{};
-    if (options.includeMedia) {
-      if (!mediaDir.existsSync()) {
-        mediaDir.createSync(recursive: true);
-      }
-      for (final message in allMessages) {
-        mediaRefs[message.id] = await downloadMessageMedia(message, mediaDir);
-      }
-    }
     final extension = switch (options.format) {
       ChatExportFormat.txt => 'txt',
       ChatExportFormat.html => 'html',
       ChatExportFormat.json => 'json',
     };
-    final file = File(p.join(exportDirectory.path, '$baseName.$extension'));
-    final content = switch (options.format) {
-      ChatExportFormat.txt => buildTxtExport(allMessages, mediaRefs),
-      ChatExportFormat.html => buildHtmlExport(allMessages, mediaRefs),
-      ChatExportFormat.json => buildJsonExport(allMessages, mediaRefs),
-    };
-    await file.writeAsString(content, flush: true);
+    final mediaRefs = <int, List<_ChatExportMediaRef>>{};
+    if (options.includeMedia) {
+      final mediaDirectoryPath = p.join(directory, '${baseName}_media');
+      await ensureDirectoryExists(mediaDirectoryPath);
+      for (final message in allMessages) {
+        mediaRefs[message.id] = await downloadMessageMedia(
+          message,
+          mediaDirectoryPath,
+        );
+      }
+    }
+    final result = await writeChatExportFile(
+      directory: directory,
+      baseName: baseName,
+      extension: extension,
+      content: switch (options.format) {
+        ChatExportFormat.txt => buildTxtExport(allMessages, mediaRefs),
+        ChatExportFormat.html => buildHtmlExport(allMessages, mediaRefs),
+        ChatExportFormat.json => buildJsonExport(allMessages, mediaRefs),
+      },
+    );
     final refs = mediaRefs.values.expand((items) => items).toList();
     return ChatExportResult(
-      filePath: file.path,
+      filePath: result.filePath,
       messageCount: allMessages.length,
       mediaCount: refs.where((ref) => ref.relativePath.isNotEmpty).length,
       mediaFailures: refs.where((ref) => ref.error.isNotEmpty).length,
@@ -220,7 +221,7 @@ extension _ChatExport on _ChatScreenState {
 
   Future<List<_ChatExportMediaRef>> downloadMessageMedia(
     ChatMessage message,
-    Directory mediaDir,
+    String mediaDirectoryPath,
   ) async {
     final targets = <({String kind, String url, String accept})>[
       if (message.imageUrl.isNotEmpty)
@@ -251,18 +252,21 @@ extension _ChatExport on _ChatScreenState {
           : p.extension(originalName);
       final fileName =
           'msg_${message.id}_${target.kind}${_safeFileExtension(extension)}';
-      final file = File(p.join(mediaDir.path, fileName));
       try {
         final bytes = await widget.state.client.getBinary(
           target.url,
           accept: target.accept,
         );
-        await file.writeAsBytes(bytes, flush: true);
+        final relativePath = await writeChatExportMediaFile(
+          mediaDirectoryPath: mediaDirectoryPath,
+          fileName: fileName,
+          bytes: bytes,
+        );
         refs.add(
           _ChatExportMediaRef(
             url: target.url,
             kind: target.kind,
-            relativePath: '${p.basename(mediaDir.path)}/$fileName',
+            relativePath: relativePath,
             fileName: fileName,
           ),
         );

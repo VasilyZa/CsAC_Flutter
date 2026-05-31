@@ -45,6 +45,7 @@ class CsacPreferences {
     this.appLockPinHash = '',
     this.appLockBiometricEnabled = false,
     this.autoCheckVersionUpdates = true,
+    this.localSystemNotificationsEnabled = true,
   });
 
   static const _themeKey = 'csac.theme_mode';
@@ -68,6 +69,7 @@ class CsacPreferences {
   static const _appLockPinHashKey = 'csac.app_lock.pin_hash';
   static const _appLockBiometricEnabledKey = 'csac.app_lock.biometric_enabled';
   static const _autoCheckVersionUpdatesKey = 'csac.updates.auto_check_version';
+  static const _localSystemNotificationsKey = 'csac.notifications.local_system';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -90,6 +92,7 @@ class CsacPreferences {
   final String appLockPinHash;
   final bool appLockBiometricEnabled;
   final bool autoCheckVersionUpdates;
+  final bool localSystemNotificationsEnabled;
 
   bool get hasAppLockPin =>
       appLockPinSalt.trim().isNotEmpty && appLockPinHash.trim().isNotEmpty;
@@ -125,6 +128,7 @@ class CsacPreferences {
     String? appLockPinHash,
     bool? appLockBiometricEnabled,
     bool? autoCheckVersionUpdates,
+    bool? localSystemNotificationsEnabled,
   }) {
     return CsacPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -153,6 +157,9 @@ class CsacPreferences {
           appLockBiometricEnabled ?? this.appLockBiometricEnabled,
       autoCheckVersionUpdates:
           autoCheckVersionUpdates ?? this.autoCheckVersionUpdates,
+      localSystemNotificationsEnabled:
+          localSystemNotificationsEnabled ??
+          this.localSystemNotificationsEnabled,
     );
   }
 
@@ -194,6 +201,8 @@ class CsacPreferences {
           prefs.getBool(_appLockBiometricEnabledKey) ?? false,
       autoCheckVersionUpdates:
           prefs.getBool(_autoCheckVersionUpdatesKey) ?? true,
+      localSystemNotificationsEnabled:
+          prefs.getBool(_localSystemNotificationsKey) ?? true,
     );
   }
 
@@ -244,6 +253,10 @@ class CsacPreferences {
     }
     await prefs.setBool(_appLockBiometricEnabledKey, appLockBiometricEnabled);
     await prefs.setBool(_autoCheckVersionUpdatesKey, autoCheckVersionUpdates);
+    await prefs.setBool(
+      _localSystemNotificationsKey,
+      localSystemNotificationsEnabled,
+    );
   }
 
   static ThemeMode _themeModeFromName(String? value) {
@@ -577,6 +590,180 @@ class ConversationPreferenceStore {
   }
 }
 
+class EmojiStickerStore {
+  const EmojiStickerStore._();
+
+  static const _key = 'csac.emoji.stickers';
+
+  static Future<List<EmojiSticker>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null || raw.isEmpty) {
+      return const <EmojiSticker>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <EmojiSticker>[];
+      }
+      return decoded
+          .whereType<Map>()
+          .map((item) => EmojiSticker.fromJson(Map<String, dynamic>.from(item)))
+          .where((emoji) => emoji.abbr.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const <EmojiSticker>[];
+    }
+  }
+
+  static Future<void> save(List<EmojiSticker> stickers) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (stickers.isEmpty) {
+      await prefs.remove(_key);
+      return;
+    }
+    await prefs.setString(
+      _key,
+      jsonEncode(stickers.map((emoji) => emoji.toJson()).toList()),
+    );
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+}
+
+class EmojiRecentStore {
+  const EmojiRecentStore._();
+
+  static const _key = 'csac.emoji.recent';
+  static const _maxEntries = 24;
+
+  static Future<List<EmojiSticker>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null || raw.isEmpty) {
+      return const <EmojiSticker>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <EmojiSticker>[];
+      }
+      return decoded
+          .whereType<Map>()
+          .map((item) => EmojiSticker.fromJson(Map<String, dynamic>.from(item)))
+          .where((emoji) => emoji.abbr.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const <EmojiSticker>[];
+    }
+  }
+
+  static Future<void> record(EmojiSticker sticker) async {
+    if (sticker.abbr.trim().isEmpty) {
+      return;
+    }
+    final current = await load();
+    final next = <EmojiSticker>[
+      sticker,
+      for (final item in current)
+        if (item.abbr != sticker.abbr) item,
+    ].take(_maxEntries).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _key,
+      jsonEncode(next.map((emoji) => emoji.toJson()).toList()),
+    );
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+}
+
+class CommandPaletteUsage {
+  const CommandPaletteUsage({
+    required this.id,
+    required this.count,
+    required this.lastUsedAt,
+  });
+
+  final String id;
+  final int count;
+  final int lastUsedAt;
+
+  factory CommandPaletteUsage.fromJson(Map<String, dynamic> json) {
+    return CommandPaletteUsage(
+      id: asString(json['id']),
+      count: asInt(json['count']),
+      lastUsedAt: asInt(json['last_used_at']),
+    );
+  }
+
+  Map<String, Object> toJson() {
+    return <String, Object>{
+      'id': id,
+      'count': count,
+      'last_used_at': lastUsedAt,
+    };
+  }
+}
+
+class CommandPaletteUsageStore {
+  const CommandPaletteUsageStore._();
+
+  static const _key = 'csac.command_palette.usage';
+  static const _maxEntries = 64;
+
+  static Future<Map<String, CommandPaletteUsage>> loadAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null || raw.isEmpty) {
+      return const <String, CommandPaletteUsage>{};
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <String, CommandPaletteUsage>{};
+      }
+      final result = <String, CommandPaletteUsage>{};
+      for (final item in decoded) {
+        if (item is Map<String, dynamic>) {
+          final usage = CommandPaletteUsage.fromJson(item);
+          if (usage.id.trim().isNotEmpty) {
+            result[usage.id] = usage;
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      return const <String, CommandPaletteUsage>{};
+    }
+  }
+
+  static Future<void> record(String id) async {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    final usage = Map<String, CommandPaletteUsage>.of(await loadAll());
+    final current = usage[normalized];
+    usage[normalized] = CommandPaletteUsage(
+      id: normalized,
+      count: (current?.count ?? 0) + 1,
+      lastUsedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    final values = usage.values.toList()
+      ..sort((a, b) => b.lastUsedAt.compareTo(a.lastUsedAt));
+    final limited = values.take(_maxEntries).map((item) => item.toJson());
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, jsonEncode(limited.toList()));
+  }
+}
+
 class ConversationDraft {
   const ConversationDraft({
     this.text = '',
@@ -620,7 +807,9 @@ class ConversationDraft {
       text: text.trimRight(),
       replyMessageId: reply?.id ?? 0,
       replySender: reply?.sender ?? '',
-      replyBody: reply == null ? '' : compactDraftText(reply.body),
+      replyBody: reply == null
+          ? ''
+          : compactDraftText(_draftMessageText(reply)),
     );
   }
 
@@ -643,6 +832,18 @@ class ConversationDraft {
       'replyBody': replyBody,
     };
   }
+}
+
+String _draftMessageText(ChatMessage message) {
+  if (message.isRecalled) {
+    return '[recalled]';
+  }
+  if (message.emojiAddress.isNotEmpty || message.messageType == 5) {
+    return message.emojiAbbr.trim().isEmpty
+        ? '[emoji]'
+        : '[emoji] ${message.emojiAbbr.trim()}';
+  }
+  return message.body;
 }
 
 String compactDraftText(String text, {int max = 96}) {

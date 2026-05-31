@@ -1,15 +1,13 @@
-import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'api_client.dart';
 import 'l10n.dart';
 import 'local_cache.dart';
 import 'models.dart';
+import 'platform/app_storage.dart';
 import 'preferences.dart';
 
 class PerformanceCacheStats {
@@ -61,11 +59,12 @@ class CsacAppState extends ChangeNotifier {
   NotificationCounts notificationCounts = const NotificationCounts();
   CsacPreferences preferences = const CsacPreferences();
   Conversation? activeConversation;
+  List<EmojiSticker> emojiStickers = const <EmojiSticker>[];
   bool bootstrapping = true;
+  bool debugMode = false;
   bool loading = false;
   bool offlineMode = false;
   bool sessionExpired = false;
-  bool debugMode = false;
   String restoreStatus = const CsacStrings(
     Locale('zh', 'CN'),
   ).text('Restoring session...');
@@ -89,15 +88,15 @@ class CsacAppState extends ChangeNotifier {
       notifyListeners();
       user = await client.currentUser();
       await cache.saveUser(user!);
-      await refreshDebugMode();
       offlineMode = false;
       sessionExpired = false;
       await loadCachedConversations();
       await syncConversations();
       await refreshNotificationCounts();
+      unawaited(loadEmojiStickers(forceRefresh: true));
+      await refreshDebugMode();
     } on CsacAuthException catch (err) {
       await client.clearSession();
-      debugMode = false;
       user = await cache.loadUser();
       conversations = _sortConversations(await cache.loadConversations());
       sessionExpired = true;
@@ -109,7 +108,6 @@ class CsacAppState extends ChangeNotifier {
             ).text('Session expired. Cached history is available offline.');
     } catch (_) {
       user = await cache.loadUser();
-      debugMode = false;
       conversations = _sortConversations(await cache.loadConversations());
       offlineMode = user != null;
       sessionExpired = false;
@@ -131,7 +129,6 @@ class CsacAppState extends ChangeNotifier {
     try {
       user = await client.login(username, password);
       await cache.saveUser(user!);
-      debugMode = false;
       await LoginAccountStore.upsert(
         user: user!,
         username: username,
@@ -143,6 +140,8 @@ class CsacAppState extends ChangeNotifier {
       error = null;
       await syncConversations();
       await refreshNotificationCounts();
+      unawaited(loadEmojiStickers(forceRefresh: true));
+      await refreshDebugMode();
     } catch (err) {
       error = err.toString();
       rethrow;
@@ -173,7 +172,6 @@ class CsacAppState extends ChangeNotifier {
         avatarFileName: avatarFileName,
       );
       await cache.saveUser(user!);
-      debugMode = false;
       await LoginAccountStore.upsert(
         user: user!,
         username: username,
@@ -185,6 +183,8 @@ class CsacAppState extends ChangeNotifier {
       error = null;
       await syncConversations();
       await refreshNotificationCounts();
+      unawaited(loadEmojiStickers(forceRefresh: true));
+      await refreshDebugMode();
     } catch (err) {
       error = err.toString();
       rethrow;
@@ -338,6 +338,14 @@ class CsacAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateLocalSystemNotifications(bool enabled) async {
+    preferences = preferences.copyWith(
+      localSystemNotificationsEnabled: enabled,
+    );
+    await preferences.save();
+    notifyListeners();
+  }
+
   bool verifyAppLockPin(String pin) {
     return preferences.verifyAppLockPin(pin);
   }
@@ -358,11 +366,14 @@ class CsacAppState extends ChangeNotifier {
     _applyPreferredServer();
     await client.clearSession();
     await cache.clear();
+    await EmojiStickerStore.clear();
+    await EmojiRecentStore.clear();
     user = null;
-    debugMode = false;
     conversations = const <Conversation>[];
     notificationCounts = const NotificationCounts();
     activeConversation = null;
+    emojiStickers = const <EmojiSticker>[];
+    debugMode = false;
     offlineMode = false;
     sessionExpired = false;
     error = null;
@@ -385,11 +396,14 @@ class CsacAppState extends ChangeNotifier {
     }
     await cache.clear();
     await ConversationDraftStore.clearAll();
+    await EmojiStickerStore.clear();
+    await EmojiRecentStore.clear();
     user = null;
-    debugMode = false;
     conversations = const <Conversation>[];
     notificationCounts = const NotificationCounts();
     activeConversation = null;
+    emojiStickers = const <EmojiSticker>[];
+    debugMode = false;
     offlineMode = false;
     sessionExpired = false;
     error = null;
@@ -464,7 +478,6 @@ class CsacAppState extends ChangeNotifier {
       await client.restoreSession(record.sessionCookies);
       user = await client.currentUser();
       await cache.saveUser(user!);
-      await refreshDebugMode();
       await LoginAccountStore.upsert(
         user: user!,
         username: record.username,
@@ -476,9 +489,10 @@ class CsacAppState extends ChangeNotifier {
       error = null;
       await syncConversations();
       await refreshNotificationCounts();
+      unawaited(loadEmojiStickers(forceRefresh: true));
+      await refreshDebugMode();
     } on CsacAuthException {
       await client.clearSession();
-      debugMode = false;
       await LoginAccountStore.clearSession(record);
       rethrow;
     } catch (err) {
@@ -805,6 +819,40 @@ class CsacAppState extends ChangeNotifier {
     return cache.loadMessages(conversation);
   }
 
+  Future<List<EmojiSticker>> loadEmojiStickers({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && emojiStickers.isNotEmpty) {
+      return emojiStickers;
+    }
+    final cached = await EmojiStickerStore.load();
+    if (cached.isNotEmpty && !forceRefresh) {
+      emojiStickers = cached;
+      notifyListeners();
+      return cached;
+    }
+    if (cached.isNotEmpty && emojiStickers.isEmpty) {
+      emojiStickers = cached;
+      notifyListeners();
+    }
+    try {
+      final loaded = await client.emojis();
+      emojiStickers = loaded;
+      await EmojiStickerStore.save(loaded);
+      notifyListeners();
+      return loaded;
+    } catch (_) {
+      if (cached.isNotEmpty) {
+        return cached;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> sendEmojiMessage(Conversation conversation, EmojiSticker emoji) {
+    return client.sendEmojiMessage(conversation, emoji);
+  }
+
   Future<List<ChatMessage>> loadAllCachedMessages(Conversation conversation) {
     return cache.loadAllMessages(conversation);
   }
@@ -870,31 +918,6 @@ class CsacAppState extends ChangeNotifier {
     required Map<String, String> values,
   }) {
     return client.runDebugRequest(method: method, route: route, values: values);
-  }
-
-  Future<void> refreshDebugMode() async {
-    try {
-      final status = await client.sessionExtensionStatus();
-      debugMode = status.active;
-    } catch (_) {
-      debugMode = false;
-    }
-    notifyListeners();
-  }
-
-  Future<void> activateDebugMode(String key) async {
-    final status = await client.activateSessionExtension(key);
-    debugMode = status.active;
-    notifyListeners();
-  }
-
-  Future<void> deactivateDebugMode() async {
-    try {
-      await client.resetSessionExtension();
-    } finally {
-      debugMode = false;
-      notifyListeners();
-    }
   }
 
   Future<List<GroupMember>> loadGroupMembers(int roomId) {
@@ -1069,29 +1092,19 @@ class CsacAppState extends ChangeNotifier {
     int targetUid, {
     required String title,
     required int level,
-  }) {
+  }) async {
+    if (debugMode) {
+      await refreshDebugMode();
+      if (!debugMode) {
+        throw const CsacApiException('Debug mode is not active.');
+      }
+    }
     return client.setGroupMemberTitle(
       roomId,
       targetUid,
       title: title,
       level: level,
     );
-  }
-
-  Future<void> banUser(int uid) async {
-    await client.banUser(uid);
-  }
-
-  Future<void> unbanUser(int uid) async {
-    await client.unbanUser(uid);
-  }
-
-  Future<void> banRoom(int roomId) async {
-    await client.banRoom(roomId);
-  }
-
-  Future<void> unbanRoom(int roomId) async {
-    await client.unbanRoom(roomId);
   }
 
   Future<void> recallMessage(Conversation conversation, int msgId) {
@@ -1180,13 +1193,9 @@ class CsacAppState extends ChangeNotifier {
   Future<PerformanceCacheStats> loadPerformanceCacheStats() async {
     final localStats = await cache.stats();
     final imageCache = PaintingBinding.instance.imageCache;
-    final diskImageBytes = await _directoryBytes(await _backgroundDirectory());
-    final voiceBytes = await _temporaryFilesBytes(
-      (name) => name.startsWith('csac_voice_'),
-    );
-    final logBytes =
-        await _directoryBytes(await _logDirectory()) +
-        await _temporaryFilesBytes(_looksLikeLogFile);
+    final diskImageBytes = await backgroundStorageBytes();
+    final voiceBytes = await voiceTemporaryStorageBytes();
+    final logBytes = await logStorageBytes();
     return PerformanceCacheStats(
       messageCount: localStats.messageCount,
       conversationCount: localStats.conversationCount,
@@ -1209,65 +1218,30 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<List<AppLogFile>> loadAppLogFiles() async {
-    final files = <AppLogFile>[];
-    await _collectLogFiles(await _logDirectory(), files, recursive: true);
-    await _collectLogFiles(await getTemporaryDirectory(), files);
-    final byPath = <String, AppLogFile>{
-      for (final file in files) file.path: file,
-    };
-    final sorted = byPath.values.toList()
-      ..sort((a, b) => b.modified.compareTo(a.modified));
-    return sorted;
+    final files = await loadStoredAppLogFiles();
+    return [
+      for (final file in files)
+        AppLogFile(
+          path: file.path,
+          name: file.name,
+          bytes: file.bytes,
+          modified: file.modified,
+        ),
+    ];
   }
 
   Future<String> readAppLogFile(
     AppLogFile log, {
     int maxBytes = 256 * 1024,
   }) async {
-    final file = File(log.path);
-    if (!await file.exists()) {
-      return '';
-    }
-    final length = await file.length();
-    final start = length > maxBytes ? length - maxBytes : 0;
-    final stream = file.openRead(start);
-    return utf8.decode(
-      await stream.expand((chunk) => chunk).toList(),
-      allowMalformed: true,
-    );
-  }
-
-  Future<void> _collectLogFiles(
-    Directory directory,
-    List<AppLogFile> files, {
-    bool recursive = false,
-  }) async {
-    if (!await directory.exists()) {
-      return;
-    }
-    await for (final entity in directory.list(recursive: recursive)) {
-      if (entity is! File ||
-          !_looksLikeLogFile(p.basename(entity.path).toLowerCase())) {
-        continue;
-      }
-      final stat = await entity.stat();
-      files.add(
-        AppLogFile(
-          path: entity.path,
-          name: p.basename(entity.path),
-          bytes: stat.size,
-          modified: stat.modified,
-        ),
-      );
-    }
+    return readStoredTextFile(log.path, maxBytes: maxBytes);
   }
 
   Future<void> _clearImageCaches({required bool resetBackground}) async {
     final imageCache = PaintingBinding.instance.imageCache;
     imageCache.clear();
     imageCache.clearLiveImages();
-    await _deleteDirectoryContents(await _backgroundDirectory());
-    await _deleteTemporaryFiles((name) => name.startsWith('csac_voice_'));
+    await clearStoredImageCaches();
     if (resetBackground && preferences.chatBackgroundPath.trim().isNotEmpty) {
       preferences = preferences.copyWith(chatBackgroundPath: '');
       await preferences.save();
@@ -1276,72 +1250,7 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> _clearLogCaches() async {
-    await _deleteDirectoryContents(await _logDirectory());
-    await _deleteTemporaryFiles(_looksLikeLogFile);
-  }
-
-  Future<Directory> _backgroundDirectory() async {
-    final support = await getApplicationSupportDirectory();
-    return Directory(p.join(support.path, 'backgrounds'));
-  }
-
-  Future<Directory> _logDirectory() async {
-    final support = await getApplicationSupportDirectory();
-    return Directory(p.join(support.path, 'logs'));
-  }
-
-  Future<int> _directoryBytes(Directory directory) async {
-    if (!await directory.exists()) {
-      return 0;
-    }
-    var total = 0;
-    await for (final entity in directory.list(recursive: true)) {
-      if (entity is File) {
-        total += await entity.length();
-      }
-    }
-    return total;
-  }
-
-  Future<int> _temporaryFilesBytes(bool Function(String name) include) async {
-    final directory = await getTemporaryDirectory();
-    if (!await directory.exists()) {
-      return 0;
-    }
-    var total = 0;
-    await for (final entity in directory.list()) {
-      if (entity is File && include(p.basename(entity.path).toLowerCase())) {
-        total += await entity.length();
-      }
-    }
-    return total;
-  }
-
-  Future<void> _deleteDirectoryContents(Directory directory) async {
-    if (!await directory.exists()) {
-      return;
-    }
-    await for (final entity in directory.list(recursive: false)) {
-      await entity.delete(recursive: true);
-    }
-  }
-
-  Future<void> _deleteTemporaryFiles(bool Function(String name) include) async {
-    final directory = await getTemporaryDirectory();
-    if (!await directory.exists()) {
-      return;
-    }
-    await for (final entity in directory.list()) {
-      if (entity is File && include(p.basename(entity.path).toLowerCase())) {
-        await entity.delete();
-      }
-    }
-  }
-
-  bool _looksLikeLogFile(String name) {
-    return name.endsWith('.log') ||
-        name.endsWith('.log.txt') ||
-        name.startsWith('csac_log_');
+    await clearStoredLogCaches();
   }
 
   Future<void> logout({bool keepLoginRecord = true}) async {
@@ -1403,5 +1312,46 @@ class CsacAppState extends ChangeNotifier {
     conversations = _sortConversations(updated);
     await cache.saveConversations(conversations);
     notifyListeners();
+  }
+
+  Future<void> refreshDebugMode() async {
+    try {
+      final status = await client.sessionExtensionStatus();
+      debugMode = status.active;
+    } catch (_) {
+      debugMode = false;
+    }
+    notifyListeners();
+  }
+
+  Future<void> activateDebugMode(String key) async {
+    final status = await client.activateSessionExtension(key);
+    debugMode = status.active;
+    notifyListeners();
+  }
+
+  Future<void> deactivateDebugMode() async {
+    try {
+      await client.resetSessionExtension();
+    } finally {
+      debugMode = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> banUser(int uid) async {
+    await client.banUser(uid);
+  }
+
+  Future<void> unbanUser(int uid) async {
+    await client.unbanUser(uid);
+  }
+
+  Future<void> banRoom(int roomId) async {
+    await client.banRoom(roomId);
+  }
+
+  Future<void> unbanRoom(int roomId) async {
+    await client.unbanRoom(roomId);
   }
 }

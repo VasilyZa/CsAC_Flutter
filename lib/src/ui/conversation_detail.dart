@@ -551,7 +551,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     }
     final result = await showDialog<_MemberTitleChange>(
       context: context,
-      builder: (context) => _MemberTitleDialog(member: member),
+      builder: (context) =>
+          _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
     );
     if (result == null || !mounted) {
       return;
@@ -567,7 +568,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       );
       return;
     }
-    if (result.level < 1 || result.level > 100) {
+    if (result.level < 1 || (!widget.state.debugMode && result.level > 100)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(strings.text('Level must be between 1 and 100.')),
@@ -661,7 +662,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> openGroupManagement(GroupProfile profile) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => GroupManagementScreen(
           state: widget.state,
           group: profile,
@@ -689,7 +690,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   void openReportGroup(GroupProfile profile) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ReportScreen(
           state: widget.state,
           type: 'group',
@@ -702,7 +703,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> openMediaCenter() {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ConversationMediaScreen(
           state: widget.state,
           conversation: widget.conversation,
@@ -713,7 +714,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   void openPrivateChatForMember(GroupMember member) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -742,10 +743,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (value.trim().isEmpty) {
       return const SizedBox.shrink();
     }
-    return ListTile(
+    return _CupertinoListTile(
       leading: Icon(icon),
-      title: Text(title),
-      subtitle: SelectableText(value),
+      title: title,
+      subtitle: value,
     );
   }
 
@@ -759,6 +760,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Widget buildGroupProfile(GroupProfile profile) {
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     final canManageGroup = canManageCurrentGroup;
     final isInGroup = isCurrentUserInGroup(profile);
     final visibleMembers = filteredMembers(memberSearch);
@@ -766,122 +768,150 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
         children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: _Avatar(
-              url: profile.avatar,
-              fallback: Icons.groups_rounded,
-              radius: 22,
-              heroTag: conversationAvatarHeroTag(widget.conversation),
-              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-              foregroundColor: Theme.of(
-                context,
-              ).colorScheme.onSecondaryContainer,
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: colors.separator.withValues(alpha: 0.25),
+                width: 0.5,
+              ),
             ),
-            title: Text(profile.name),
-            subtitle: Text(
-              profile.subtitle.isEmpty
-                  ? strings.format('Room {id}', {'id': profile.id})
-                  : profile.subtitle,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            child: Column(
+            child: Row(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.tag),
-                  title: Text(strings.text('Room ID')),
-                  subtitle: SelectableText('${profile.id}'),
-                  trailing: IconButton(
-                    tooltip: strings.text('Copy room ID'),
-                    onPressed: () =>
-                        copyText(strings.text('Room ID'), '${profile.id}'),
-                    icon: const Icon(Icons.copy),
-                  ),
+                _Avatar(
+                  url: profile.avatar,
+                  fallback: CupertinoIcons.group_solid,
+                  radius: 28,
+                  heroTag: conversationAvatarHeroTag(widget.conversation),
                 ),
-                infoRow(
-                  Icons.info_outline,
-                  strings.text('Description'),
-                  profile.description,
-                ),
-                infoRow(
-                  Icons.campaign_outlined,
-                  strings.text('Notice'),
-                  profile.notice,
-                ),
-                if (profile.inviteCode.isNotEmpty)
-                  ListTile(
-                    leading: const Icon(Icons.key_outlined),
-                    title: Text(strings.text('Invite code')),
-                    subtitle: SelectableText(profile.inviteCode),
-                    trailing: IconButton(
-                      tooltip: strings.text('Copy invite code'),
-                      onPressed: () => copyText(
-                        strings.text('Invite code'),
-                        profile.inviteCode,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.name,
+                        style: TextStyle(
+                          color: colors.label,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      icon: const Icon(Icons.copy),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        profile.subtitle.isEmpty
+                            ? strings.format('Room {id}', {'id': profile.id})
+                            : profile.subtitle,
+                        style: TextStyle(
+                          color: colors.secondaryLabel,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ),
-                infoRow(
-                  Icons.lock_outline,
-                  strings.text('Fixed code'),
-                  profile.code,
-                ),
-                infoRow(
-                  Icons.question_answer_outlined,
-                  strings.text('Question'),
-                  profile.question,
                 ),
               ],
             ),
           ),
-          if (canManageGroup) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => openGroupManagement(profile),
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              label: Text(strings.text('Group management')),
-            ),
-          ],
-          if (isInGroup && (profile.allowInvite || canManageGroup)) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => inviteMember(profile),
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: Text(strings.text('Invite member')),
-            ),
-          ],
-          if (!isInGroup) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => joinGroup(profile),
-              icon: const Icon(Icons.group_add),
-              label: Text(strings.text('Apply to join')),
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => leaveGroup(profile),
-              icon: const Icon(Icons.logout),
-              label: Text(strings.text('Leave group')),
-            ),
-          ],
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: openMediaCenter,
-            icon: const Icon(Icons.perm_media_outlined),
-            label: Text(strings.text('Media and files')),
+          _CupertinoGroupedCard(
+            margin: EdgeInsets.zero,
+            children: [
+              _CupertinoListTile(
+                leading: const Icon(CupertinoIcons.number),
+                title: strings.text('Room ID'),
+                subtitle: '${profile.id}',
+                trailing: IconButton(
+                  tooltip: strings.text('Copy room ID'),
+                  onPressed: () =>
+                      copyText(strings.text('Room ID'), '${profile.id}'),
+                  icon: const Icon(CupertinoIcons.doc_on_doc),
+                ),
+              ),
+              infoRow(
+                CupertinoIcons.info_circle,
+                strings.text('Description'),
+                profile.description,
+              ),
+              infoRow(
+                CupertinoIcons.speaker_2,
+                strings.text('Notice'),
+                profile.notice,
+              ),
+              if (profile.inviteCode.isNotEmpty)
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.link),
+                  title: strings.text('Invite code'),
+                  subtitle: profile.inviteCode,
+                  trailing: IconButton(
+                    tooltip: strings.text('Copy invite code'),
+                    onPressed: () => copyText(
+                      strings.text('Invite code'),
+                      profile.inviteCode,
+                    ),
+                    icon: const Icon(CupertinoIcons.doc_on_doc),
+                  ),
+                ),
+              infoRow(
+                CupertinoIcons.lock,
+                strings.text('Fixed code'),
+                profile.code,
+              ),
+              infoRow(
+                CupertinoIcons.question_circle,
+                strings.text('Question'),
+                profile.question,
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => openReportGroup(profile),
-            icon: const Icon(Icons.flag_outlined),
-            label: Text(strings.text('Report group')),
+          _CupertinoGroupedCard(
+            margin: EdgeInsets.zero,
+            children: [
+              if (canManageGroup)
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.gear_alt),
+                  title: strings.text('Group management'),
+                  onTap: () => openGroupManagement(profile),
+                ),
+              if (isInGroup && (profile.allowInvite || canManageGroup))
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.person_add),
+                  title: strings.text('Invite member'),
+                  onTap: () => inviteMember(profile),
+                ),
+              if (!isInGroup)
+                _CupertinoListTile(
+                  leading: const Icon(CupertinoIcons.person_2_fill),
+                  title: strings.text('Apply to join'),
+                  onTap: () => joinGroup(profile),
+                )
+              else
+                _CupertinoListTile(
+                  leading: Icon(
+                    CupertinoIcons.square_arrow_left,
+                    color: colors.destructive,
+                  ),
+                  title: strings.text('Leave group'),
+                  titleColor: colors.destructive,
+                  onTap: () => leaveGroup(profile),
+                ),
+              _CupertinoListTile(
+                leading: const Icon(CupertinoIcons.photo_on_rectangle),
+                title: strings.text('Media and files'),
+                onTap: openMediaCenter,
+              ),
+              _CupertinoListTile(
+                leading: Icon(CupertinoIcons.flag, color: colors.destructive),
+                title: strings.text('Report group'),
+                titleColor: colors.destructive,
+                onTap: () => openReportGroup(profile),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           Row(
@@ -889,7 +919,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               Expanded(
                 child: Text(
                   strings.text('Members'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  style: TextStyle(
+                    color: colors.label,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -905,13 +937,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               hintText: strings.text(
                 'Search members by nickname, UID or remark',
               ),
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: const Icon(CupertinoIcons.search),
               suffixIcon: memberQuery.isEmpty
                   ? null
                   : IconButton(
                       tooltip: strings.text('Clear'),
                       onPressed: memberSearch.clear,
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(CupertinoIcons.xmark_circle_fill),
                     ),
               border: const OutlineInputBorder(),
             ),
@@ -994,13 +1026,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         ? context.strings.text('Group details')
         : context.strings.text('User details');
     return Scaffold(
+      backgroundColor: CsacColors.of(context).systemBackground,
       appBar: AppBar(
         title: Text(title),
         actions: [
           IconButton(
             tooltip: context.strings.text('Refresh'),
             onPressed: loading ? null : load,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(CupertinoIcons.arrow_clockwise),
           ),
         ],
       ),
@@ -1087,9 +1120,10 @@ class _MemberTitleChange {
 }
 
 class _MemberTitleDialog extends StatefulWidget {
-  const _MemberTitleDialog({required this.member});
+  const _MemberTitleDialog({required this.member, this.debugMode = false});
 
   final GroupMember member;
+  final bool debugMode;
 
   @override
   State<_MemberTitleDialog> createState() => _MemberTitleDialogState();
@@ -1118,7 +1152,9 @@ class _MemberTitleDialogState extends State<_MemberTitleDialog> {
 
   void submit() {
     final parsedLevel = int.tryParse(level.text.trim()) ?? 0;
-    if (parsedLevel < 1 || parsedLevel > 100 || title.text.runes.length > 16) {
+    if (parsedLevel < 1 ||
+        (!widget.debugMode && parsedLevel > 100) ||
+        title.text.runes.length > 16) {
       return;
     }
     Navigator.of(
@@ -1131,7 +1167,9 @@ class _MemberTitleDialogState extends State<_MemberTitleDialog> {
     final strings = context.strings;
     final parsedLevel = int.tryParse(level.text.trim()) ?? 0;
     final canSubmit =
-        parsedLevel >= 1 && parsedLevel <= 100 && title.text.runes.length <= 16;
+        parsedLevel >= 1 &&
+        (widget.debugMode || parsedLevel <= 100) &&
+        title.text.runes.length <= 16;
     return AlertDialog(
       title: Text(strings.text('Set member title')),
       content: SizedBox(
@@ -1155,7 +1193,9 @@ class _MemberTitleDialogState extends State<_MemberTitleDialog> {
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 labelText: strings.text('Member level'),
-                helperText: strings.text('Level must be between 1 and 100.'),
+                helperText: widget.debugMode
+                    ? strings.text('Debug mode allows any positive level.')
+                    : strings.text('Level must be between 1 and 100.'),
                 border: const OutlineInputBorder(),
               ),
               onSubmitted: (_) => submit(),
@@ -1601,7 +1641,8 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   Future<void> editMemberTitle(GroupMember member) async {
     final result = await showDialog<_MemberTitleChange>(
       context: context,
-      builder: (context) => _MemberTitleDialog(member: member),
+      builder: (context) =>
+          _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
     );
     if (result == null || !mounted) {
       return;
@@ -1612,7 +1653,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       );
       return;
     }
-    if (result.level < 1 || result.level > 100) {
+    if (result.level < 1 || (!widget.state.debugMode && result.level > 100)) {
       showSnack(context.strings.text('Level must be between 1 and 100.'));
       return;
     }
@@ -1702,7 +1743,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
 
   void openPrivateChatForMember(GroupMember member) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: Conversation(
@@ -1743,16 +1784,32 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> transferGroup() async {
+    final currentUser = widget.state.user;
+    final candidates = members
+        .where(
+          (member) =>
+              widget.state.debugMode ? true : member.uid != currentUser?.uid,
+        )
+        .where((member) => widget.state.debugMode ? true : !member.hasOwnerRole)
+        .toList();
+    if (widget.state.debugMode &&
+        currentUser != null &&
+        candidates.every((member) => member.uid != currentUser.uid)) {
+      candidates.insert(
+        0,
+        GroupMember(
+          uid: currentUser.uid,
+          name: currentUser.nickname,
+          username: currentUser.username,
+          nickname: currentUser.nickname,
+          avatar: currentUser.avatar,
+          onlineStatus: currentUser.onlineStatus,
+        ),
+      );
+    }
     final target = await chooseMember(
       context.strings.text('Transfer owner to'),
-      members
-          .where(
-            (member) => widget.state.debugMode
-                ? true
-                : member.uid != widget.state.user?.uid,
-          )
-          .where((member) => !member.hasOwnerRole)
-          .toList(),
+      candidates,
     );
     if (target == null || !mounted) {
       return;

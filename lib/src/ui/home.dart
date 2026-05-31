@@ -35,6 +35,11 @@ class _MainShellState extends State<MainShell> {
   Future<void> refreshHomeWithHint() async {
     final strings = context.strings;
     final messenger = ScaffoldMessenger.of(context);
+    final beforeUnread = <String, int>{
+      for (final conversation in widget.state.conversations)
+        '${conversation.type.name}:${conversation.id}':
+            conversation.unreadCount,
+    };
     try {
       await widget.state.refreshHome();
     } catch (_) {
@@ -70,8 +75,32 @@ class _MainShellState extends State<MainShell> {
         'count': after - lastUnreadChats,
       });
       messenger.showSnackBar(SnackBar(content: Text(message)));
+      await showNewMessageNotifications(beforeUnread);
     }
     lastUnreadChats = after;
+  }
+
+  Future<void> showNewMessageNotifications(
+    Map<String, int> beforeUnread,
+  ) async {
+    if (!widget.state.preferences.localSystemNotificationsEnabled) {
+      return;
+    }
+    for (final conversation in widget.state.conversations) {
+      if (widget.state.isActiveConversation(conversation)) {
+        continue;
+      }
+      final key = '${conversation.type.name}:${conversation.id}';
+      final previous = beforeUnread[key] ?? 0;
+      final delta = conversation.unreadCount - previous;
+      if (delta > 0) {
+        await CsacLocalNotificationService.instance
+            .showConversationNotification(
+              conversation: conversation,
+              newCount: delta,
+            );
+      }
+    }
   }
 
   @override
@@ -85,6 +114,7 @@ class _MainShellState extends State<MainShell> {
     final unreadChats = totalUnreadChats();
     final noticeCount = widget.state.notificationCounts.total;
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final colors = CsacColors.of(context);
     final pages = <Widget>[
       ConversationScreen(
         state: widget.state,
@@ -107,67 +137,30 @@ class _MainShellState extends State<MainShell> {
       NoticeCenterScreen(state: widget.state),
       ProfileScreen(state: widget.state),
     ];
+    void selectTab(int value) {
+      setState(() => index = value);
+      if (value == 0) {
+        widget.state.loadConversations();
+      }
+      if (value == 2) {
+        widget.state.refreshNotificationCounts();
+      }
+    }
+
     Widget shell;
     if (wide) {
-      shell = Scaffold(
-        body: SafeArea(
+      shell = CupertinoPageScaffold(
+        backgroundColor: colors.systemBackground,
+        child: SafeArea(
           child: Row(
             children: [
-              NavigationRail(
-                selectedIndex: index,
-                onDestinationSelected: (value) {
-                  setState(() => index = value);
-                  if (value == 0) {
-                    widget.state.loadConversations();
-                  }
-                  if (value == 2) {
-                    widget.state.refreshNotificationCounts();
-                  }
-                },
-                labelType: NavigationRailLabelType.all,
-                leading: Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 18),
-                  child: Icon(
-                    Icons.forum_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                destinations: [
-                  NavigationRailDestination(
-                    icon: _BadgeIcon(
-                      icon: Icons.chat_bubble_outline,
-                      count: unreadChats,
-                    ),
-                    selectedIcon: _BadgeIcon(
-                      icon: Icons.chat_bubble,
-                      count: unreadChats,
-                    ),
-                    label: Text(context.strings.text('Chats')),
-                  ),
-                  NavigationRailDestination(
-                    icon: const Icon(Icons.manage_search_outlined),
-                    selectedIcon: const Icon(Icons.manage_search),
-                    label: Text(context.strings.text('Search')),
-                  ),
-                  NavigationRailDestination(
-                    icon: _BadgeIcon(
-                      icon: Icons.notifications_none,
-                      count: noticeCount,
-                    ),
-                    selectedIcon: _BadgeIcon(
-                      icon: Icons.notifications,
-                      count: noticeCount,
-                    ),
-                    label: Text(context.strings.text('Notices')),
-                  ),
-                  NavigationRailDestination(
-                    icon: const Icon(Icons.person_outline),
-                    selectedIcon: const Icon(Icons.person),
-                    label: Text(context.strings.text('Me')),
-                  ),
-                ],
+              _CupertinoSideRail(
+                index: index,
+                unreadChats: unreadChats,
+                noticeCount: noticeCount,
+                onChanged: selectTab,
               ),
-              const VerticalDivider(width: 1),
+              Container(width: 0.5, color: colors.separator),
               Expanded(
                 child: index == 0
                     ? _WideChatLayout(
@@ -182,51 +175,27 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     } else {
-      shell = Scaffold(
-        body: _BottomTabSwitcher(index: index, children: pages),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: (value) {
-            setState(() => index = value);
-            if (value == 0) {
-              widget.state.loadConversations();
-            }
-            if (value == 2) {
-              widget.state.refreshNotificationCounts();
-            }
-          },
-          destinations: [
-            NavigationDestination(
-              icon: _BadgeIcon(
-                icon: Icons.chat_bubble_outline,
-                count: unreadChats,
-              ),
-              selectedIcon: _BadgeIcon(
-                icon: Icons.chat_bubble,
-                count: unreadChats,
-              ),
-              label: context.strings.text('Chats'),
+      shell = CupertinoPageScaffold(
+        backgroundColor: colors.systemBackground,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _BottomTabSwitcher(index: index, children: pages),
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.manage_search_outlined),
-              selectedIcon: const Icon(Icons.manage_search),
-              label: context.strings.text('Search'),
-            ),
-            NavigationDestination(
-              icon: _BadgeIcon(
-                icon: Icons.notifications_none,
-                count: noticeCount,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                minimum: const EdgeInsets.only(bottom: 8),
+                child: _FloatingTabBar(
+                  index: index,
+                  unreadChats: unreadChats,
+                  noticeCount: noticeCount,
+                  onChanged: selectTab,
+                ),
               ),
-              selectedIcon: _BadgeIcon(
-                icon: Icons.notifications,
-                count: noticeCount,
-              ),
-              label: context.strings.text('Notices'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline),
-              selectedIcon: const Icon(Icons.person),
-              label: context.strings.text('Me'),
             ),
           ],
         ),
@@ -246,97 +215,316 @@ class _BottomTabSwitcher extends StatefulWidget {
   State<_BottomTabSwitcher> createState() => _BottomTabSwitcherState();
 }
 
-class _BottomTabSwitcherState extends State<_BottomTabSwitcher>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController controller;
-  int previousIndex = 0;
+class _CupertinoSideRail extends StatelessWidget {
+  const _CupertinoSideRail({
+    required this.index,
+    required this.unreadChats,
+    required this.noticeCount,
+    required this.onChanged,
+  });
 
-  @override
-  void initState() {
-    super.initState();
-    previousIndex = widget.index;
-    controller = AnimationController(duration: 280.ms, vsync: this)..value = 1;
-  }
-
-  @override
-  void didUpdateWidget(covariant _BottomTabSwitcher oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.index != widget.index) {
-      previousIndex = oldWidget.index;
-      controller.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
+  final int index;
+  final int unreadChats;
+  final int noticeCount;
+  final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = _MotionPreference.reduceOf(context);
-    if (reduceMotion) {
-      return IndexedStack(
-        index: widget.index,
-        children: [
-          for (var i = 0; i < widget.children.length; i++)
-            _FocusableTabPage(
-              active: i == widget.index,
-              child: widget.children[i],
-            ),
-        ],
-      );
-    }
-    final forward = widget.index >= previousIndex;
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final curved = Curves.easeOutCubic.transform(controller.value);
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            for (var i = 0; i < widget.children.length; i++)
-              _buildPage(i, curved, forward),
-          ],
-        );
-      },
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final items = [
+      (
+        CupertinoIcons.chat_bubble_2,
+        CupertinoIcons.chat_bubble_2_fill,
+        context.strings.text('Chats'),
+        unreadChats,
+      ),
+      (
+        CupertinoIcons.search,
+        CupertinoIcons.search_circle_fill,
+        context.strings.text('Search'),
+        0,
+      ),
+      (
+        CupertinoIcons.bell,
+        CupertinoIcons.bell_fill,
+        context.strings.text('Notices'),
+        noticeCount,
+      ),
+      (
+        CupertinoIcons.person,
+        CupertinoIcons.person_solid,
+        context.strings.text('Me'),
+        0,
+      ),
+    ];
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          width: 72,
+          color: colors.cardBackground.withValues(alpha: 0.86),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 20, bottom: 16),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.chat_bubble_text_fill,
+                    color: primary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              for (final item in items.indexed)
+                _SideRailItem(
+                  selected: index == item.$1,
+                  icon: item.$2.$1,
+                  activeIcon: item.$2.$2,
+                  label: item.$2.$3,
+                  badge: item.$2.$4,
+                  onTap: () => onChanged(item.$1),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildPage(int pageIndex, double progress, bool forward) {
-    final active = pageIndex == widget.index;
-    final outgoing = pageIndex == previousIndex && pageIndex != widget.index;
-    final direction = forward ? 1.0 : -1.0;
-    final offset = active
-        ? Offset(0.06 * direction * (1 - progress), 0)
-        : outgoing
-        ? Offset(-0.04 * direction * progress, 0)
-        : Offset.zero;
-    final opacity = active
-        ? progress
-        : outgoing
-        ? 1 - progress
-        : pageIndex == widget.index
-        ? 1.0
-        : 0.0;
-    return _FocusableTabPage(
-      active: active,
-      child: Offstage(
-        offstage: !active && !outgoing,
-        child: TickerMode(
-          enabled: active,
-          child: IgnorePointer(
-            ignoring: !active,
-            child: Opacity(
-              opacity: opacity.clamp(0.0, 1.0),
-              child: FractionalTranslation(
-                translation: offset,
-                child: widget.children[pageIndex],
+class _SideRailItem extends StatelessWidget {
+  const _SideRailItem({
+    required this.selected,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.badge,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final int badge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CsacPressable(
+      onTap: onTap,
+      child: SizedBox(
+        width: 72,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BadgeIcon(
+                icon: selected ? activeIcon : icon,
+                count: badge,
+                color: selected ? primary : colors.secondaryLabel,
+                size: 22,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? primary : colors.secondaryLabel,
+                  fontSize: 10,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingTabBar extends StatelessWidget {
+  const _FloatingTabBar({
+    required this.index,
+    required this.unreadChats,
+    required this.noticeCount,
+    required this.onChanged,
+  });
+
+  final int index;
+  final int unreadChats;
+  final int noticeCount;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final items = [
+      (
+        CupertinoIcons.chat_bubble,
+        CupertinoIcons.chat_bubble_fill,
+        strings.text('Chats'),
+        unreadChats,
+      ),
+      (CupertinoIcons.search, CupertinoIcons.search, strings.text('Search'), 0),
+      (
+        CupertinoIcons.bell,
+        CupertinoIcons.bell_fill,
+        strings.text('Notices'),
+        noticeCount,
+      ),
+      (
+        CupertinoIcons.person,
+        CupertinoIcons.person_fill,
+        strings.text('Me'),
+        0,
+      ),
+    ];
+    final colors = CsacColors.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 382),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: colors.cardBackground.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: colors.separator.withValues(alpha: 0.28),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: CupertinoColors.black.withValues(
+                        alpha: colors.isDark ? 0.32 : 0.12,
+                      ),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    for (final item in items.indexed)
+                      Expanded(
+                        child: _FloatingTabButton(
+                          selected: index == item.$1,
+                          icon: item.$2.$1,
+                          activeIcon: item.$2.$2,
+                          label: item.$2.$3,
+                          badge: item.$2.$4,
+                          onTap: () => onChanged(item.$1),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FloatingTabButton extends StatelessWidget {
+  const _FloatingTabButton({
+    required this.selected,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.badge,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final int badge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final colors = CsacColors.of(context);
+    return _CsacPressable(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 220.ms,
+        curve: Curves.easeOutCubic,
+        height: 44,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? primary.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _BadgeIcon(
+              icon: selected ? activeIcon : icon,
+              count: badge,
+              color: selected ? primary : colors.secondaryLabel,
+              size: 21,
+            ),
+            AnimatedSize(
+              duration: 180.ms,
+              curve: Curves.easeOutCubic,
+              child: selected
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomTabSwitcherState extends State<_BottomTabSwitcher>
+    with SingleTickerProviderStateMixin {
+  @override
+  Widget build(BuildContext context) {
+    return _FocusableTabPage(
+      active: true,
+      child: KeyedSubtree(
+        key: ValueKey<int>(widget.index),
+        child: widget.children[widget.index],
       ),
     );
   }
@@ -379,7 +567,7 @@ class _WideChatLayout extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 320, maxWidth: 430),
           child: conversations,
         ),
-        const VerticalDivider(width: 1),
+        Container(width: 0.5, color: CsacColors.of(context).separator),
         Expanded(
           child: selected == null
               ? const _WideEmptyChatPlaceholder()
@@ -400,6 +588,7 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -407,14 +596,14 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.chat_bubble_outline,
+              CupertinoIcons.bubble_left_bubble_right,
               size: 56,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              color: colors.tertiaryLabel,
             ),
             const SizedBox(height: 14),
             Text(
               context.strings.text('Select a conversation'),
-              style: Theme.of(context).textTheme.titleMedium,
+              style: TextStyle(color: colors.secondaryLabel, fontSize: 17),
             ),
           ],
         ),
@@ -424,14 +613,21 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
 }
 
 class _BadgeIcon extends StatelessWidget {
-  const _BadgeIcon({required this.icon, required this.count});
+  const _BadgeIcon({
+    required this.icon,
+    required this.count,
+    this.color,
+    this.size,
+  });
 
   final IconData icon;
   final int count;
+  final Color? color;
+  final double? size;
 
   @override
   Widget build(BuildContext context) {
-    final child = Icon(icon);
+    final child = Icon(icon, color: color, size: size);
     if (count <= 0) {
       return child;
     }
@@ -457,8 +653,6 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-enum _ConversationGroupFilter { all, important, friends, groups, archived }
-
 class _ConversationScreenState extends State<ConversationScreen> {
   final search = TextEditingController();
   late final ScrollController conversationsScroll;
@@ -466,7 +660,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Map<String, ConversationLocalPreference> conversationPrefs =
       const <String, ConversationLocalPreference>{};
   bool refreshing = false;
-  _ConversationGroupFilter groupFilter = _ConversationGroupFilter.all;
 
   @override
   void initState() {
@@ -516,13 +709,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> loadConversationPrefs() async {
     final loaded = await ConversationPreferenceStore.loadAll();
     if (mounted) {
-      setState(() {
-        conversationPrefs = loaded;
-        if (groupFilter == _ConversationGroupFilter.archived &&
-            !loaded.values.any((value) => value.archived)) {
-          groupFilter = _ConversationGroupFilter.all;
-        }
-      });
+      setState(() => conversationPrefs = loaded);
     }
   }
 
@@ -548,7 +735,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     .toLowerCase();
             return target.contains(query);
           }).toList();
-    final visible = searched.where(conversationInCurrentGroup).toList();
+    final visible = searched.where((conversation) {
+      return !localPref(conversation).archived;
+    }).toList();
     visible.sort((a, b) {
       final aPref = localPref(a);
       final bPref = localPref(b);
@@ -558,59 +747,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
       return searched.indexOf(a).compareTo(searched.indexOf(b));
     });
     return visible;
-  }
-
-  bool conversationInCurrentGroup(Conversation conversation) {
-    final pref = localPref(conversation);
-    switch (groupFilter) {
-      case _ConversationGroupFilter.all:
-        return !pref.archived;
-      case _ConversationGroupFilter.important:
-        return !pref.archived && pref.pinned;
-      case _ConversationGroupFilter.friends:
-        return !pref.archived && conversation.type == ConversationType.private;
-      case _ConversationGroupFilter.groups:
-        return !pref.archived && conversation.type == ConversationType.group;
-      case _ConversationGroupFilter.archived:
-        return pref.archived;
-    }
-  }
-
-  int groupCount(_ConversationGroupFilter filter) {
-    return widget.state.conversations.where((conversation) {
-      final pref = localPref(conversation);
-      switch (filter) {
-        case _ConversationGroupFilter.all:
-          return !pref.archived;
-        case _ConversationGroupFilter.important:
-          return !pref.archived && pref.pinned;
-        case _ConversationGroupFilter.friends:
-          return !pref.archived &&
-              conversation.type == ConversationType.private;
-        case _ConversationGroupFilter.groups:
-          return !pref.archived && conversation.type == ConversationType.group;
-        case _ConversationGroupFilter.archived:
-          return pref.archived;
-      }
-    }).length;
-  }
-
-  String emptyMessageForGroup(String query) {
-    if (query.isNotEmpty) {
-      return 'No matching conversations.';
-    }
-    switch (groupFilter) {
-      case _ConversationGroupFilter.all:
-        return 'No active conversations.';
-      case _ConversationGroupFilter.important:
-        return 'No important conversations.';
-      case _ConversationGroupFilter.friends:
-        return 'No friend conversations.';
-      case _ConversationGroupFilter.groups:
-        return 'No group conversations.';
-      case _ConversationGroupFilter.archived:
-        return 'No archived conversations.';
-    }
   }
 
   Future<void> updateLocalPreference(
@@ -711,28 +847,28 @@ class _ConversationScreenState extends State<ConversationScreen> {
         break;
       case 'addFriend':
         await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          CsacPageRoute<void>(
             builder: (_) => AddFriendScreen(state: widget.state),
           ),
         );
         break;
       case 'joinGroup':
         await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          CsacPageRoute<void>(
             builder: (_) => JoinGroupScreen(state: widget.state),
           ),
         );
         break;
       case 'createGroup':
         await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          CsacPageRoute<void>(
             builder: (_) => CreateGroupScreen(state: widget.state),
           ),
         );
         break;
       case 'searchMessages':
         await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          CsacPageRoute<void>(
             builder: (_) => MessageSearchScreen(state: widget.state),
           ),
         );
@@ -749,84 +885,129 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
+  Future<void> showHomeActions() async {
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('refresh'),
+            child: Text(strings.text('Refresh')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('addFriend'),
+            child: Text(strings.text('Add friend')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('joinGroup'),
+            child: Text(strings.text('Join group')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('createGroup'),
+            child: Text(strings.text('Create group')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('searchMessages'),
+            child: Text(strings.text('Search messages')),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop('logout'),
+            child: Text(strings.text('Logout')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
+        ),
+      ),
+    );
+    if (action != null && mounted) {
+      await openHomeAction(action);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = widget.state.user;
     final strings = context.strings;
+    final colors = CsacColors.of(context);
     final query = search.text.trim().toLowerCase();
     final conversations = visibleConversations(query);
-    final groupFilters = <_ConversationGroupFilter>[
-      _ConversationGroupFilter.all,
-      _ConversationGroupFilter.important,
-      _ConversationGroupFilter.friends,
-      _ConversationGroupFilter.groups,
-      _ConversationGroupFilter.archived,
-    ];
+    final bottomPadding = widget.embedded
+        ? 24.0
+        : MediaQuery.paddingOf(context).bottom + 92;
     final content = RefreshIndicator(
       onRefresh: refresh,
       child: ListView(
         controller: conversationsScroll,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: EdgeInsets.fromLTRB(12, 8, 12, bottomPadding),
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _Avatar(
-                        url: user?.avatar ?? '',
-                        fallback: Icons.person_rounded,
-                        radius: 19,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          user == null
-                              ? strings.text('Not logged in')
-                              : '${user.nickname} / UID ${user.uid}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                      Text(
+                        strings.text('Chats'),
+                        style: TextStyle(
+                          color: colors.label,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.7,
                         ),
                       ),
+                      if (user != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${user.nickname} / UID ${user.uid}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.secondaryLabel,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 if (widget.state.offlineMode)
                   Chip(
-                    avatar: const Icon(Icons.cloud_off_outlined, size: 18),
+                    avatar: const Icon(CupertinoIcons.wifi_slash, size: 18),
                     label: Text(strings.text('Offline')),
                   ),
-                PopupMenuButton<String>(
-                  tooltip: strings.text('More'),
-                  onSelected: openHomeAction,
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'addFriend',
-                      child: ListTile(
-                        leading: const Icon(Icons.person_add_alt),
-                        title: Text(strings.text('Add friend')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'joinGroup',
-                      child: ListTile(
-                        leading: const Icon(Icons.group_add_outlined),
-                        title: Text(strings.text('Join group')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'createGroup',
-                      child: ListTile(
-                        leading: const Icon(Icons.add_home_work_outlined),
-                        title: Text(strings.text('Create group')),
-                      ),
-                    ),
-                  ],
-                  icon: const Icon(Icons.add_circle_outline),
+                CupertinoButton(
+                  padding: const EdgeInsets.all(6),
+                  minimumSize: const Size(36, 36),
+                  onPressed: () => openHomeAction('addFriend'),
+                  child: Icon(
+                    CupertinoIcons.person_add,
+                    color: colors.primaryColor,
+                  ),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.all(6),
+                  minimumSize: const Size(36, 36),
+                  onPressed: () => openHomeAction('joinGroup'),
+                  child: Icon(
+                    CupertinoIcons.person_2,
+                    color: colors.primaryColor,
+                  ),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.all(6),
+                  minimumSize: const Size(36, 36),
+                  onPressed: () => openHomeAction('createGroup'),
+                  child: Icon(
+                    CupertinoIcons.plus_bubble,
+                    color: colors.primaryColor,
+                  ),
                 ),
               ],
             ),
@@ -838,7 +1019,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 hintText: strings.text('Search conversations'),
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(CupertinoIcons.search),
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
@@ -847,48 +1028,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           search.clear();
                           setState(() {});
                         },
-                        icon: const Icon(Icons.close),
+                        icon: const Icon(CupertinoIcons.xmark_circle_fill),
                       ),
                 border: const OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-            child: ScrollConfiguration(
-              behavior: const _HorizontalDragScrollBehavior(),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final filter in groupFilters)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          showCheckmark: false,
-                          avatar: Icon(
-                            _conversationGroupIcon(filter),
-                            size: 18,
-                          ),
-                          label: Text(
-                            strings.format(_conversationGroupLabel(filter), {
-                              'count': groupCount(filter),
-                            }),
-                          ),
-                          selected: groupFilter == filter,
-                          onSelected: (_) =>
-                              setState(() => groupFilter = filter),
-                        ),
-                      ),
-                  ],
-                ),
               ),
             ),
           ),
           if (widget.state.conversations.isEmpty)
             _EmptyPanel(message: strings.text('No conversations yet.'))
           else if (conversations.isEmpty)
-            _EmptyPanel(message: strings.text(emptyMessageForGroup(query)))
+            _EmptyPanel(
+              message: strings.text(
+                query.isEmpty
+                    ? 'No active conversations.'
+                    : 'No matching conversations.',
+              ),
+            )
           else
             for (final entry in conversations.indexed)
               _MotionListItem(
@@ -908,7 +1063,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       return;
                     }
                     await Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      CsacPageRoute<void>(
                         builder: (_) => ChatScreen(
                           state: widget.state,
                           conversation: entry.$2,
@@ -928,104 +1083,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
       appBar: widget.embedded
           ? null
           : AppBar(
-              title: const Text('CsAC'),
+              title: Text(strings.text('CsAC Mobile')),
               actions: [
-                PopupMenuButton<String>(
+                IconButton(
                   tooltip: strings.text('More'),
-                  onSelected: openHomeAction,
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'refresh',
-                      child: ListTile(
-                        leading: const Icon(Icons.refresh),
-                        title: Text(strings.text('Refresh')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'addFriend',
-                      child: ListTile(
-                        leading: const Icon(Icons.person_add_alt),
-                        title: Text(strings.text('Add friend')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'joinGroup',
-                      child: ListTile(
-                        leading: const Icon(Icons.group_add_outlined),
-                        title: Text(strings.text('Join group')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'createGroup',
-                      child: ListTile(
-                        leading: const Icon(Icons.add_home_work_outlined),
-                        title: Text(strings.text('Create group')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'searchMessages',
-                      child: ListTile(
-                        leading: const Icon(Icons.manage_search),
-                        title: Text(strings.text('Search messages')),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'logout',
-                      child: ListTile(
-                        leading: const Icon(Icons.logout),
-                        title: Text(strings.text('Logout')),
-                      ),
-                    ),
-                  ],
+                  onPressed: showHomeActions,
+                  icon: const Icon(CupertinoIcons.ellipsis_circle),
                 ),
               ],
             ),
       body: SafeArea(top: widget.embedded, child: content),
     );
   }
-}
-
-String _conversationGroupLabel(_ConversationGroupFilter filter) {
-  switch (filter) {
-    case _ConversationGroupFilter.all:
-      return 'All conversations ({count})';
-    case _ConversationGroupFilter.important:
-      return 'Important ({count})';
-    case _ConversationGroupFilter.friends:
-      return 'Friends ({count})';
-    case _ConversationGroupFilter.groups:
-      return 'Groups ({count})';
-    case _ConversationGroupFilter.archived:
-      return 'Archived ({count})';
-  }
-}
-
-IconData _conversationGroupIcon(_ConversationGroupFilter filter) {
-  switch (filter) {
-    case _ConversationGroupFilter.all:
-      return Icons.inbox_outlined;
-    case _ConversationGroupFilter.important:
-      return Icons.push_pin_outlined;
-    case _ConversationGroupFilter.friends:
-      return Icons.person_outline;
-    case _ConversationGroupFilter.groups:
-      return Icons.groups_outlined;
-    case _ConversationGroupFilter.archived:
-      return Icons.archive_outlined;
-  }
-}
-
-class _HorizontalDragScrollBehavior extends MaterialScrollBehavior {
-  const _HorizontalDragScrollBehavior();
-
-  @override
-  Set<ui.PointerDeviceKind> get dragDevices => const {
-    ui.PointerDeviceKind.touch,
-    ui.PointerDeviceKind.mouse,
-    ui.PointerDeviceKind.trackpad,
-    ui.PointerDeviceKind.stylus,
-    ui.PointerDeviceKind.unknown,
-  };
 }
 
 class _ConversationTile extends StatelessWidget {

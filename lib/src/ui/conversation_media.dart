@@ -89,7 +89,7 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
 
   Future<void> openMessage(ConversationMediaItem item) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      CsacPageRoute<void>(
         builder: (_) => ChatScreen(
           state: widget.state,
           conversation: widget.conversation,
@@ -280,14 +280,12 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
             ),
             if (loading || syncing) const LinearProgressIndicator(minHeight: 2),
             if (error != null)
-              MaterialBanner(
-                content: Text(error!),
-                actions: [
-                  TextButton(
-                    onPressed: () => setState(() => error = null),
-                    child: Text(strings.text('Dismiss')),
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                child: _InlineError(
+                  message: error!,
+                  onRetry: () => setState(() => error = null),
+                ),
               ),
             Expanded(
               child: loading
@@ -362,10 +360,10 @@ class _MediaKindChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
+      child: _CupertinoMiniPill(
+        label: label,
         selected: selected,
-        onSelected: (_) => onSelected(),
+        onTap: onSelected,
       ),
     );
   }
@@ -441,11 +439,19 @@ class _MediaGridTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final time = displayMessageTime(item.message, preferences);
-    return Card(
-      elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
+    final csacColors = CsacColors.of(context);
+    return _CsacPressable(
+      onTap: onOpen,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: csacColors.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: csacColors.separator.withValues(alpha: 0.24),
+            width: 0.5,
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -490,7 +496,7 @@ class _MediaGridTile extends StatelessWidget {
                   IconButton(
                     tooltip: context.strings.text('More'),
                     onPressed: onMore,
-                    icon: const Icon(Icons.more_vert),
+                    icon: const Icon(CupertinoIcons.ellipsis_circle),
                   ),
                 ],
               ),
@@ -524,12 +530,7 @@ class _MediaThumbnail extends StatelessWidget {
       );
       return ClipRRect(
         borderRadius: BorderRadius.circular(large ? 0 : 8),
-        child: heroTag == null
-            ? image
-            : Hero(
-                tag: heroTag!,
-                child: Material(type: MaterialType.transparency, child: image),
-              ),
+        child: heroTag == null ? image : Hero(tag: heroTag!, child: image),
       );
     }
     final icon = item.kind == ConversationMediaKind.voice
