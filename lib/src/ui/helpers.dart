@@ -408,6 +408,122 @@ class _CupertinoListTile extends StatelessWidget {
   }
 }
 
+class _CupertinoExpansionTile extends StatefulWidget {
+  const _CupertinoExpansionTile({
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.children = const [],
+    this.childrenPadding = EdgeInsets.zero,
+    this.initiallyExpanded = false,
+    this.onExpansionChanged,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? leading;
+  final List<Widget> children;
+  final EdgeInsetsGeometry childrenPadding;
+  final bool initiallyExpanded;
+  final ValueChanged<bool>? onExpansionChanged;
+
+  @override
+  State<_CupertinoExpansionTile> createState() =>
+      _CupertinoExpansionTileState();
+}
+
+class _CupertinoExpansionTileState extends State<_CupertinoExpansionTile> {
+  late bool expanded = widget.initiallyExpanded;
+
+  void toggleExpanded() {
+    setState(() => expanded = !expanded);
+    widget.onExpansionChanged?.call(expanded);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CsacPressable(
+          onTap: toggleExpanded,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: _csacListMinHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                if (widget.leading != null) ...[
+                  widget.leading!,
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DefaultTextStyle.merge(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.label,
+                          fontSize: 16,
+                          height: 1.18,
+                        ),
+                        child: widget.title,
+                      ),
+                      if (widget.subtitle != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: DefaultTextStyle.merge(
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.secondaryLabel,
+                              fontSize: 13,
+                              height: 1.22,
+                            ),
+                            child: widget.subtitle!,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedRotation(
+                  turns: expanded ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 14,
+                    color: colors.tertiaryLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: Padding(
+            padding: widget.childrenPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: widget.children,
+            ),
+          ),
+          crossFadeState: expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 180),
+          sizeCurve: Curves.easeOutCubic,
+        ),
+      ],
+    );
+  }
+}
+
 String pickedImageFileName(XFile picked, ImageSource source) {
   final name = picked.name.trim();
   final extension = p.extension(name).toLowerCase();

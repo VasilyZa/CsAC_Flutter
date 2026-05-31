@@ -98,6 +98,6 @@ void main() {
       '1.2.5-46',
     );
     expect(VersionUpdateChecker.displayVersion('1.2.5+46'), '1.2.5-46');
-    expect(VersionUpdateChecker.displayVersion('1.3.0+50'), '1.3.0-50');
+    expect(VersionUpdateChecker.displayVersion('1.3.1+51'), '1.3.1-51');
   });
 }

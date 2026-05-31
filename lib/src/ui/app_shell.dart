@@ -327,6 +327,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
+          scrollBehavior: const CsacScrollBehavior(),
           theme: buildCsacCupertinoTheme(
             effectiveBrightness,
             seedColor,

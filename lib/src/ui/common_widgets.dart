@@ -945,6 +945,15 @@ class VerticalDivider extends StatelessWidget {
 
 class CsacScrollBehavior extends CupertinoScrollBehavior {
   const CsacScrollBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
 }
 
 class ButtonSegment<T> {

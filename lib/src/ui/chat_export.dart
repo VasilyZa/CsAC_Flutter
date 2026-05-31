@@ -23,6 +23,71 @@ class ChatExportResult {
   final int mediaFailures;
 }
 
+class _ChatExportFormatPicker extends StatelessWidget {
+  const _ChatExportFormatPicker({required this.value, required this.onChanged});
+
+  final ChatExportFormat value;
+  final ValueChanged<ChatExportFormat> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return SizedBox(
+      height: 36,
+      child: CupertinoSlidingSegmentedControl<ChatExportFormat>(
+        groupValue: value,
+        proportionalWidth: true,
+        padding: const EdgeInsets.all(3),
+        children: {
+          ChatExportFormat.txt: _ChatExportFormatLabel(
+            label: context.strings.text('TXT'),
+            color: colors.label,
+          ),
+          ChatExportFormat.html: _ChatExportFormatLabel(
+            label: context.strings.text('HTML'),
+            color: colors.label,
+          ),
+          ChatExportFormat.json: _ChatExportFormatLabel(
+            label: context.strings.text('JSON'),
+            color: colors.label,
+          ),
+        },
+        onValueChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _ChatExportFormatLabel extends StatelessWidget {
+  const _ChatExportFormatLabel({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChatExportMediaRef {
   const _ChatExportMediaRef({
     required this.url,
@@ -108,30 +173,15 @@ extension _ChatExport on _ChatScreenState {
     return showDialog<ChatExportOptions>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (context, setDialogState) => CupertinoAlertDialog(
           title: Text(context.strings.text('Export chat history')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SegmentedButton<ChatExportFormat>(
-                segments: [
-                  ButtonSegment(
-                    value: ChatExportFormat.txt,
-                    label: Text(context.strings.text('TXT')),
-                  ),
-                  ButtonSegment(
-                    value: ChatExportFormat.html,
-                    label: Text(context.strings.text('HTML')),
-                  ),
-                  ButtonSegment(
-                    value: ChatExportFormat.json,
-                    label: Text(context.strings.text('JSON')),
-                  ),
-                ],
-                selected: {format},
-                onSelectionChanged: (value) {
-                  setDialogState(() => format = value.first);
-                },
+              const SizedBox(height: 4),
+              _ChatExportFormatPicker(
+                value: format,
+                onChanged: (value) => setDialogState(() => format = value),
               ),
               const SizedBox(height: 12),
               _DialogCheckRow(
@@ -147,19 +197,19 @@ extension _ChatExport on _ChatScreenState {
             ],
           ),
           actions: [
-            TextButton(
+            CupertinoDialogAction(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(context.strings.text('Cancel')),
             ),
-            FilledButton.icon(
+            CupertinoDialogAction(
+              isDefaultAction: true,
               onPressed: () => Navigator.of(context).pop(
                 ChatExportOptions(
                   format: format,
                   includeMedia: includeMedia && supportsLocalFiles,
                 ),
               ),
-              icon: const Icon(Icons.ios_share_outlined),
-              label: Text(context.strings.text('Export')),
+              child: Text(context.strings.text('Export')),
             ),
           ],
         ),
