@@ -1,4 +1,4 @@
-package ink.jjmm.csacflutter.csac
+package com.xiaobai.csac
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
