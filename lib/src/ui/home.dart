@@ -231,7 +231,6 @@ class _CupertinoSideRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
-    final primary = CupertinoTheme.of(context).primaryColor;
     final items = [
       (
         CupertinoIcons.chat_bubble_2,
@@ -268,19 +267,7 @@ class _CupertinoSideRail extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.only(top: 20, bottom: 16),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    CupertinoIcons.chat_bubble_text_fill,
-                    color: primary,
-                    size: 20,
-                  ),
-                ),
+                child: const _AppIconImage(size: 34, borderRadius: 9),
               ),
               for (final item in items.indexed)
                 _SideRailItem(
