@@ -684,6 +684,60 @@ class EmojiRecentStore {
   }
 }
 
+class EmojiPinnedStore {
+  const EmojiPinnedStore._();
+
+  static const _key = 'csac.emoji.pinned';
+
+  static Future<List<EmojiSticker>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null || raw.isEmpty) {
+      return const <EmojiSticker>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <EmojiSticker>[];
+      }
+      return decoded
+          .whereType<Map>()
+          .map((item) => EmojiSticker.fromJson(Map<String, dynamic>.from(item)))
+          .where((emoji) => emoji.abbr.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const <EmojiSticker>[];
+    }
+  }
+
+  static Future<void> save(List<EmojiSticker> stickers) async {
+    final prefs = await SharedPreferences.getInstance();
+    final next = <EmojiSticker>[];
+    final seen = <String>{};
+    for (final sticker in stickers) {
+      final abbr = sticker.abbr.trim();
+      if (abbr.isEmpty || seen.contains(abbr)) {
+        continue;
+      }
+      seen.add(abbr);
+      next.add(sticker);
+    }
+    if (next.isEmpty) {
+      await prefs.remove(_key);
+      return;
+    }
+    await prefs.setString(
+      _key,
+      jsonEncode(next.map((emoji) => emoji.toJson()).toList()),
+    );
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+}
+
 class CommandPaletteUsage {
   const CommandPaletteUsage({
     required this.id,
