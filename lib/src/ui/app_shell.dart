@@ -1450,6 +1450,7 @@ class _RecentAccountTile extends StatelessWidget {
               url: account.avatar,
               fallback: Icons.person_rounded,
               radius: 19,
+              name: account.displayName,
             ),
             const SizedBox(width: 12),
             Expanded(

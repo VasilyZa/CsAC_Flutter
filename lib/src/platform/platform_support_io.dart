@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -21,6 +23,90 @@ bool get supportsLocalAuth => true;
 bool get isApplePlatform => Platform.isIOS || Platform.isMacOS;
 
 bool get shouldForceHideMobileTextInput => Platform.isIOS || Platform.isAndroid;
+
+void installGlobalBadCertificateOverride() {
+  final previous = HttpOverrides.current;
+  if (previous is _AcceptAllCertificatesHttpOverrides) {
+    return;
+  }
+  HttpOverrides.global = _AcceptAllCertificatesHttpOverrides(previous);
+}
+
+http.Client createPlatformHttpClient({
+  String userAgent = 'CsAC-Mobile',
+  bool preferCronet = true,
+}) {
+  if (Platform.isAndroid && preferCronet) {
+    return AndroidOkHttpClient(userAgent: userAgent);
+  }
+  return http.Client();
+}
+
+class _AcceptAllCertificatesHttpOverrides extends HttpOverrides {
+  _AcceptAllCertificatesHttpOverrides(this.previous);
+
+  final HttpOverrides? previous;
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client =
+        previous?.createHttpClient(context) ?? super.createHttpClient(context);
+    client.badCertificateCallback = (_, _, _) => true;
+    return client;
+  }
+}
+
+class AndroidOkHttpClient extends http.BaseClient {
+  AndroidOkHttpClient({required this.userAgent});
+
+  static const _channel = MethodChannel('csac/android_http');
+
+  final String userAgent;
+  bool _closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (_closed) {
+      throw http.ClientException('HTTP client is closed.', request.url);
+    }
+    final body = await request.finalize().toBytes();
+    final headers = Map<String, String>.from(request.headers);
+    headers.putIfAbsent('User-Agent', () => userAgent);
+    final result = await _channel
+        .invokeMapMethod<String, Object?>('send', <String, Object?>{
+          'method': request.method,
+          'url': request.url.toString(),
+          'headers': headers,
+          'body': body,
+        });
+    if (result == null) {
+      throw http.ClientException(
+        'Android HTTP returned no response.',
+        request.url,
+      );
+    }
+    final statusCode = (result['statusCode'] as num?)?.toInt() ?? 0;
+    final responseHeaders = (result['headers'] as Map<Object?, Object?>? ?? {})
+        .map((key, value) => MapEntry('$key'.toLowerCase(), '$value'));
+    final responseBody = result['body'];
+    final bytes = responseBody is Uint8List
+        ? responseBody
+        : utf8.encode(responseBody?.toString() ?? '');
+    return http.StreamedResponse(
+      Stream<List<int>>.value(bytes),
+      statusCode,
+      contentLength: bytes.length,
+      request: request,
+      headers: responseHeaders,
+      reasonPhrase: result['reasonPhrase']?.toString(),
+    );
+  }
+
+  @override
+  void close() {
+    _closed = true;
+  }
+}
 
 void hidePlatformTextInput() {
   FocusManager.instance.primaryFocus?.unfocus();
@@ -49,6 +135,44 @@ Future<String> persistChatBackgroundFile(XFile picked) async {
   return target.path;
 }
 
+Future<String?> saveDownloadedBytes({
+  required Uint8List bytes,
+  required String suggestedName,
+  String typeLabel = '',
+  List<String> extensions = const <String>[],
+}) async {
+  if (isDesktopPlatform) {
+    final location = await getSaveLocation(
+      suggestedName: suggestedName,
+      acceptedTypeGroups: extensions.isEmpty
+          ? const <XTypeGroup>[]
+          : <XTypeGroup>[XTypeGroup(label: typeLabel, extensions: extensions)],
+    );
+    if (location == null) {
+      return null;
+    }
+    var targetPath = location.path;
+    if (p.extension(targetPath).isEmpty) {
+      final activeExt = location.activeFilter?.extensions?.firstOrNull;
+      final ext = activeExt ?? p.extension(suggestedName).replaceFirst('.', '');
+      if (ext.isNotEmpty) {
+        targetPath = '$targetPath.$ext';
+      }
+    }
+    await File(targetPath).writeAsBytes(bytes, flush: true);
+    return targetPath;
+  }
+
+  final directory = await _mobileDownloadDirectory();
+  if (!directory.existsSync()) {
+    directory.createSync(recursive: true);
+  }
+  final safeName = _safeDownloadFileName(suggestedName);
+  final target = await _uniqueFile(directory, safeName);
+  await target.writeAsBytes(bytes, flush: true);
+  return target.path;
+}
+
 Future<bool> localFileExists(String path) async {
   return path.isNotEmpty && await File(path).exists();
 }
@@ -73,6 +197,39 @@ Future<Uint8List?> readLocalFileBytes(String path) async {
 }
 
 String basenameOfPath(String path) => p.basename(path);
+
+Future<Directory> _mobileDownloadDirectory() async {
+  if (Platform.isAndroid) {
+    final external = await getExternalStorageDirectory();
+    if (external != null) {
+      return Directory(p.join(external.path, 'Downloads'));
+    }
+  }
+  final documents = await getApplicationDocumentsDirectory();
+  return Directory(p.join(documents.path, 'Downloads'));
+}
+
+String _safeDownloadFileName(String name) {
+  final cleaned = name
+      .trim()
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+      .replaceAll(RegExp(r'\s+'), ' ');
+  return cleaned.isEmpty ? 'csac_download.bin' : cleaned;
+}
+
+Future<File> _uniqueFile(Directory directory, String fileName) async {
+  final extension = p.extension(fileName);
+  final baseName = extension.isEmpty
+      ? fileName
+      : fileName.substring(0, fileName.length - extension.length);
+  var candidate = File(p.join(directory.path, fileName));
+  var suffix = 1;
+  while (await candidate.exists()) {
+    candidate = File(p.join(directory.path, '${baseName}_$suffix$extension'));
+    suffix += 1;
+  }
+  return candidate;
+}
 
 Future<String> cacheVoiceBytes({
   required int messageId,

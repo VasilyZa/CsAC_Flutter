@@ -7,6 +7,7 @@ import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'platform/platform_support.dart';
 
 class CsacApiException implements Exception {
   const CsacApiException(this.message);
@@ -104,12 +105,13 @@ class SessionExtensionStatus {
 
 class CsacApiClient {
   CsacApiClient({http.Client? httpClient, String baseUrl = defaultBaseUrl})
-    : _http = httpClient ?? http.Client(),
+    : _http = httpClient ?? createPlatformHttpClient(),
       _baseUrl = normalizeServerUrl(baseUrl) {
     configureApiAssetBaseUrl(_baseUrl);
   }
 
-  static const defaultBaseUrl = 'http://103.40.14.14:24582/rpc/UniCsAC.php';
+  static const defaultBaseUrl =
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/rpc/UniCsAC.php';
   static const _defaultApiPath = '/rpc/UniCsAC.php';
   static const _sessionKey = 'csac.cookies';
 
@@ -133,7 +135,7 @@ class CsacApiClient {
     if (value.isEmpty) {
       return defaultBaseUrl;
     }
-    final withScheme = value.contains('://') ? value : 'http://$value';
+    final withScheme = value.contains('://') ? value : 'https://$value';
     final uri = Uri.tryParse(withScheme);
     if (uri == null ||
         !uri.hasScheme ||
@@ -312,10 +314,10 @@ class CsacApiClient {
                 _binaryRequest(uri, 'image/*, */*'),
               ).timeout(const Duration(seconds: 8));
               if (response.statusCode < 200 || response.statusCode >= 400) {
-                throw CsacApiException('HTTP ${response.statusCode}');
+                throw CsacApiException('HTTP ${response.statusCode} $uri');
               }
               final type = response.headers['content-type'] ?? 'unknown';
-              return '$type, ${response.bodyBytes.length} B';
+              return '$type, ${response.bodyBytes.length} B, $uri';
             }),
     );
     total.stop();

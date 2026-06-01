@@ -91,6 +91,7 @@ class ProfileScreen extends StatelessWidget {
                         url: user?.avatar ?? '',
                         fallback: CupertinoIcons.person_fill,
                         radius: 27,
+                        name: user?.nickname ?? '',
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -454,6 +455,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       url: user?.avatar ?? '',
                       fallback: CupertinoIcons.person_fill,
                       radius: 30,
+                      name: user?.nickname ?? '',
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -3631,14 +3633,18 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.state,
     this.initialDeveloperOptionsExpanded = false,
+    this.initialCategoryIndex,
   });
 
   final CsacAppState state;
   final bool initialDeveloperOptionsExpanded;
+  final int? initialCategoryIndex;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
+
+enum _SettingsCategory { account, appearance, data, security, about, developer }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController serverUrl;
@@ -3654,6 +3660,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool checkingVersionUpdate = false;
   PerformanceCacheStats? performanceStats;
   late bool developerOptionsExpanded;
+  _SettingsCategory? activeCategory;
 
   static const themeColorOptions = <_ThemeColorOption>[
     _ThemeColorOption('Emerald', Color(0xff1f8a70)),
@@ -3687,7 +3694,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     settingsScroll = ScrollController();
     serverUrl = TextEditingController(text: widget.state.preferences.serverUrl);
     settingsSearch = TextEditingController()..addListener(handleSearchChanged);
-    developerOptionsExpanded = widget.initialDeveloperOptionsExpanded;
+    activeCategory = initialSettingsCategory();
+    developerOptionsExpanded =
+        widget.initialDeveloperOptionsExpanded ||
+        activeCategory == _SettingsCategory.developer;
     unawaited(loadPerformanceStats());
   }
 
@@ -3702,6 +3712,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void handleSearchChanged() {
     setState(() {});
+  }
+
+  _SettingsCategory? initialSettingsCategory() {
+    final index = widget.initialCategoryIndex;
+    if (index == null ||
+        index < 0 ||
+        index >= _SettingsCategory.values.length) {
+      return widget.initialDeveloperOptionsExpanded
+          ? _SettingsCategory.developer
+          : null;
+    }
+    return _SettingsCategory.values[index];
   }
 
   bool settingMatches(String query, Iterable<String> keywords) {
@@ -4789,103 +4811,211 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  void openSettingsCategory(_SettingsCategory category) {
+    settingsSearch.clear();
+    Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          state: widget.state,
+          initialCategoryIndex: category.index,
+          initialDeveloperOptionsExpanded:
+              category == _SettingsCategory.developer,
+        ),
+      ),
+    );
+  }
+
+  String settingsCategoryTitle(_SettingsCategory category) {
+    final strings = context.strings;
+    return switch (category) {
+      _SettingsCategory.account => strings.text('Account and session'),
+      _SettingsCategory.appearance => strings.text('Appearance and chat'),
+      _SettingsCategory.data => strings.text('Data and notifications'),
+      _SettingsCategory.security => strings.text('Privacy and security'),
+      _SettingsCategory.about => strings.text('About and feedback'),
+      _SettingsCategory.developer => strings.text('Developer tools'),
+    };
+  }
+
+  String settingsCategorySubtitle(_SettingsCategory category) {
+    final strings = context.strings;
+    return switch (category) {
+      _SettingsCategory.account => strings.text(
+        'Profile, account details and sign out',
+      ),
+      _SettingsCategory.appearance => strings.text(
+        'Theme, typography, bubbles and chat behavior',
+      ),
+      _SettingsCategory.data => strings.text(
+        'Cache, diagnostics, refresh and local alerts',
+      ),
+      _SettingsCategory.security => strings.text('PIN lock and device unlock'),
+      _SettingsCategory.about => strings.text(
+        'Version, licenses, updates and feedback',
+      ),
+      _SettingsCategory.developer => strings.text(
+        'Server address and API explorer',
+      ),
+    };
+  }
+
+  IconData settingsCategoryIcon(_SettingsCategory category) {
+    return switch (category) {
+      _SettingsCategory.account => Icons.person_outline,
+      _SettingsCategory.appearance => Icons.palette_outlined,
+      _SettingsCategory.data => Icons.speed_outlined,
+      _SettingsCategory.security => Icons.lock_outline,
+      _SettingsCategory.about => Icons.info_outline,
+      _SettingsCategory.developer => Icons.developer_mode_outlined,
+    };
+  }
+
+  Widget settingsCategoryIndex() {
+    final categories = _SettingsCategory.values;
+    return Card(
+      elevation: 0,
+      child: _RoundedInkClip(
+        child: Column(
+          children: [
+            for (final entry in categories.indexed) ...[
+              ListTile(
+                leading: Icon(settingsCategoryIcon(entry.$2)),
+                title: Text(settingsCategoryTitle(entry.$2)),
+                subtitle: Text(settingsCategorySubtitle(entry.$2)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openSettingsCategory(entry.$2),
+              ),
+              if (entry.$1 != categories.length - 1) const Divider(height: 1),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = widget.state.user;
     final strings = context.strings;
     final query = settingsSearch.text.trim().toLowerCase();
-    final showAccount = settingMatches(query, [
-      'Account settings',
-      'Username',
-      'Nickname',
-      'Avatar',
-      'UID',
-      'Profile',
-    ]);
-    final showInfo = settingMatches(query, [
-      'App information',
-      'Open-source licenses',
-      'Version',
-      'Version updates',
-      'Check for updates',
-      'Automatic update checks',
-      'Release notes',
-      'Source code',
-      'License',
-    ]);
-    final showFeedback = settingMatches(query, [
-      'Feedback',
-      'Report a problem',
-      'Bug report',
-      'Problem',
-      'Submit feedback',
-    ]);
-    final showAppearance = settingMatches(query, [
-      'Theme',
-      'Theme color',
-      'Language',
-      'Font style',
-      'Font',
-      'Typography',
-      'Conversation sorting',
-      'Message time format',
-      'Chat bubble theme',
-      'Own bubble color',
-      'Other bubble color',
-      'Bubble corner style',
-      'Bubble opacity',
-      'Chat background',
-      'Background',
-      'Show chat avatars',
-      'Avatar',
-      'Double tap avatar pat',
-      'Pat',
-      'Group member level',
-      'Level',
-      'Reduce motion',
-      'Animation',
-      'Motion',
-    ]);
-    final showLock = settingMatches(query, ['App lock', 'PIN', 'Security']);
-    final showData = settingMatches(query, [
-      'Refresh app data',
-      'Connection diagnostics',
-      'Network diagnostics',
-      'Server latency',
-      'API availability',
-      'Login status',
-      'Image domain',
-      'Clear local cache',
-      'Performance and cache',
-      'Message cache',
-      'Image cache',
-      'Log files',
-      'App logs',
-      'View app logs',
-      'Diagnostics',
-      'System notifications',
-      'Local notifications',
-      'New message alerts',
-      'Low performance mode',
-      'Cache',
-      'Cached conversations and message history',
-    ]);
-    final showDeveloper = settingMatches(query, [
-      'Developer options',
-      'CsAC server address',
-      'API explorer',
-      'API documentation',
-      'Run online',
-      'Endpoint',
-      'Route',
-      'Server',
-      'Default server',
-    ]);
-    final showLogout = settingMatches(query, [
-      'Logout',
-      'Clear session and return to login',
-      'Session',
-    ]);
+    final category = query.isEmpty ? activeCategory : null;
+    final showCategoryIndex = query.isEmpty && category == null;
+    final showAccount = category != null
+        ? category == _SettingsCategory.account
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Account settings',
+                'Username',
+                'Nickname',
+                'Avatar',
+                'UID',
+                'Profile',
+              ]);
+    final showInfo = category != null
+        ? category == _SettingsCategory.about
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'App information',
+                'Open-source licenses',
+                'Version',
+                'Version updates',
+                'Check for updates',
+                'Automatic update checks',
+                'Release notes',
+                'Source code',
+                'License',
+              ]);
+    final showFeedback = category != null
+        ? category == _SettingsCategory.about
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Feedback',
+                'Report a problem',
+                'Bug report',
+                'Problem',
+                'Submit feedback',
+              ]);
+    final showAppearance = category != null
+        ? category == _SettingsCategory.appearance
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Theme',
+                'Theme color',
+                'Language',
+                'Font style',
+                'Font',
+                'Typography',
+                'Conversation sorting',
+                'Message time format',
+                'Chat bubble theme',
+                'Own bubble color',
+                'Other bubble color',
+                'Bubble corner style',
+                'Bubble opacity',
+                'Chat background',
+                'Background',
+                'Show chat avatars',
+                'Avatar',
+                'Double tap avatar pat',
+                'Pat',
+                'Group member level',
+                'Level',
+                'Reduce motion',
+                'Animation',
+                'Motion',
+              ]);
+    final showLock = category != null
+        ? category == _SettingsCategory.security
+        : !showCategoryIndex &&
+              settingMatches(query, ['App lock', 'PIN', 'Security']);
+    final showData = category != null
+        ? category == _SettingsCategory.data
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Refresh app data',
+                'Connection diagnostics',
+                'Network diagnostics',
+                'Server latency',
+                'API availability',
+                'Login status',
+                'Image domain',
+                'Clear local cache',
+                'Performance and cache',
+                'Message cache',
+                'Image cache',
+                'Log files',
+                'App logs',
+                'View app logs',
+                'Diagnostics',
+                'System notifications',
+                'Local notifications',
+                'New message alerts',
+                'Low performance mode',
+                'Cache',
+                'Cached conversations and message history',
+              ]);
+    final showDeveloper = category != null
+        ? category == _SettingsCategory.developer
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Developer options',
+                'CsAC server address',
+                'API explorer',
+                'API documentation',
+                'Run online',
+                'Endpoint',
+                'Route',
+                'Server',
+                'Default server',
+              ]);
+    final showLogout = category != null
+        ? category == _SettingsCategory.account
+        : !showCategoryIndex &&
+              settingMatches(query, [
+                'Logout',
+                'Clear session and return to login',
+                'Session',
+              ]);
     final hasMatches =
         showAccount ||
         showInfo ||
@@ -4896,8 +5026,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         showDeveloper ||
         showLogout;
     final colors = CsacColors.of(context);
+    final title = category == null
+        ? strings.text('Settings')
+        : settingsCategoryTitle(category);
     return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Settings'))),
+      appBar: AppBar(title: Text(title)),
       backgroundColor: colors.systemBackground,
       body: SafeArea(
         child: LayoutBuilder(
@@ -4927,6 +5060,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    if (showCategoryIndex) ...[
+                      settingsCategoryIndex(),
+                      const SizedBox(height: 12),
+                    ],
                     if (showAccount) ...[
                       Card(
                         elevation: 0,
@@ -4935,6 +5072,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             leading: _Avatar(
                               url: user?.avatar ?? '',
                               fallback: Icons.person_rounded,
+                              name: user?.nickname ?? '',
                             ),
                             title: Text(
                               user?.nickname ?? strings.text('Not logged in'),
@@ -5760,7 +5898,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ],
-                    if (!hasMatches)
+                    if (!showCategoryIndex && !hasMatches)
                       _EmptyPanel(
                         message: strings.text('No matching settings.'),
                       ),

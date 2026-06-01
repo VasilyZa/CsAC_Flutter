@@ -48,5 +48,6 @@ part 'src/ui/conversation_media.dart';
 part 'src/ui/helpers.dart';
 
 void main() {
+  installGlobalBadCertificateOverride();
   runApp(const CsacMobileApp());
 }

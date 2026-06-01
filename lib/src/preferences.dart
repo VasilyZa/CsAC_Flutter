@@ -18,7 +18,7 @@ enum CsacFontStyle { system, serif, rounded, monospace }
 
 enum ChatBubbleCornerStyle { telegram, ios, qq }
 
-const defaultThemeColorValue = 0xff1f8a70;
+const defaultThemeColorValue = 0xff2563eb;
 const defaultChatBubbleColorValue = 0;
 const defaultChatBubbleOpacity = 1.0;
 

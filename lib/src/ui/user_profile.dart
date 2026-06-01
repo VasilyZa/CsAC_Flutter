@@ -810,6 +810,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   leading: _Avatar(
                                     url: group.avatar,
                                     fallback: Icons.groups_rounded,
+                                    name: group.name,
                                     backgroundColor: colors.secondaryContainer,
                                     foregroundColor:
                                         colors.onSecondaryContainer,
@@ -1042,6 +1043,7 @@ class _UserProfileHeaderSpace extends StatelessWidget {
                 fallback: Icons.person_rounded,
                 radius: avatarRadius,
                 heroTag: avatarHeroTag,
+                name: title,
                 backgroundColor: Colors.white.withValues(alpha: 0.24),
                 foregroundColor: Colors.white,
               ),

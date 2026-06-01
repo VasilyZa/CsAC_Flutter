@@ -741,29 +741,15 @@ Future<void> downloadUrl(
     final fileName = suggestedName.trim().isEmpty
         ? defaultDownloadName(url, fallbackExtension: fallbackExt)
         : suggestedName.trim();
-    final location = await getSaveLocation(
+    final path = await saveDownloadedBytes(
+      bytes: response.bodyBytes,
       suggestedName: fileName,
-      acceptedTypeGroups: extensions.isEmpty
-          ? const <XTypeGroup>[]
-          : <XTypeGroup>[XTypeGroup(label: typeLabel, extensions: extensions)],
+      typeLabel: typeLabel,
+      extensions: extensions,
     );
-    if (location == null) {
+    if (path == null) {
       return;
     }
-    var path = location.path;
-    if (p.extension(path).isEmpty) {
-      final activeExt = location.activeFilter?.extensions?.firstOrNull;
-      final ext = activeExt ?? fallbackExt.replaceFirst('.', '');
-      if (ext.isNotEmpty) {
-        path = '$path.$ext';
-      }
-    }
-    final file = XFile.fromData(
-      response.bodyBytes,
-      name: p.basename(path),
-      mimeType: mimeTypeForExtension(p.extension(path)),
-    );
-    await file.saveTo(path);
     if (!context.mounted) {
       return;
     }

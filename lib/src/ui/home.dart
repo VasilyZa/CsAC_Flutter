@@ -378,52 +378,149 @@ class _FloatingTabBar extends StatelessWidget {
         0,
       ),
     ];
-    final colors = CsacColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 382),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: colors.cardBackground.withValues(alpha: 0.88),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: colors.separator.withValues(alpha: 0.28),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CupertinoColors.black.withValues(
-                        alpha: colors.isDark ? 0.32 : 0.12,
-                      ),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
+          constraints: const BoxConstraints(maxWidth: 398),
+          child: _LiquidGlassTabBarSurface(
+            child: Row(
+              children: [
+                for (final item in items.indexed)
+                  Expanded(
+                    child: _FloatingTabButton(
+                      selected: index == item.$1,
+                      icon: item.$2.$1,
+                      activeIcon: item.$2.$2,
+                      label: item.$2.$3,
+                      badge: item.$2.$4,
+                      onTap: () => onChanged(item.$1),
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    for (final item in items.indexed)
-                      Expanded(
-                        child: _FloatingTabButton(
-                          selected: index == item.$1,
-                          icon: item.$2.$1,
-                          activeIcon: item.$2.$2,
-                          label: item.$2.$3,
-                          badge: item.$2.$4,
-                          onTap: () => onChanged(item.$1),
-                        ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiquidGlassTabBarSurface extends StatelessWidget {
+  const _LiquidGlassTabBarSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final radius = BorderRadius.circular(30);
+    final glassTint = colors.isDark
+        ? const Color(0xFF121216).withValues(alpha: 0.50)
+        : CupertinoColors.white.withValues(alpha: 0.42);
+    final edgeHighlight = CupertinoColors.white.withValues(
+      alpha: colors.isDark ? 0.22 : 0.68,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withValues(
+              alpha: colors.isDark ? 0.42 : 0.16,
+            ),
+            blurRadius: 32,
+            spreadRadius: -8,
+            offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: primary.withValues(alpha: colors.isDark ? 0.18 : 0.10),
+            blurRadius: 28,
+            spreadRadius: -12,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+          child: SizedBox(
+            height: 60,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: glassTint,
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: colors.separator.withValues(alpha: 0.18),
+                        width: 0.5,
                       ),
-                  ],
+                    ),
+                  ),
                 ),
-              ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          edgeHighlight,
+                          CupertinoColors.white.withValues(alpha: 0.10),
+                          primary.withValues(
+                            alpha: colors.isDark ? 0.12 : 0.08,
+                          ),
+                          colors.cardBackground.withValues(
+                            alpha: colors.isDark ? 0.08 : 0.16,
+                          ),
+                        ],
+                        stops: const [0, 0.28, 0.62, 1],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.78, -0.92),
+                        radius: 1.0,
+                        colors: [
+                          CupertinoColors.white.withValues(
+                            alpha: colors.isDark ? 0.18 : 0.48,
+                          ),
+                          CupertinoColors.white.withValues(alpha: 0.00),
+                        ],
+                        stops: const [0, 0.72],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: edgeHighlight.withValues(alpha: 0.72),
+                        width: 0.6,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 7,
+                  ),
+                  child: child,
+                ),
+              ],
             ),
           ),
         ),
@@ -458,45 +555,93 @@ class _FloatingTabButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: 220.ms,
         curve: Curves.easeOutCubic,
-        height: 44,
+        height: 46,
         margin: const EdgeInsets.symmetric(horizontal: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: selected
-              ? primary.withValues(alpha: 0.14)
+              ? primary.withValues(alpha: 0.13)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(23),
+          border: selected
+              ? Border.all(
+                  color: CupertinoColors.white.withValues(
+                    alpha: colors.isDark ? 0.22 : 0.54,
+                  ),
+                  width: 0.5,
+                )
+              : null,
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: primary.withValues(
+                      alpha: colors.isDark ? 0.18 : 0.10,
+                    ),
+                    blurRadius: 18,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _BadgeIcon(
-              icon: selected ? activeIcon : icon,
-              count: badge,
-              color: selected ? primary : colors.secondaryLabel,
-              size: 21,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(23),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(
+              sigmaX: selected ? 18 : 0.001,
+              sigmaY: selected ? 18 : 0.001,
             ),
-            AnimatedSize(
-              duration: 180.ms,
-              curve: Curves.easeOutCubic,
-              child: selected
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
-                        style: TextStyle(
-                          color: primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: selected
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          CupertinoColors.white.withValues(
+                            alpha: colors.isDark ? 0.12 : 0.38,
+                          ),
+                          primary.withValues(
+                            alpha: colors.isDark ? 0.10 : 0.08,
+                          ),
+                          CupertinoColors.white.withValues(alpha: 0.04),
+                        ],
+                      )
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _BadgeIcon(
+                    icon: selected ? activeIcon : icon,
+                    count: badge,
+                    color: selected ? primary : colors.secondaryLabel,
+                    size: 21,
+                  ),
+                  AnimatedSize(
+                    duration: 180.ms,
+                    curve: Curves.easeOutCubic,
+                    child: selected
+                        ? Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.fade,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -646,6 +791,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Map<String, ConversationDraft> drafts = const <String, ConversationDraft>{};
   Map<String, ConversationLocalPreference> conversationPrefs =
       const <String, ConversationLocalPreference>{};
+  List<Conversation>? heroLockedConversations;
   bool refreshing = false;
 
   @override
@@ -714,9 +860,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   List<Conversation> visibleConversations(String query) {
+    final source = heroLockedConversations ?? widget.state.conversations;
     final searched = query.isEmpty
-        ? widget.state.conversations
-        : widget.state.conversations.where((conversation) {
+        ? source
+        : source.where((conversation) {
             final target =
                 '${conversation.name} ${conversation.subtitle} ${conversation.searchText}'
                     .toLowerCase();
@@ -1049,16 +1196,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       unawaited(loadDrafts());
                       return;
                     }
-                    await Navigator.of(context).push(
-                      CsacPageRoute<void>(
-                        builder: (_) => ChatScreen(
-                          state: widget.state,
-                          conversation: entry.$2,
-                        ),
+                    setState(
+                      () => heroLockedConversations = List<Conversation>.of(
+                        widget.state.conversations,
                       ),
                     );
+                    final route = CsacPageRoute<void>(
+                      builder: (_) => ChatScreen(
+                        state: widget.state,
+                        conversation: entry.$2,
+                      ),
+                    );
+                    await Navigator.of(context).push(route);
+                    await route.completed;
                     if (mounted) {
-                      refresh();
+                      setState(() => heroLockedConversations = null);
+                      unawaited(refresh());
                     }
                   },
                 ),

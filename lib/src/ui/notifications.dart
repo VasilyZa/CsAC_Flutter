@@ -10,75 +10,99 @@ class NoticeCenterScreen extends StatefulWidget {
 }
 
 class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
-  int index = 0;
+  int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.addListener(_handleStateChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.state.removeListener(_handleStateChanged);
+    super.dispose();
+  }
+
+  void _handleStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final counts = widget.state.notificationCounts;
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    final pages = [
-      NoticesPage(state: widget.state),
-      MentionNoticesPage(state: widget.state),
-      FriendChangeNoticesPage(state: widget.state),
-      FriendRequestsPage(state: widget.state),
-      GroupApplicationsPage(state: widget.state),
-    ];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(strings.text('Notices')),
-        actions: [
-          IconButton(
-            tooltip: strings.text('Refresh'),
-            onPressed: widget.state.refreshNotificationCounts,
-            icon: const Icon(CupertinoIcons.arrow_clockwise),
-          ),
-        ],
-      ),
+    return CupertinoPageScaffold(
       backgroundColor: colors.systemBackground,
-      body: SafeArea(
-        top: false,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(strings.text('Notices')),
+        backgroundColor: colors.navBarBackground,
+        border: null,
+        trailing: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.state.refreshNotificationCounts,
+          child: Icon(
+            CupertinoIcons.refresh,
+            size: 20,
+            color: colors.primaryColor,
+          ),
+        ),
+      ),
+      child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-              child: CupertinoSlidingSegmentedControl<int>(
-                groupValue: index,
-                onValueChanged: (value) {
-                  if (value != null) {
-                    setState(() => index = value);
-                  }
-                },
-                children: {
-                  0: _NoticeSegment(
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                children: [
+                  _NoticeTab(
                     icon: CupertinoIcons.bell,
-                    count: counts.notices,
                     label: strings.text('Notices'),
+                    badge: counts.notices,
+                    selected: _selectedIndex == 0,
+                    onTap: () => setState(() => _selectedIndex = 0),
                   ),
-                  1: _NoticeSegment(
-                    icon: CupertinoIcons.at,
-                    count: counts.mentions,
-                    label: strings.text('Mentions'),
-                  ),
-                  2: _NoticeSegment(
-                    icon: CupertinoIcons.person_2,
-                    count: counts.friendChanges,
+                  _NoticeTab(
+                    icon: CupertinoIcons.person_badge_minus,
                     label: strings.text('Friend changes'),
+                    badge: counts.friendChanges,
+                    selected: _selectedIndex == 1,
+                    onTap: () => setState(() => _selectedIndex = 1),
                   ),
-                  3: _NoticeSegment(
-                    icon: CupertinoIcons.person_add,
-                    count: counts.friendRequests,
+                  _NoticeTab(
+                    icon: CupertinoIcons.person_badge_plus,
                     label: strings.text('Friends'),
+                    badge: counts.friendRequests,
+                    selected: _selectedIndex == 2,
+                    onTap: () => setState(() => _selectedIndex = 2),
                   ),
-                  4: _NoticeSegment(
+                  _NoticeTab(
                     icon: CupertinoIcons.group,
-                    count: counts.groupApplications,
                     label: strings.text('Groups'),
+                    badge: counts.groupApplications,
+                    selected: _selectedIndex == 3,
+                    onTap: () => setState(() => _selectedIndex = 3),
                   ),
-                },
+                ],
               ),
             ),
-            Expanded(child: pages[index]),
+            Container(height: 0.5, color: colors.separator),
+            Expanded(
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: [
+                  NoticesPage(state: widget.state),
+                  FriendDeletedNoticesPage(state: widget.state),
+                  FriendRequestsPage(state: widget.state),
+                  GroupApplicationsPage(state: widget.state),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -86,318 +110,63 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
   }
 }
 
-class _NoticeSegment extends StatelessWidget {
-  const _NoticeSegment({
+class _NoticeTab extends StatelessWidget {
+  const _NoticeTab({
     required this.icon,
-    required this.count,
     required this.label,
+    required this.badge,
+    required this.selected,
+    required this.onTap,
   });
 
   final IconData icon;
-  final int count;
   final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _BadgeIcon(icon: icon, count: count, size: 16),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class MentionNoticesPage extends StatefulWidget {
-  const MentionNoticesPage({super.key, required this.state});
-
-  final CsacAppState state;
-
-  @override
-  State<MentionNoticesPage> createState() => _MentionNoticesPageState();
-}
-
-class _MentionNoticesPageState extends State<MentionNoticesPage> {
-  MentionNoticeBundle bundle = const MentionNoticeBundle(items: []);
-  bool loading = true;
-  String? error;
-
-  @override
-  void initState() {
-    super.initState();
-    load();
-  }
-
-  Future<void> load() async {
-    setState(() {
-      loading = true;
-      error = null;
-    });
-    try {
-      final loaded = await widget.state.loadVisibleMentionNotices();
-      if (!mounted) {
-        return;
-      }
-      setState(() => bundle = loaded);
-      widget.state.updateNotificationCounts(mentions: loaded.unreadCount);
-    } catch (err) {
-      if (mounted) {
-        setState(() => error = err.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
-  }
-
-  Future<void> openMention(MentionNotice notice) async {
-    final navigator = Navigator.of(context);
-    await widget.state.markMentionNoticeRead(notice);
-    await navigator.push(
-      CsacPageRoute<void>(
-        builder: (_) => ChatScreen(
-          state: widget.state,
-          conversation: notice.conversation,
-          focusMessageId: notice.message.id > 0 ? notice.message.id : null,
-        ),
-      ),
-    );
-    if (mounted) {
-      load();
-    }
-  }
-
-  Future<void> markRead(MentionNotice notice) async {
-    await widget.state.markMentionNoticeRead(notice);
-    await load();
-  }
-
-  Future<void> clearNotice(MentionNotice notice) async {
-    await widget.state.clearMentionNotice(notice);
-    await load();
-  }
-
-  Future<void> markSummaryRead() async {
-    await widget.state.markMentionSummaryRead();
-    await load();
-  }
-
-  Future<void> clearSummary() async {
-    await widget.state.clearMentionSummary();
-    await load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          MediaQuery.paddingOf(context).bottom + 92,
-        ),
-        children: [
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) _InlineError(message: error!, onRetry: load),
-          if (!loading && bundle.hasOnlySummary)
-            _MotionListItem(
-              child: _MentionSummaryCard(
-                bundle: bundle,
-                onMarkRead: markSummaryRead,
-                onClear: clearSummary,
-              ),
-            )
-          else if (!loading && bundle.items.isEmpty)
-            _EmptyPanel(message: strings.text('No mentions or replies.'))
-          else
-            for (final entry in bundle.items.indexed)
-              _MotionListItem(
-                index: entry.$1,
-                child: _MentionNoticeTile(
-                  notice: entry.$2,
-                  preferences: widget.state.preferences,
-                  onTap: () => openMention(entry.$2),
-                  onMarkRead: () => markRead(entry.$2),
-                  onClear: () => clearNotice(entry.$2),
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MentionNoticeTile extends StatelessWidget {
-  const _MentionNoticeTile({
-    required this.notice,
-    required this.preferences,
-    required this.onTap,
-    required this.onMarkRead,
-    required this.onClear,
-  });
-
-  final MentionNotice notice;
-  final CsacPreferences preferences;
+  final int badge;
+  final bool selected;
   final VoidCallback onTap;
-  final VoidCallback onMarkRead;
-  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    final time = displayMessageTime(notice.message, preferences);
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      child: _RoundedInkClip(
-        child: ListTile(
-          onTap: onTap,
-          leading: Icon(
-            notice.isReply ? Icons.reply_outlined : Icons.alternate_email,
-          ),
-          title: Text(
-            notice.displayTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: notice.isRead ? FontWeight.w500 : FontWeight.w800,
-            ),
-          ),
-          subtitle: Text(
-            [
-              notice.conversation.name,
-              if (notice.message.sender.isNotEmpty) notice.message.sender,
-              if (time.isNotEmpty) time,
-              notice.message.body.replaceAll('\n', ' '),
-            ].where((part) => part.trim().isNotEmpty).join(' | '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Wrap(
-            spacing: 4,
-            children: [
-              if (!notice.isRead)
-                IconButton(
-                  tooltip: context.strings.text('Mark read'),
-                  onPressed: onMarkRead,
-                  icon: const Icon(Icons.done),
-                ),
-              IconButton(
-                tooltip: context.strings.text('Clear'),
-                onPressed: onClear,
-                icon: const Icon(Icons.clear),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: selected ? primary : colors.tertiaryFill,
+          borderRadius: BorderRadius.circular(16),
         ),
-      ),
-    );
-  }
-}
-
-class _MentionSummaryCard extends StatelessWidget {
-  const _MentionSummaryCard({
-    required this.bundle,
-    required this.onMarkRead,
-    required this.onClear,
-  });
-
-  final MentionNoticeBundle bundle;
-  final VoidCallback onMarkRead;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.alternate_email,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    strings.text('Mentions and replies'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Badge(label: Text('${bundle.unreadCount}')),
-              ],
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? CupertinoColors.white : colors.secondaryLabel,
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Chip(
-                  avatar: const Icon(Icons.alternate_email, size: 18),
-                  label: Text(
-                    strings.format('@ me: {count}', {
-                      'count': bundle.mentionCount,
-                    }),
-                  ),
-                ),
-                Chip(
-                  avatar: const Icon(Icons.reply_outlined, size: 18),
-                  label: Text(
-                    strings.format('Replies: {count}', {
-                      'count': bundle.replyCount,
-                    }),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(width: 5),
             Text(
-              strings.text(
-                'The server returned counts only, so there is no message position to open yet.',
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? CupertinoColors.white : colors.secondaryLabel,
               ),
-              style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: onMarkRead,
-                  icon: const Icon(Icons.done),
-                  label: Text(strings.text('Mark read')),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: onClear,
-                  icon: const Icon(Icons.clear),
-                  label: Text(strings.text('Clear')),
-                ),
-              ],
-            ),
+            if (badge > 0) ...[
+              const SizedBox(width: 5),
+              _NoticeBadge(
+                count: badge,
+                color: selected
+                    ? CupertinoColors.white.withValues(alpha: 0.3)
+                    : CupertinoColors.systemRed,
+              ),
+            ],
           ],
         ),
       ),
@@ -405,17 +174,43 @@ class _MentionSummaryCard extends StatelessWidget {
   }
 }
 
-class FriendChangeNoticesPage extends StatefulWidget {
-  const FriendChangeNoticesPage({super.key, required this.state});
+class _NoticeBadge extends StatelessWidget {
+  const _NoticeBadge({required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: CupertinoColors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class FriendDeletedNoticesPage extends StatefulWidget {
+  const FriendDeletedNoticesPage({super.key, required this.state});
 
   final CsacAppState state;
 
   @override
-  State<FriendChangeNoticesPage> createState() =>
-      _FriendChangeNoticesPageState();
+  State<FriendDeletedNoticesPage> createState() =>
+      _FriendDeletedNoticesPageState();
 }
 
-class _FriendChangeNoticesPageState extends State<FriendChangeNoticesPage> {
+class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
   List<FriendChangeNotice> notices = const <FriendChangeNotice>[];
   bool loading = true;
   String? error;
@@ -454,70 +249,47 @@ class _FriendChangeNoticesPageState extends State<FriendChangeNoticesPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          MediaQuery.paddingOf(context).bottom + 92,
-        ),
-        children: [
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) _InlineError(message: error!, onRetry: load),
-          if (!loading && notices.isEmpty)
-            _EmptyPanel(message: strings.text('No friend changes.'))
-          else
-            for (final entry in notices.indexed)
-              _MotionListItem(
-                index: entry.$1,
-                child: Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: _RoundedInkClip(
-                    child: ListTile(
-                      onTap: entry.$2.uid > 0
-                          ? () => openUserProfile(
-                              context,
-                              widget.state,
-                              entry.$2.uid,
-                            )
-                          : null,
-                      leading: _Avatar(
-                        url: entry.$2.avatar,
-                        fallback: Icons.manage_accounts_outlined,
+    final colors = CsacColors.of(context);
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              if (!loading && notices.isEmpty)
+                _EmptyPanel(message: strings.text('No friend changes.'))
+              else
+                for (final notice in notices)
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 5),
+                    decoration: BoxDecoration(
+                      color: colors.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _CupertinoListTile(
+                      leading: const Icon(
+                        CupertinoIcons.person_badge_minus,
+                        size: 24,
                       ),
-                      title: Text(
-                        entry.$2.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: entry.$2.isRead
-                              ? FontWeight.w500
-                              : FontWeight.w800,
-                        ),
-                      ),
-                      subtitle: Text(
-                        [
-                          if (entry.$2.username.isNotEmpty)
-                            '@${entry.$2.username}',
-                          if (entry.$2.kind.isNotEmpty) entry.$2.kind,
-                          if (entry.$2.time.isNotEmpty) entry.$2.time,
-                          entry.$2.content.replaceAll('\n', ' '),
-                        ].where((part) => part.trim().isNotEmpty).join(' | '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: entry.$2.uid > 0
-                          ? const Icon(Icons.chevron_right)
-                          : null,
+                      title: notice.nickname,
+                      subtitle: [
+                        if (notice.time.isNotEmpty) notice.time,
+                        if (notice.content.isNotEmpty) notice.content,
+                        if (notice.uid > 0) 'UID ${notice.uid}',
+                      ].join(' | '),
                     ),
                   ),
-                ),
-              ),
-        ],
-      ),
+            ]),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -572,7 +344,13 @@ class _NoticesPageState extends State<NoticesPage> {
     setState(() => acting = true);
     try {
       await widget.state.markNoticeRead(readAll: true);
-      await load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        notices = [for (final notice in notices) notice.copyWith(isRead: true)];
+      });
+      widget.state.updateNotificationCounts(notices: 0);
     } catch (err) {
       if (mounted) {
         setState(() => error = err.toString());
@@ -588,7 +366,18 @@ class _NoticesPageState extends State<NoticesPage> {
     setState(() => acting = true);
     try {
       await widget.state.markNoticeRead(noticeId: notice.id);
-      await load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        notices = [
+          for (final item in notices)
+            item.id == notice.id ? item.copyWith(isRead: true) : item,
+        ];
+      });
+      widget.state.updateNotificationCounts(
+        notices: notices.where((notice) => !notice.isRead).length,
+      );
     } catch (err) {
       if (mounted) {
         setState(() => error = err.toString());
@@ -601,10 +390,11 @@ class _NoticesPageState extends State<NoticesPage> {
   }
 
   void openNotice(CsacNotice notice) {
+    final pageContext = context;
     final strings = context.strings;
-    showDialog<void>(
+    showCupertinoDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(notice.title),
         content: SingleChildScrollView(
           child: Column(
@@ -614,32 +404,41 @@ class _NoticesPageState extends State<NoticesPage> {
               if (notice.time.isNotEmpty)
                 Text(
                   notice.time,
-                  style: Theme.of(context).textTheme.labelMedium,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: CupertinoColors.secondaryLabel,
+                  ),
                 ),
               if (notice.time.isNotEmpty) const SizedBox(height: 12),
-              SelectableText(
+              Text(
                 notice.content.isEmpty
                     ? strings.text('(empty)')
                     : notice.content,
+                textAlign: TextAlign.left,
               ),
               if (notice.link.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                SelectableText(notice.link),
+                Text(
+                  notice.link,
+                  style: const TextStyle(
+                    color: CupertinoColors.activeBlue,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ],
           ),
         ),
         actions: [
           if (notice.link.isNotEmpty)
-            TextButton.icon(
+            CupertinoDialogAction(
               onPressed: () => launchUrl(
                 Uri.parse(notice.link),
                 mode: LaunchMode.externalApplication,
               ),
-              icon: const Icon(Icons.open_in_new),
-              label: Text(strings.text('Open')),
+              child: Text(strings.text('Open')),
             ),
-          TextButton.icon(
+          CupertinoDialogAction(
             onPressed: () {
               Clipboard.setData(
                 ClipboardData(
@@ -647,15 +446,16 @@ class _NoticesPageState extends State<NoticesPage> {
                       '${notice.title}\n${notice.time}\n\n${notice.content}\n${notice.link}',
                 ),
               );
-              ScaffoldMessenger.of(context).showSnackBar(
+              Navigator.of(dialogContext).pop();
+              ScaffoldMessenger.of(pageContext).showSnackBar(
                 SnackBar(content: Text(strings.text('Notice copied'))),
               );
             },
-            icon: const Icon(Icons.copy),
-            label: Text(strings.text('Copy')),
+            child: Text(strings.text('Copy')),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(strings.text('Close')),
           ),
         ],
@@ -666,85 +466,161 @@ class _NoticesPageState extends State<NoticesPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          MediaQuery.paddingOf(context).bottom + 92,
-        ),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  strings.format('{count} unread', {
-                    'count': notices.where((notice) => !notice.isRead).length,
-                  }),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: acting || notices.isEmpty ? null : markAllRead,
-                icon: const Icon(Icons.done_all),
-                label: Text(strings.text('Mark all read')),
-              ),
-            ],
-          ),
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) _InlineError(message: error!, onRetry: load),
-          if (!loading && notices.isEmpty)
-            _EmptyPanel(message: strings.text('No notices.'))
-          else
-            for (final entry in notices.indexed)
-              _MotionListItem(
-                index: entry.$1,
-                child: Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: _RoundedInkClip(
-                    child: ListTile(
-                      onTap: () => openNotice(entry.$2),
-                      leading: Icon(
-                        entry.$2.isRead
-                            ? Icons.mark_email_read_outlined
-                            : Icons.mark_email_unread_outlined,
+    final colors = CsacColors.of(context);
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      strings.format('{count} unread', {
+                        'count': notices
+                            .where((notice) => !notice.isRead)
+                            .length,
+                      }),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: colors.label,
                       ),
-                      title: Text(
-                        entry.$2.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: entry.$2.isRead
-                              ? FontWeight.w500
-                              : FontWeight.w800,
-                        ),
-                      ),
-                      subtitle: Text(
-                        [
-                          if (entry.$2.time.isNotEmpty) entry.$2.time,
-                          entry.$2.content.replaceAll('\n', ' '),
-                        ].join(' | '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: entry.$2.isRead
-                          ? const Icon(Icons.chevron_right)
-                          : IconButton(
-                              tooltip: strings.text('Mark read'),
-                              onPressed: acting
-                                  ? null
-                                  : () => markOneRead(entry.$2),
-                              icon: const Icon(Icons.done),
-                            ),
                     ),
                   ),
-                ),
+                  GestureDetector(
+                    onTap: acting || notices.isEmpty ? null : markAllRead,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CupertinoTheme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.checkmark_seal,
+                            size: 14,
+                            color: CupertinoTheme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            strings.text('Mark all read'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: CupertinoTheme.of(context).primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-        ],
-      ),
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              if (!loading && notices.isEmpty)
+                _EmptyPanel(message: strings.text('No notices.'))
+              else
+                for (final notice in notices)
+                  GestureDetector(
+                    onTap: () => openNotice(notice),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 5),
+                      decoration: BoxDecoration(
+                        color: colors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              notice.isRead
+                                  ? CupertinoIcons.envelope_open
+                                  : CupertinoIcons.envelope_badge,
+                              size: 24,
+                              color: notice.isRead
+                                  ? colors.secondaryLabel
+                                  : colors.primaryColor,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    notice.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: notice.isRead
+                                          ? FontWeight.w500
+                                          : FontWeight.w700,
+                                      color: colors.label,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    [
+                                      if (notice.time.isNotEmpty) notice.time,
+                                      notice.content.replaceAll('\n', ' '),
+                                    ].join(' | '),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colors.secondaryLabel,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (notice.isRead)
+                              Icon(
+                                CupertinoIcons.chevron_right,
+                                size: 16,
+                                color: colors.tertiaryLabel,
+                              )
+                            else
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(28, 28),
+                                onPressed: acting
+                                    ? null
+                                    : () => markOneRead(notice),
+                                child: const Icon(
+                                  CupertinoIcons.checkmark_circle,
+                                  size: 22,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+            ]),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -814,36 +690,39 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          MediaQuery.paddingOf(context).bottom + 92,
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              if (!loading && requests.isEmpty)
+                _EmptyPanel(message: strings.text('No friend requests.'))
+              else
+                for (final request in requests)
+                  _FriendRequestTile(
+                    request: request,
+                    acting: actingId == request.id,
+                    onOpenUser: () =>
+                        openUserProfile(context, widget.state, request.fromUid),
+                    onAgree: request.pending
+                        ? () => handle(request, 'agree')
+                        : null,
+                    onRefuse: request.pending
+                        ? () => handle(request, 'refuse')
+                        : null,
+                  ),
+            ]),
+          ),
         ),
-        children: [
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) _InlineError(message: error!, onRetry: load),
-          if (!loading && requests.isEmpty)
-            _EmptyPanel(message: strings.text('No friend requests.'))
-          else
-            for (final request in requests)
-              _FriendRequestTile(
-                request: request,
-                acting: actingId == request.id,
-                onOpenUser: () =>
-                    openUserProfile(context, widget.state, request.fromUid),
-                onAgree: request.pending
-                    ? () => handle(request, 'agree')
-                    : null,
-                onRefuse: request.pending
-                    ? () => handle(request, 'refuse')
-                    : null,
-              ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -866,62 +745,149 @@ class _FriendRequestTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Card(
-      elevation: 0,
+    final colors = CsacColors.of(context);
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: onOpenUser,
-              leading: _Avatar(
-                url: request.avatar,
-                fallback: Icons.person_rounded,
-              ),
-              title: Text(request.nickname),
-              subtitle: Text(
-                [
-                  if (request.username.isNotEmpty) '@${request.username}',
-                  'UID ${request.fromUid}',
-                  if (request.createTime.isNotEmpty) request.createTime,
-                ].join(' | '),
-              ),
-              trailing: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Row(
                 children: [
+                  _Avatar(
+                    url: request.avatar,
+                    fallback: CupertinoIcons.person_solid,
+                    name: request.nickname,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request.nickname,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: colors.label,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            if (request.username.isNotEmpty)
+                              '@${request.username}',
+                            'UID ${request.fromUid}',
+                            if (request.createTime.isNotEmpty)
+                              request.createTime,
+                          ].join(' | '),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.secondaryLabel,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _StatusChip(pending: request.pending),
-                  const Icon(Icons.chevron_right),
+                  const SizedBox(width: 4),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: colors.tertiaryLabel,
+                  ),
                 ],
               ),
             ),
             if (request.content.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(request.content),
+              const SizedBox(height: 8),
+              Text(
+                request.content,
+                style: TextStyle(fontSize: 14, color: colors.label),
+              ),
             ],
             if (request.pending) ...[
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: acting ? null : onRefuse,
-                    child: Text(strings.text('Refuse')),
+                  GestureDetector(
+                    onTap: acting ? null : onRefuse,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: CupertinoColors.destructiveRed.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        strings.text('Refuse'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: CupertinoColors.destructiveRed,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: acting ? null : onAgree,
-                    icon: acting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(strings.text('Agree')),
+                  GestureDetector(
+                    onTap: acting ? null : onAgree,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: acting
+                            ? CupertinoTheme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.5)
+                            : CupertinoTheme.of(context).primaryColor,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: acting
+                          ? const CupertinoActivityIndicator(
+                              radius: 8,
+                              color: CupertinoColors.white,
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  CupertinoIcons.checkmark_alt,
+                                  size: 14,
+                                  color: CupertinoColors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  strings.text('Agree'),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: CupertinoColors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -1000,53 +966,56 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return RefreshIndicator(
-      onRefresh: load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          MediaQuery.paddingOf(context).bottom + 92,
-        ),
-        children: [
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) _InlineError(message: error!, onRetry: load),
-          if (!loading && applications.isEmpty)
-            _EmptyPanel(message: strings.text('No group applications.'))
-          else
-            for (final application in applications)
-              _GroupApplicationTile(
-                application: application,
-                acting: actingId == application.id,
-                onOpenUser: () async {
-                  GroupProfile? group;
-                  if (application.roomId > 0) {
-                    try {
-                      group = await widget.state.loadGroupProfile(
-                        application.roomId,
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              if (!loading && applications.isEmpty)
+                _EmptyPanel(message: strings.text('No group applications.'))
+              else
+                for (final application in applications)
+                  _GroupApplicationTile(
+                    application: application,
+                    acting: actingId == application.id,
+                    onOpenUser: () async {
+                      GroupProfile? group;
+                      if (application.roomId > 0) {
+                        try {
+                          group = await widget.state.loadGroupProfile(
+                            application.roomId,
+                          );
+                        } catch (_) {}
+                      }
+                      if (!context.mounted) {
+                        return;
+                      }
+                      await openUserProfile(
+                        context,
+                        widget.state,
+                        application.uid,
+                        group: group,
                       );
-                    } catch (_) {}
-                  }
-                  if (!context.mounted) {
-                    return;
-                  }
-                  await openUserProfile(
-                    context,
-                    widget.state,
-                    application.uid,
-                    group: group,
-                  );
-                },
-                onPass: application.pending
-                    ? () => handle(application, 'pass')
-                    : null,
-                onRefuse: application.pending
-                    ? () => handle(application, 'refuse')
-                    : null,
-              ),
-        ],
-      ),
+                    },
+                    onPass: application.pending
+                        ? () => handle(application, 'pass')
+                        : null,
+                    onRefuse: application.pending
+                        ? () => handle(application, 'refuse')
+                        : null,
+                  ),
+            ]),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1072,67 +1041,153 @@ class _GroupApplicationTile extends StatelessWidget {
         ? application.answer
         : application.content;
     final strings = context.strings;
-    return Card(
-      elevation: 0,
+    final colors = CsacColors.of(context);
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: onOpenUser,
-              leading: _Avatar(
-                url: application.avatar,
-                fallback: Icons.person_rounded,
-              ),
-              title: Text(application.nickname),
-              subtitle: Text(
-                [
-                  if (application.username.isNotEmpty)
-                    '@${application.username}',
-                  'UID ${application.uid}',
-                  if (application.roomName.isNotEmpty)
-                    strings.format('Group: {name}', {
-                      'name': application.roomName,
-                    }),
-                  if (application.createTime.isNotEmpty) application.createTime,
-                ].join(' | '),
-              ),
-              trailing: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Row(
                 children: [
+                  _Avatar(
+                    url: application.avatar,
+                    fallback: CupertinoIcons.person_solid,
+                    name: application.nickname,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          application.nickname,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: colors.label,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            if (application.username.isNotEmpty)
+                              '@${application.username}',
+                            'UID ${application.uid}',
+                            if (application.roomName.isNotEmpty)
+                              strings.format('Group: {name}', {
+                                'name': application.roomName,
+                              }),
+                            if (application.createTime.isNotEmpty)
+                              application.createTime,
+                          ].join(' | '),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.secondaryLabel,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _StatusChip(pending: application.pending),
-                  const Icon(Icons.chevron_right),
+                  const SizedBox(width: 4),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: colors.tertiaryLabel,
+                  ),
                 ],
               ),
             ),
             if (message.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(message),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: TextStyle(fontSize: 14, color: colors.label),
+              ),
             ],
             if (application.pending) ...[
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: acting ? null : onRefuse,
-                    child: Text(strings.text('Refuse')),
+                  GestureDetector(
+                    onTap: acting ? null : onRefuse,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: CupertinoColors.destructiveRed.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        strings.text('Refuse'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: CupertinoColors.destructiveRed,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: acting ? null : onPass,
-                    icon: acting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(strings.text('Pass')),
+                  GestureDetector(
+                    onTap: acting ? null : onPass,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: acting
+                            ? CupertinoTheme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.5)
+                            : CupertinoTheme.of(context).primaryColor,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: acting
+                          ? const CupertinoActivityIndicator(
+                              radius: 8,
+                              color: CupertinoColors.white,
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  CupertinoIcons.checkmark_alt,
+                                  size: 14,
+                                  color: CupertinoColors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  strings.text('Pass'),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: CupertinoColors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
                 ],
               ),

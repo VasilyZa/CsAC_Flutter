@@ -3564,6 +3564,7 @@ class _ChatMessageAvatarState extends State<_ChatMessageAvatar> {
         url: widget.url,
         fallback: widget.mine ? Icons.person_rounded : Icons.person_outline,
         radius: 16,
+        name: widget.name,
         backgroundColor: widget.mine
             ? colors.primaryContainer
             : colors.surfaceContainerHighest,
@@ -5467,6 +5468,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
                             leading: _Avatar(
                               url: member.avatar,
                               fallback: CupertinoIcons.person_fill,
+                              name: member.name,
                             ),
                             title: member.name,
                             subtitle: member.subtitle.isEmpty
@@ -5616,6 +5618,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
   final search = TextEditingController();
   List<ChatMessage> messages = const <ChatMessage>[];
   EssenceStats? stats;
+  Map<int, String> contributorAvatars = const <int, String>{};
   String statsType = 'all';
   bool loading = true;
   bool loadingStats = true;
@@ -5666,6 +5669,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
           statsError = statsResult?.toString();
         }
       });
+      unawaited(loadContributorAvatars());
     } catch (err) {
       if (mounted) {
         setState(() => error = err.toString());
@@ -5696,6 +5700,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
       );
       if (mounted) {
         setState(() => stats = loaded);
+        unawaited(loadContributorAvatars());
       }
     } catch (err) {
       if (mounted) {
@@ -5703,11 +5708,47 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
           stats = EssenceStats.fromMessages(messages, type: value);
           statsError = err.toString();
         });
+        unawaited(loadContributorAvatars());
       }
     } finally {
       if (mounted) {
         setState(() => loadingStats = false);
       }
+    }
+  }
+
+  Future<void> loadContributorAvatars() async {
+    final contributors = (stats ?? EssenceStats.fromMessages(messages))
+        .contributors
+        .where((contributor) => contributor.uid > 0)
+        .take(5)
+        .toList();
+    final next = <int, String>{
+      for (final entry in contributorAvatars.entries) entry.key: entry.value,
+    };
+    var changed = false;
+    for (final contributor in contributors) {
+      if (contributor.avatar.isNotEmpty) {
+        if (next[contributor.uid] != contributor.avatar) {
+          next[contributor.uid] = contributor.avatar;
+          changed = true;
+        }
+        continue;
+      }
+      if (next[contributor.uid]?.isNotEmpty == true) {
+        continue;
+      }
+      try {
+        final profile = await widget.state.loadUserProfile(contributor.uid);
+        if (profile.avatar.isEmpty) {
+          continue;
+        }
+        next[contributor.uid] = profile.avatar;
+        changed = true;
+      } catch (_) {}
+    }
+    if (changed && mounted) {
+      setState(() => contributorAvatars = next);
     }
   }
 
@@ -5791,6 +5832,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
               stats: effectiveStats,
               loading: loadingStats,
               statsError: statsError,
+              avatarOverrides: contributorAvatars,
               selectedType: statsType,
               typeOptions: statsTypeOptions,
               onTypeChanged: changeStatsType,
@@ -5846,6 +5888,7 @@ class _EssenceStatsHeader extends StatelessWidget {
     required this.stats,
     required this.loading,
     required this.statsError,
+    required this.avatarOverrides,
     required this.selectedType,
     required this.typeOptions,
     required this.onTypeChanged,
@@ -5854,6 +5897,7 @@ class _EssenceStatsHeader extends StatelessWidget {
   final EssenceStats stats;
   final bool loading;
   final String? statsError;
+  final Map<int, String> avatarOverrides;
   final String selectedType;
   final List<String> typeOptions;
   final ValueChanged<String> onTypeChanged;
@@ -5963,7 +6007,10 @@ class _EssenceStatsHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               for (final contributor in stats.contributors.take(5))
-                _EssenceContributorRow(contributor: contributor),
+                _EssenceContributorRow(
+                  contributor: contributor,
+                  avatarUrl: avatarOverrides[contributor.uid],
+                ),
             ],
           ],
         ),
@@ -6077,9 +6124,10 @@ class _EssenceCategoryRow extends StatelessWidget {
 }
 
 class _EssenceContributorRow extends StatelessWidget {
-  const _EssenceContributorRow({required this.contributor});
+  const _EssenceContributorRow({required this.contributor, this.avatarUrl});
 
   final EssenceContributor contributor;
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -6089,9 +6137,12 @@ class _EssenceContributorRow extends StatelessWidget {
       child: Row(
         children: [
           _Avatar(
-            url: contributor.avatar,
+            url: avatarUrl?.isNotEmpty == true
+                ? avatarUrl!
+                : contributor.avatar,
             fallback: CupertinoIcons.person_fill,
             radius: 16,
+            name: contributor.name,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -6135,7 +6186,9 @@ class _CupertinoMiniPill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: 180.ms,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected
               ? primary.withValues(alpha: 0.14)

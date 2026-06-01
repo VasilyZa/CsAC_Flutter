@@ -133,6 +133,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                   leading: _Avatar(
                     url: preview!.avatar,
                     fallback: Icons.person_rounded,
+                    name: preview!.displayName,
                   ),
                   title: Text(preview!.displayName),
                   subtitle: Text(
@@ -681,7 +682,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
           ),
         ),
         SizedBox(
-          height: 46,
+          height: 44,
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             scrollDirection: Axis.horizontal,
@@ -775,10 +776,13 @@ class _ScopeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: _CupertinoMiniPill(
-        label: label,
-        selected: selected,
-        onTap: onSelected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 58, minHeight: 32),
+        child: _CupertinoMiniPill(
+          label: label,
+          selected: selected,
+          onTap: onSelected,
+        ),
       ),
     );
   }

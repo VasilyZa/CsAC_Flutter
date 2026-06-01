@@ -1606,7 +1606,19 @@ class _Avatar extends StatelessWidget {
     this.heroTag,
     this.backgroundColor,
     this.foregroundColor,
+    this.name = '',
   });
+
+  static const _fallbackPalette = <Color>[
+    Color(0xFF3478F6),
+    Color(0xFF34C759),
+    Color(0xFFFF9500),
+    Color(0xFFFF3B30),
+    Color(0xFFAF52DE),
+    Color(0xFF5AC8FA),
+    Color(0xFFFF2D55),
+    Color(0xFF4CD964),
+  ];
 
   final String url;
   final IconData fallback;
@@ -1614,6 +1626,39 @@ class _Avatar extends StatelessWidget {
   final Object? heroTag;
   final Color? backgroundColor;
   final Color? foregroundColor;
+  final String name;
+
+  Color fallbackBackgroundColor(BuildContext context) {
+    if (backgroundColor != null) {
+      return backgroundColor!;
+    }
+    final key = name.trim();
+    if (key.isEmpty) {
+      return CupertinoColors.secondarySystemFill.resolveFrom(context);
+    }
+    final index =
+        key.codeUnits.fold<int>(0, (sum, unit) => sum + unit) %
+        _fallbackPalette.length;
+    return _fallbackPalette[index];
+  }
+
+  Widget fallbackAvatar(BuildContext context, double size) {
+    final trimmedName = name.trim();
+    final initial = trimmedName.isEmpty ? '' : trimmedName[0].toUpperCase();
+    final color = foregroundColor ?? CupertinoColors.white;
+    if (initial.isNotEmpty) {
+      return Text(
+        initial,
+        style: TextStyle(
+          color: color,
+          fontSize: size * 0.42,
+          fontWeight: FontWeight.w600,
+          height: 1,
+        ),
+      );
+    }
+    return Icon(fallback, color: foregroundColor, size: size * 0.56);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1622,18 +1667,44 @@ class _Avatar extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        color:
-            backgroundColor ??
-            CupertinoColors.secondarySystemFill.resolveFrom(context),
+        color: fallbackBackgroundColor(context),
+        alignment: Alignment.center,
         child: url.isEmpty
-            ? Icon(fallback, color: foregroundColor, size: size * 0.56)
-            : Image.network(url, fit: BoxFit.cover),
+            ? fallbackAvatar(context, size)
+            : Image.network(
+                url,
+                fit: BoxFit.cover,
+                width: size,
+                height: size,
+                errorBuilder: (_, _, _) => fallbackAvatar(context, size),
+                loadingBuilder: (_, child, progress) =>
+                    progress == null ? child : fallbackAvatar(context, size),
+              ),
       ),
     );
     if (heroTag == null || _MotionPreference.reduceOf(context)) {
       return avatar;
     }
-    return Hero(tag: heroTag!, child: avatar);
+    return Hero(
+      tag: heroTag!,
+      transitionOnUserGestures: true,
+      flightShuttleBuilder:
+          (flightContext, animation, direction, fromContext, toContext) {
+            final heroContext = direction == HeroFlightDirection.pop
+                ? fromContext
+                : toContext;
+            final renderObject = heroContext.findRenderObject();
+            final childSize = renderObject is RenderBox && renderObject.hasSize
+                ? renderObject.size
+                : Size.square(size);
+            final hero = heroContext.widget as Hero;
+            return FittedBox(
+              fit: BoxFit.fill,
+              child: SizedBox.fromSize(size: childSize, child: hero.child),
+            );
+          },
+      child: avatar,
+    );
   }
 }
 
@@ -1665,7 +1736,53 @@ class _HeroText extends StatelessWidget {
         child: child,
       ),
     );
-    return Hero(tag: tag, child: heroChild);
+    return Hero(
+      tag: tag,
+      transitionOnUserGestures: true,
+      flightShuttleBuilder:
+          (flightContext, animation, direction, fromContext, toContext) {
+            final fromTextStyle = DefaultTextStyle.of(fromContext);
+            final toTextStyle = DefaultTextStyle.of(toContext);
+            final fromIconTheme = IconTheme.of(fromContext);
+            final toIconTheme = IconTheme.of(toContext);
+            return AnimatedBuilder(
+              animation: animation,
+              builder: (context, child) {
+                final t =
+                    (direction == HeroFlightDirection.push
+                            ? animation.value
+                            : 1 - animation.value)
+                        .clamp(0.0, 1.0)
+                        .toDouble();
+                return IconTheme(
+                  data: IconThemeData.lerp(fromIconTheme, toIconTheme, t),
+                  child: DefaultTextStyle(
+                    style: TextStyle.lerp(
+                      fromTextStyle.style,
+                      toTextStyle.style,
+                      t,
+                    )!,
+                    textAlign: t < 0.5
+                        ? fromTextStyle.textAlign
+                        : toTextStyle.textAlign,
+                    softWrap: t < 0.5
+                        ? fromTextStyle.softWrap
+                        : toTextStyle.softWrap,
+                    overflow: t < 0.5
+                        ? fromTextStyle.overflow
+                        : toTextStyle.overflow,
+                    maxLines: t < 0.5
+                        ? fromTextStyle.maxLines
+                        : toTextStyle.maxLines,
+                    child: child!,
+                  ),
+                );
+              },
+              child: child,
+            );
+          },
+      child: heroChild,
+    );
   }
 }
 
@@ -1727,6 +1844,7 @@ class _ConversationAvatarHero extends StatelessWidget {
       fallback: isGroup ? Icons.groups_rounded : Icons.person_rounded,
       radius: radius,
       heroTag: enabled ? conversationAvatarHeroTag(conversation) : null,
+      name: conversation.name,
       backgroundColor: isGroup
           ? colors.secondaryContainer
           : colors.primaryContainer,
@@ -1744,8 +1862,23 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(context.strings.text(pending ? 'Pending' : 'Handled')),
+    final colors = CsacColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: pending
+            ? colors.primaryColor.withValues(alpha: 0.12)
+            : colors.tertiaryFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        context.strings.text(pending ? 'Pending' : 'Handled'),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: pending ? colors.primaryColor : colors.secondaryLabel,
+        ),
+      ),
     );
   }
 }

@@ -787,6 +787,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   fallback: CupertinoIcons.group_solid,
                   radius: 28,
                   heroTag: conversationAvatarHeroTag(widget.conversation),
+                  name: profile.name,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -963,6 +964,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     leading: _Avatar(
                       url: member.avatar,
                       fallback: Icons.person_rounded,
+                      name: member.name,
                       heroTag: userAvatarHeroTag(
                         member.uid,
                         'conversation-detail-${profile.id}',
@@ -1894,6 +1896,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       leading: _Avatar(
                         url: member.avatar,
                         fallback: Icons.person_rounded,
+                        name: member.name,
                       ),
                       title: Text(member.name),
                       subtitle: Text(
@@ -2002,6 +2005,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               url: group.avatar,
                               fallback: Icons.groups_rounded,
                               radius: 24,
+                              name: group.name,
                               backgroundColor: colors.secondaryContainer,
                               foregroundColor: colors.onSecondaryContainer,
                             ),
@@ -2111,6 +2115,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                                   leading: _Avatar(
                                     url: application.avatar,
                                     fallback: Icons.person_rounded,
+                                    name: application.nickname,
                                     heroTag: userAvatarHeroTag(
                                       application.uid,
                                       'group-applications-${group.id}',
@@ -2227,6 +2232,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               leading: _Avatar(
                                 url: member.avatar,
                                 fallback: Icons.person_rounded,
+                                name: member.name,
                                 heroTag: userAvatarHeroTag(
                                   member.uid,
                                   'group-management-${group.id}',

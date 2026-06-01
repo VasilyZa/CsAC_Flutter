@@ -56,11 +56,20 @@ void main() {
   test('server URL accepts bare host and host with port', () {
     expect(
       CsacApiClient.normalizeServerUrl('192.168.1.10'),
-      'http://192.168.1.10/rpc/UniCsAC.php',
+      'https://192.168.1.10/rpc/UniCsAC.php',
     );
     expect(
       CsacApiClient.normalizeServerUrl('192.168.1.10:8080'),
-      'http://192.168.1.10:8080/rpc/UniCsAC.php',
+      'https://192.168.1.10:8080/rpc/UniCsAC.php',
+    );
+  });
+
+  test('server URL accepts bracketed IPv6 host', () {
+    expect(
+      CsacApiClient.normalizeServerUrl(
+        'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]',
+      ),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/rpc/UniCsAC.php',
     );
   });
 
@@ -73,6 +82,72 @@ void main() {
     );
 
     configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+  });
+
+  test('media URLs support IPv6 API origin', () {
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+
+    expect(
+      normalizeApiUrl('upload/img/avatar.png'),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/upload/img/avatar.png',
+    );
+  });
+
+  test('legacy media hosts are rewritten to configured API origin', () {
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+
+    expect(
+      normalizeApiUrl(
+        'https://cschat.ccccocccc.cc/upload/img/avatar.png?size=small',
+      ),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/upload/img/avatar.png?size=small',
+    );
+    expect(
+      normalizeApiUrl('https://example.com/upload/img/avatar.png'),
+      'https://example.com/upload/img/avatar.png',
+    );
+    expect(normalizeApiUrl('https://cschat.ccccocccc.cc'), '');
+  });
+
+  test('host-only current media URL is ignored', () {
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+
+    expect(
+      normalizeApiUrl('https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]'),
+      '',
+    );
+  });
+
+  test('current host absolute media URL keeps server path', () {
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+
+    expect(
+      normalizeApiUrl(
+        'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/avatar_51_37c2d7d5c446_1780237650.jpg',
+      ),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/avatar_51_37c2d7d5c446_1780237650.jpg',
+    );
+  });
+
+  test('relative media paths resolve under server root unchanged', () {
+    configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
+
+    expect(
+      normalizeApiUrl('default.png'),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/default.png',
+    );
+    expect(
+      normalizeApiUrl('avatar_51_37c2d7d5c446_1780237650.jpg'),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/avatar_51_37c2d7d5c446_1780237650.jpg',
+    );
+    expect(
+      normalizeApiUrl('room_avatar_5_d3b63305e09c_1780244273.jpg'),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/room_avatar_5_d3b63305e09c_1780244273.jpg',
+    );
+    expect(
+      normalizeApiUrl('img_1_17_0ae40b2090a8_1780196137.jpg'),
+      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/img_1_17_0ae40b2090a8_1780196137.jpg',
+    );
   });
 
   test('release version tags match app versions', () {

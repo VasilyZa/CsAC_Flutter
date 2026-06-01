@@ -653,11 +653,15 @@ class CsacAppState extends ChangeNotifier {
     try {
       final baseCounts = await client.notificationCounts();
       var mentionCount = 0;
+      var replyCount = baseCounts.replies;
       var friendChangeCount = baseCounts.friendChanges;
       try {
-        mentionCount = (await loadVisibleMentionNotices()).unreadCount;
+        final visibleMentions = await loadVisibleMentionNotices();
+        mentionCount = visibleMentions.mentionCount;
+        replyCount = visibleMentions.replyCount;
       } catch (_) {
         mentionCount = notificationCounts.mentions;
+        replyCount = notificationCounts.replies;
       }
       if (friendChangeCount == 0) {
         try {
@@ -668,6 +672,7 @@ class CsacAppState extends ChangeNotifier {
       notificationCounts = NotificationCounts(
         notices: baseCounts.notices,
         mentions: mentionCount,
+        replies: replyCount,
         friendChanges: friendChangeCount,
         friendRequests: baseCounts.friendRequests,
         groupApplications: baseCounts.groupApplications,
@@ -676,6 +681,7 @@ class CsacAppState extends ChangeNotifier {
       notificationCounts = NotificationCounts(
         notices: notificationCounts.notices,
         mentions: notificationCounts.mentions,
+        replies: notificationCounts.replies,
         friendChanges: notificationCounts.friendChanges,
         friendRequests: notificationCounts.friendRequests,
         groupApplications: notificationCounts.groupApplications,
@@ -687,6 +693,7 @@ class CsacAppState extends ChangeNotifier {
   void updateNotificationCounts({
     int? notices,
     int? mentions,
+    int? replies,
     int? friendChanges,
     int? friendRequests,
     int? groupApplications,
@@ -694,6 +701,7 @@ class CsacAppState extends ChangeNotifier {
     notificationCounts = NotificationCounts(
       notices: notices ?? notificationCounts.notices,
       mentions: mentions ?? notificationCounts.mentions,
+      replies: replies ?? notificationCounts.replies,
       friendChanges: friendChanges ?? notificationCounts.friendChanges,
       friendRequests: friendRequests ?? notificationCounts.friendRequests,
       groupApplications:
@@ -741,25 +749,37 @@ class CsacAppState extends ChangeNotifier {
   Future<void> markMentionNoticeRead(MentionNotice notice) async {
     await MentionNoticeStore.markRead(notice);
     final visible = await loadVisibleMentionNotices();
-    updateNotificationCounts(mentions: visible.unreadCount);
+    updateNotificationCounts(
+      mentions: visible.mentionCount,
+      replies: visible.replyCount,
+    );
   }
 
   Future<void> markMentionSummaryRead() async {
     await MentionNoticeStore.markSummaryRead();
     final visible = await loadVisibleMentionNotices();
-    updateNotificationCounts(mentions: visible.unreadCount);
+    updateNotificationCounts(
+      mentions: visible.mentionCount,
+      replies: visible.replyCount,
+    );
   }
 
   Future<void> clearMentionNotice(MentionNotice notice) async {
     await MentionNoticeStore.clear(notice);
     final visible = await loadVisibleMentionNotices();
-    updateNotificationCounts(mentions: visible.unreadCount);
+    updateNotificationCounts(
+      mentions: visible.mentionCount,
+      replies: visible.replyCount,
+    );
   }
 
   Future<void> clearMentionSummary() async {
     await MentionNoticeStore.clearSummary();
     final visible = await loadVisibleMentionNotices();
-    updateNotificationCounts(mentions: visible.unreadCount);
+    updateNotificationCounts(
+      mentions: visible.mentionCount,
+      replies: visible.replyCount,
+    );
   }
 
   Future<List<FriendChangeNotice>> loadFriendChangeNotices() {

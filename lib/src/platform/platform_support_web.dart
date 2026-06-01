@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 bool get isWebPlatform => true;
@@ -17,12 +18,30 @@ bool get isApplePlatform => false;
 
 bool get shouldForceHideMobileTextInput => false;
 
+void installGlobalBadCertificateOverride() {}
+
+http.Client createPlatformHttpClient({
+  String userAgent = 'CsAC-Mobile',
+  bool preferCronet = true,
+}) {
+  return http.Client();
+}
+
 void hidePlatformTextInput() {
   FocusManager.instance.primaryFocus?.unfocus();
 }
 
 Future<String> persistChatBackgroundFile(XFile picked) async {
   throw UnsupportedError('Chat background files are not supported on Web.');
+}
+
+Future<String?> saveDownloadedBytes({
+  required Uint8List bytes,
+  required String suggestedName,
+  String typeLabel = '',
+  List<String> extensions = const <String>[],
+}) async {
+  throw UnsupportedError('File downloads are handled by the browser.');
 }
 
 Future<bool> localFileExists(String path) async => false;

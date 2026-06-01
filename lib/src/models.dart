@@ -1202,6 +1202,7 @@ class NotificationCounts {
   const NotificationCounts({
     this.notices = 0,
     this.mentions = 0,
+    this.replies = 0,
     this.friendChanges = 0,
     this.friendRequests = 0,
     this.groupApplications = 0,
@@ -1209,12 +1210,18 @@ class NotificationCounts {
 
   final int notices;
   final int mentions;
+  final int replies;
   final int friendChanges;
   final int friendRequests;
   final int groupApplications;
 
   int get total =>
-      notices + mentions + friendChanges + friendRequests + groupApplications;
+      notices +
+      mentions +
+      replies +
+      friendChanges +
+      friendRequests +
+      groupApplications;
 
   factory NotificationCounts.fromJson(Map<String, dynamic> json) {
     return NotificationCounts(
@@ -1231,10 +1238,15 @@ class NotificationCounts {
         'mentions',
         'mention_unread',
         'mention_unread_count',
+        'at_count',
+      ]),
+      replies: firstInt(json, const [
         'reply_count',
+        'replies',
+        'replies_count',
         'reply_unread',
         'reply_unread_count',
-        'at_count',
+        'unread_replies',
       ]),
       friendChanges: firstInt(json, const [
         'friend_change_count',
@@ -1459,6 +1471,18 @@ class CsacNotice {
   final bool isRead;
   final String link;
   final String route;
+
+  CsacNotice copyWith({bool? isRead}) {
+    return CsacNotice(
+      id: id,
+      title: title,
+      content: content,
+      time: time,
+      isRead: isRead ?? this.isRead,
+      link: link,
+      route: route,
+    );
+  }
 
   factory CsacNotice.fromJson(Map<String, dynamic> json) {
     final id = firstInt(json, const ['id', 'notice_id']);
@@ -1854,7 +1878,10 @@ String formatLocalTime(DateTime value) {
   return '${two(value.hour)}:${two(value.minute)}:${two(value.second)}';
 }
 
-String _apiAssetBaseUrl = 'https://cschat.ccccocccc.cc';
+const _fallbackApiAssetBaseUrl = 'https://cschat.ccccocccc.cc';
+const _legacyApiAssetHosts = {'cschat.ccccocccc.cc', 'csac.ccccocccc.cc'};
+
+String _apiAssetBaseUrl = _fallbackApiAssetBaseUrl;
 
 void configureApiAssetBaseUrl(String apiBaseUrl) {
   _apiAssetBaseUrl = apiOriginFromBaseUrl(apiBaseUrl);
@@ -1863,7 +1890,7 @@ void configureApiAssetBaseUrl(String apiBaseUrl) {
 String apiOriginFromBaseUrl(String apiBaseUrl) {
   final uri = Uri.tryParse(apiBaseUrl.trim());
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-    return 'https://cschat.ccccocccc.cc';
+    return _fallbackApiAssetBaseUrl;
   }
   return Uri(
     scheme: uri.scheme,
@@ -1874,12 +1901,45 @@ String apiOriginFromBaseUrl(String apiBaseUrl) {
 
 String normalizeApiUrl(String raw) {
   final value = raw.trim();
-  if (value.isEmpty ||
-      value.startsWith('http://') ||
-      value.startsWith('https://')) {
+  if (value.isEmpty) {
     return value;
   }
-  return '$_apiAssetBaseUrl/${value.replaceFirst(RegExp(r'^/+'), '')}';
+  final uri = Uri.tryParse(value);
+  if (uri != null && uri.hasScheme) {
+    if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+        (uri.path.isEmpty || uri.path == '/')) {
+      return '';
+    }
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      final currentOrigin = Uri.tryParse(_apiAssetBaseUrl);
+      final shouldRewrite =
+          _legacyApiAssetHosts.contains(uri.host.toLowerCase()) ||
+          (currentOrigin != null &&
+              currentOrigin.host.toLowerCase() == uri.host.toLowerCase() &&
+              currentOrigin.scheme == uri.scheme &&
+              (!uri.hasPort ||
+                  !currentOrigin.hasPort ||
+                  currentOrigin.port == uri.port));
+      if (!shouldRewrite) {
+        return value;
+      }
+      if (uri.path.isEmpty || uri.path == '/') {
+        return '';
+      }
+      if (currentOrigin != null && currentOrigin.host.isNotEmpty) {
+        return currentOrigin
+            .replace(
+              path: uri.path,
+              query: uri.query.isEmpty ? null : uri.query,
+              fragment: uri.fragment.isEmpty ? null : uri.fragment,
+            )
+            .toString();
+      }
+    }
+    return value;
+  }
+  final normalizedPath = value.replaceFirst(RegExp(r'^/+'), '');
+  return '$_apiAssetBaseUrl/$normalizedPath';
 }
 
 bool looksLikeImagePath(String value) {
