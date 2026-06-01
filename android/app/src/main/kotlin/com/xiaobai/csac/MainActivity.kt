@@ -21,6 +21,7 @@ import java.io.IOException
 
 class MainActivity : FlutterFragmentActivity() {
     private val httpClient: OkHttpClient by lazy { createUnsafeHttp2Client() }
+    private val http1Client: OkHttpClient by lazy { createUnsafeHttp2Client(http2 = false) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -65,8 +66,17 @@ class MainActivity : FlutterFragmentActivity() {
             .headers(headers.build())
             .method(method, body)
             .build()
-        httpClient.newCall(request).enqueue(object : Callback {
+        sendWithFallback(request, result, retried = false)
+    }
+
+    private fun sendWithFallback(request: Request, result: MethodChannel.Result, retried: Boolean) {
+        val client = if (retried) http1Client else httpClient
+        client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                if (!retried && shouldRetryWithHttp1(e)) {
+                    sendWithFallback(request, result, retried = true)
+                    return
+                }
                 result.error("network_error", e.message, null)
             }
 
@@ -90,7 +100,16 @@ class MainActivity : FlutterFragmentActivity() {
         })
     }
 
-    private fun createUnsafeHttp2Client(): OkHttpClient {
+    private fun shouldRetryWithHttp1(e: IOException): Boolean {
+        val message = e.message?.lowercase().orEmpty()
+        return message.contains("connection closed") ||
+            message.contains("stream was reset") ||
+            message.contains("unexpected end of stream") ||
+            message.contains("protocol_error") ||
+            message.contains("refused_stream")
+    }
+
+    private fun createUnsafeHttp2Client(http2: Boolean = true): OkHttpClient {
         val trustManager = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
@@ -101,7 +120,7 @@ class MainActivity : FlutterFragmentActivity() {
         return OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustManager)
             .hostnameVerifier { _, _ -> true }
-            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+            .protocols(if (http2) listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) else listOf(Protocol.HTTP_1_1))
             .build()
     }
 }
