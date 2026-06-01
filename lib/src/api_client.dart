@@ -110,8 +110,7 @@ class CsacApiClient {
     configureApiAssetBaseUrl(_baseUrl);
   }
 
-  static const defaultBaseUrl =
-      'https://[240e:306:6f6e:6d00:65ff:2bdd:552:6871]/rpc/UniCsAC.php';
+  static const defaultBaseUrl = 'https://103.40.14.14:14660/rpc/UniCsAC.php';
   static const _defaultApiPath = '/rpc/UniCsAC.php';
   static const _sessionKey = 'csac.cookies';
 
