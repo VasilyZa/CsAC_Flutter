@@ -34,6 +34,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   bool get isSelf => widget.state.user?.uid == widget.uid;
 
+  UserProfile? get placeholderProfile {
+    final currentUser = widget.state.user;
+    if (currentUser != null && currentUser.uid == widget.uid) {
+      return UserProfile(
+        uid: currentUser.uid,
+        nickname: currentUser.nickname,
+        username: currentUser.username,
+        avatar: currentUser.avatar,
+        onlineStatus: currentUser.onlineStatus,
+        platform: currentUser.platform,
+      );
+    }
+    final member = widget.member;
+    if (member != null && member.uid == widget.uid) {
+      return UserProfile(
+        uid: member.uid,
+        nickname: member.nickname.isEmpty ? member.name : member.nickname,
+        username: member.username,
+        avatar: member.avatar,
+        onlineStatus: member.onlineStatus,
+      );
+    }
+    return null;
+  }
+
   bool get canManageMember {
     if (widget.state.debugMode) {
       return true;
@@ -529,13 +554,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final strings = context.strings;
     final colors = Theme.of(context).colorScheme;
     final loaded = profile;
+    final headerProfile = loaded ?? placeholderProfile;
     final member = widget.member;
     return Scaffold(
       body: loading
           ? buildProfileScrollView(
               slivers: [
                 _UserProfileHeaderSliver(
-                  title: strings.text('User profile'),
+                  title:
+                      headerProfile?.displayName ??
+                      strings.text('User profile'),
+                  profile: headerProfile,
+                  avatarHeroTag: widget.avatarHeroTag,
                   loading: loading,
                   onRefresh: null,
                 ),
@@ -621,7 +651,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               infoRow(
                                 Icons.info_outline,
                                 strings.text('Client'),
-                                loaded.platform,
+                                loaded.platformLabel,
                               ),
                               if (member != null)
                                 infoRow(

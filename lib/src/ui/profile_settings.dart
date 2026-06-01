@@ -114,6 +114,9 @@ class ProfileScreen extends StatelessWidget {
                                 if (user != null) 'UID ${user.uid}',
                                 if (user?.onlineStatus.isNotEmpty == true)
                                   user!.onlineStatus,
+                                if (user != null &&
+                                    user.platformLabel != 'none')
+                                  user.platformLabel,
                               ].join(' | '),
                               style: TextStyle(
                                 color: colors.secondaryLabel,

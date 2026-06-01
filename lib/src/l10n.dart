@@ -524,6 +524,7 @@ const _zh = <String, String>{
   'User profile': '用户个人页',
   'User not found.': '未找到用户。',
   'Nickname': '昵称',
+  'Client': '客户端',
   'Group role': '群内身份',
   'Open private chat': '打开私聊',
   'Cannot add friend': '无法添加好友',

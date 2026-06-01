@@ -2289,6 +2289,7 @@ Future<void> openUserProfile(
 }) {
   return Navigator.of(context).push(
     CsacPageRoute<void>(
+      allowSnapshotting: false,
       builder: (_) => UserProfileScreen(
         state: state,
         uid: uid,

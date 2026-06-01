@@ -70,7 +70,7 @@ class CsacLocalCache {
   Future<CsacUser?> loadUser() async {
     final db = await _database();
     final rows = db.select('''
-      SELECT uid, nickname, username, avatar, online_status, pat_action
+      SELECT uid, nickname, username, avatar, online_status, platform, pat_action
       FROM session_user
       ORDER BY saved_at DESC
       LIMIT 1
@@ -85,6 +85,7 @@ class CsacLocalCache {
       username: row['username'] as String,
       avatar: row['avatar'] as String,
       onlineStatus: row['online_status'] as String,
+      platform: row['platform'] as String,
       patAction: row['pat_action'] as String,
     );
   }
@@ -95,9 +96,9 @@ class CsacLocalCache {
     db.execute(
       '''
       INSERT INTO session_user (
-        uid, nickname, username, avatar, online_status, pat_action, saved_at
+        uid, nickname, username, avatar, online_status, platform, pat_action, saved_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         user.uid,
@@ -105,6 +106,7 @@ class CsacLocalCache {
         user.username,
         user.avatar,
         user.onlineStatus,
+        user.platform,
         user.patAction,
         DateTime.now().millisecondsSinceEpoch,
       ],
@@ -774,10 +776,17 @@ class CsacLocalCache {
         username TEXT NOT NULL DEFAULT '',
         avatar TEXT NOT NULL DEFAULT '',
         online_status TEXT NOT NULL DEFAULT '',
+        platform TEXT NOT NULL DEFAULT 'none',
         pat_action TEXT NOT NULL DEFAULT '$defaultPatAction',
         saved_at INTEGER NOT NULL DEFAULT 0
       )
       ''');
+    _addColumnIfMissing(
+      db,
+      'session_user',
+      'platform',
+      "TEXT NOT NULL DEFAULT 'none'",
+    );
     _addColumnIfMissing(
       db,
       'session_user',

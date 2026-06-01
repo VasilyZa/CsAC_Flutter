@@ -324,6 +324,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
           supportedLocales: const [Locale('en'), Locale('zh', 'CN')],
           localizationsDelegates: const [
             CsacStringsDelegate(),
+            GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],

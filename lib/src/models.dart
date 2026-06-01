@@ -8,6 +8,30 @@ enum CsacTimestampPattern { slash, dash, compact, timeOnly }
 
 const defaultPatAction = '\u62cd\u4e86\u62cd';
 
+String formatClientPlatform(String platform) {
+  final raw = platform.trim();
+  if (raw.isEmpty || raw.toLowerCase() == 'none') {
+    return 'none';
+  }
+  final match = RegExp(
+    r'^([A-Za-z0-9_.]+)-([A-Za-z0-9_.]+)-(.+)$',
+  ).firstMatch(raw);
+  if (match == null) {
+    return raw;
+  }
+  final branch = match.group(2)!;
+  final version = match.group(3)!;
+  return '${_formatBranchName(branch)}\u5206\u652f|$version';
+}
+
+String _formatBranchName(String branch) {
+  return branch
+      .split(RegExp(r'[_.-]+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => part[0].toUpperCase() + part.substring(1).toLowerCase())
+      .join();
+}
+
 class CsacUser {
   const CsacUser({
     required this.uid,
@@ -15,6 +39,7 @@ class CsacUser {
     this.username = '',
     this.avatar = '',
     this.onlineStatus = '',
+    this.platform = 'none',
     this.patAction = defaultPatAction,
   });
 
@@ -23,7 +48,10 @@ class CsacUser {
   final String username;
   final String avatar;
   final String onlineStatus;
+  final String platform;
   final String patAction;
+
+  String get platformLabel => formatClientPlatform(platform);
 
   factory CsacUser.fromJson(Map<String, dynamic> json) {
     return CsacUser(
@@ -34,6 +62,9 @@ class CsacUser {
       username: asString(json['username']),
       avatar: normalizeApiUrl(asString(json['avatar'])),
       onlineStatus: asString(json['online_status']),
+      platform: asString(json['platform']).isEmpty
+          ? 'none'
+          : asString(json['platform']),
       patAction: firstString(json, const ['pat_action', 'patAction']).isEmpty
           ? defaultPatAction
           : firstString(json, const ['pat_action', 'patAction']),
@@ -238,6 +269,8 @@ class UserProfile {
   final String platform;
   final bool isFriend;
   final bool canAddFriend;
+
+  String get platformLabel => formatClientPlatform(platform);
 
   String get displayName {
     if (remark.trim().isNotEmpty) {
