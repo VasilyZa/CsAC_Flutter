@@ -224,6 +224,7 @@ class UserProfile {
     this.avatar = '',
     this.remark = '',
     this.onlineStatus = '',
+    this.platform = 'none',
     this.isFriend = false,
     this.canAddFriend = false,
   });
@@ -234,6 +235,7 @@ class UserProfile {
   final String avatar;
   final String remark;
   final String onlineStatus;
+  final String platform;
   final bool isFriend;
   final bool canAddFriend;
 
@@ -264,6 +266,9 @@ class UserProfile {
       avatar: normalizeApiUrl(asString(json['avatar'])),
       remark: asString(json['remark']),
       onlineStatus: asString(json['online_status']),
+      platform: asString(json['platform']).isEmpty
+          ? 'none'
+          : asString(json['platform']),
       isFriend: asBool(json['is_friend']),
       canAddFriend: asBool(json['can_add_friend']),
     );

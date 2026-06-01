@@ -618,6 +618,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 strings.text('Online'),
                                 loaded.onlineStatus,
                               ),
+                              infoRow(
+                                Icons.info_outline,
+                                strings.text('Client'),
+                                loaded.platform,
+                              ),
                               if (member != null)
                                 infoRow(
                                   Icons.admin_panel_settings_outlined,

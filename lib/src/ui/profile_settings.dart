@@ -2062,6 +2062,12 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     params: [
       ApiDocParam(name: 'username', description: 'Username', required: true),
       ApiDocParam(name: 'pwd', description: 'Password', required: true),
+      ApiDocParam(
+        name: 'platform',
+        description: 'Client identifier: client-branch-version',
+        required: true,
+        example: 'flutter-xiaobai-1.3.4',
+      ),
     ],
   ),
   ApiDocEndpoint(

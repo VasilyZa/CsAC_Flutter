@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -196,16 +197,33 @@ class CsacApiClient {
   }
 
   Future<CsacUser> login(String username, String password) async {
+    final platform = await _clientPlatformIdentifier();
     final data = await postForm('auth/login', <String, String>{
       'username': username,
       'pwd': password,
+      'platform': platform,
     });
     final user = data['user'];
     if (user is! Map<String, dynamic>) {
       throw const CsacApiException('Login succeeded but no user was returned.');
     }
     await saveSession();
+    await refreshPlatform();
     return CsacUser.fromJson(user);
+  }
+
+  Future<void> refreshPlatform() async {
+    await get('user/get_info', <String, String>{
+      'platform': await _clientPlatformIdentifier(),
+    });
+  }
+
+  Future<String> _clientPlatformIdentifier() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final version = packageInfo.version.trim().isEmpty
+        ? '0.0.0'
+        : packageInfo.version.trim();
+    return 'flutter-xiaobai-$version';
   }
 
   Future<CsacUser> register({
@@ -258,7 +276,9 @@ class CsacApiClient {
   }
 
   Future<CsacUser> currentUser() async {
-    final data = await get('user/get_info');
+    final data = await get('user/get_info', <String, String>{
+      'platform': await _clientPlatformIdentifier(),
+    });
     final user = data['user'];
     if (user is! Map<String, dynamic>) {
       throw const CsacApiException('Server did not return user info.');
