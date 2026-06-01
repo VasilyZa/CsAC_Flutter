@@ -1,8 +1,13 @@
+val useAliyunMaven = !System.getenv("CI").equals("true", ignoreCase = true) &&
+    !providers.gradleProperty("csacDisableAliyunMaven").orNull.equals("true", ignoreCase = true)
+
 allprojects {
     repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/central")
-        maven("https://maven.aliyun.com/repository/public")
+        if (useAliyunMaven) {
+            maven("https://maven.aliyun.com/repository/google")
+            maven("https://maven.aliyun.com/repository/central")
+            maven("https://maven.aliyun.com/repository/public")
+        }
         google()
         mavenCentral()
     }

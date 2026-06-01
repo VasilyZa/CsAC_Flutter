@@ -1,4 +1,6 @@
 pluginManagement {
+    val useAliyunMaven = !System.getenv("CI").equals("true", ignoreCase = true) &&
+        !providers.gradleProperty("csacDisableAliyunMaven").orNull.equals("true", ignoreCase = true)
     val flutterSdkPath =
         run {
             val properties = java.util.Properties()
@@ -11,9 +13,11 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/central")
-        maven("https://maven.aliyun.com/repository/gradle-plugin")
+        if (useAliyunMaven) {
+            maven("https://maven.aliyun.com/repository/google")
+            maven("https://maven.aliyun.com/repository/central")
+            maven("https://maven.aliyun.com/repository/gradle-plugin")
+        }
         google()
         mavenCentral()
         gradlePluginPortal()
