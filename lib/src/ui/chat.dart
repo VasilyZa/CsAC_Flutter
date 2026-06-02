@@ -2737,8 +2737,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           top: BorderSide(
                             color: nearBottom
                                 ? Colors.transparent
-                                : Theme.of(context).colorScheme.outlineVariant,
-                            width: nearBottom ? 0 : 1,
+                                : colors.separator.withValues(alpha: 0.28),
+                            width: nearBottom ? 0 : 0.5,
                           ),
                         ),
                       ),
@@ -2794,13 +2794,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       duration:
                                           _MotionPreference.reduceOf(context)
                                           ? Duration.zero
-                                          : 220.ms,
-                                      curve: Curves.easeOutBack,
+                                          : 180.ms,
+                                      curve: Curves.easeOutCubic,
                                       child: Container(
                                         width: 38,
                                         height: 38,
                                         decoration: BoxDecoration(
-                                          color: colors.cardBackground,
+                                          color: colors.tertiaryFill,
                                           shape: BoxShape.circle,
                                           border: Border.all(
                                             color: colors.separator.withValues(
@@ -2830,7 +2830,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       onSubmitted: (_) => send(),
                                       decoration: InputDecoration(
                                         hintText: strings.text('Message'),
-                                        border: InputBorder.none,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 13,
+                                              vertical: 9,
+                                            ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: colors.separator.withValues(
+                                              alpha: 0.28,
+                                            ),
+                                            width: 0.5,
+                                          ),
+                                        ),
                                         filled: true,
                                         fillColor: colors.cardBackground,
                                       ),
@@ -3365,7 +3380,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          Icons.reply,
+                          CupertinoIcons.reply,
                           size: 19,
                           color: armed
                               ? colors.onPrimary
@@ -3401,13 +3416,13 @@ class _ChatBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final overlay = colors.surface.withValues(
-      alpha: Theme.of(context).brightness == Brightness.dark ? 0.78 : 0.68,
+    final colors = CsacColors.of(context);
+    final overlay = colors.systemBackground.withValues(
+      alpha: colors.isDark ? 0.78 : 0.68,
     );
     final image = localFileImageProvider(path);
     if (image == null) {
-      return ColoredBox(color: colors.surface);
+      return ColoredBox(color: colors.systemBackground);
     }
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -4008,15 +4023,15 @@ class _AnimatedSendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final background = active ? colors.primary : colors.surfaceContainerHighest;
-    final foreground = active ? colors.onPrimary : colors.onSurfaceVariant;
+    final colors = CsacColors.of(context);
+    final background = active ? colors.primaryColor : colors.tertiaryFill;
+    final foreground = active ? CupertinoColors.white : colors.tertiaryLabel;
     return AnimatedScale(
-      scale: active ? 1 : 0.94,
-      duration: 170.ms,
-      curve: Curves.easeOutBack,
+      scale: active ? 1 : 0.96,
+      duration: 150.ms,
+      curve: Curves.easeOutCubic,
       child: AnimatedContainer(
-        duration: 190.ms,
+        duration: 170.ms,
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: background,
@@ -4024,9 +4039,9 @@ class _AnimatedSendButton extends StatelessWidget {
           boxShadow: active
               ? [
                   BoxShadow(
-                    color: colors.primary.withValues(alpha: 0.25),
-                    blurRadius: 14,
-                    offset: const Offset(0, 7),
+                    color: colors.primaryColor.withValues(alpha: 0.18),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
                   ),
                 ]
               : null,
@@ -4041,7 +4056,9 @@ class _AnimatedSendButton extends StatelessWidget {
               child: FadeTransition(opacity: animation, child: child),
             ),
             child: Icon(
-              Icons.send_rounded,
+              active
+                  ? CupertinoIcons.paperplane_fill
+                  : CupertinoIcons.paperplane,
               key: ValueKey<bool>(active),
               color: foreground,
             ),

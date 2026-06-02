@@ -425,10 +425,10 @@ class _LiquidGlassTabBarSurface extends StatelessWidget {
     final primary = CupertinoTheme.of(context).primaryColor;
     final radius = BorderRadius.circular(30);
     final glassTint = colors.isDark
-        ? const Color(0xFF121216).withValues(alpha: 0.50)
-        : CupertinoColors.white.withValues(alpha: 0.42);
+        ? const Color(0xFF121216).withValues(alpha: 0.64)
+        : CupertinoColors.white.withValues(alpha: 0.68);
     final edgeHighlight = CupertinoColors.white.withValues(
-      alpha: colors.isDark ? 0.22 : 0.68,
+      alpha: colors.isDark ? 0.18 : 0.46,
     );
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -436,24 +436,24 @@ class _LiquidGlassTabBarSurface extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: CupertinoColors.black.withValues(
-              alpha: colors.isDark ? 0.42 : 0.16,
+              alpha: colors.isDark ? 0.30 : 0.10,
             ),
-            blurRadius: 32,
-            spreadRadius: -8,
-            offset: const Offset(0, 18),
+            blurRadius: 24,
+            spreadRadius: -10,
+            offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: primary.withValues(alpha: colors.isDark ? 0.18 : 0.10),
-            blurRadius: 28,
-            spreadRadius: -12,
-            offset: const Offset(0, 8),
+            color: primary.withValues(alpha: colors.isDark ? 0.08 : 0.05),
+            blurRadius: 18,
+            spreadRadius: -14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ClipRRect(
         borderRadius: radius,
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
           child: SizedBox(
             height: 60,
             child: Stack(
@@ -479,12 +479,12 @@ class _LiquidGlassTabBarSurface extends StatelessWidget {
                         end: Alignment.bottomRight,
                         colors: [
                           edgeHighlight,
-                          CupertinoColors.white.withValues(alpha: 0.10),
+                          CupertinoColors.white.withValues(alpha: 0.06),
                           primary.withValues(
-                            alpha: colors.isDark ? 0.12 : 0.08,
+                            alpha: colors.isDark ? 0.06 : 0.04,
                           ),
                           colors.cardBackground.withValues(
-                            alpha: colors.isDark ? 0.08 : 0.16,
+                            alpha: colors.isDark ? 0.05 : 0.10,
                           ),
                         ],
                         stops: const [0, 0.28, 0.62, 1],
@@ -501,7 +501,7 @@ class _LiquidGlassTabBarSurface extends StatelessWidget {
                         radius: 1.0,
                         colors: [
                           CupertinoColors.white.withValues(
-                            alpha: colors.isDark ? 0.18 : 0.48,
+                            alpha: colors.isDark ? 0.10 : 0.28,
                           ),
                           CupertinoColors.white.withValues(alpha: 0.00),
                         ],
@@ -561,20 +561,20 @@ class _FloatingTabButton extends StatelessWidget {
     return _CsacPressable(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: 220.ms,
+        duration: 180.ms,
         curve: Curves.easeOutCubic,
         height: 46,
         margin: const EdgeInsets.symmetric(horizontal: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: selected
-              ? primary.withValues(alpha: 0.13)
+              ? primary.withValues(alpha: colors.isDark ? 0.14 : 0.10)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(23),
           border: selected
               ? Border.all(
                   color: CupertinoColors.white.withValues(
-                    alpha: colors.isDark ? 0.22 : 0.54,
+                    alpha: colors.isDark ? 0.18 : 0.36,
                   ),
                   width: 0.5,
                 )
@@ -583,11 +583,11 @@ class _FloatingTabButton extends StatelessWidget {
               ? [
                   BoxShadow(
                     color: primary.withValues(
-                      alpha: colors.isDark ? 0.18 : 0.10,
+                      alpha: colors.isDark ? 0.10 : 0.06,
                     ),
-                    blurRadius: 18,
+                    blurRadius: 12,
                     spreadRadius: -8,
-                    offset: const Offset(0, 8),
+                    offset: const Offset(0, 6),
                   ),
                 ]
               : null,
@@ -596,8 +596,8 @@ class _FloatingTabButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(23),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(
-              sigmaX: selected ? 18 : 0.001,
-              sigmaY: selected ? 18 : 0.001,
+              sigmaX: selected ? 8 : 0.001,
+              sigmaY: selected ? 8 : 0.001,
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -607,12 +607,12 @@ class _FloatingTabButton extends StatelessWidget {
                         end: Alignment.bottomRight,
                         colors: [
                           CupertinoColors.white.withValues(
-                            alpha: colors.isDark ? 0.12 : 0.38,
+                            alpha: colors.isDark ? 0.07 : 0.22,
                           ),
                           primary.withValues(
-                            alpha: colors.isDark ? 0.10 : 0.08,
+                            alpha: colors.isDark ? 0.06 : 0.05,
                           ),
-                          CupertinoColors.white.withValues(alpha: 0.04),
+                          CupertinoColors.white.withValues(alpha: 0.02),
                         ],
                       )
                     : null,
@@ -627,7 +627,7 @@ class _FloatingTabButton extends StatelessWidget {
                     size: 21,
                   ),
                   AnimatedSize(
-                    duration: 180.ms,
+                    duration: 140.ms,
                     curve: Curves.easeOutCubic,
                     child: selected
                         ? Padding(
@@ -656,16 +656,15 @@ class _FloatingTabButton extends StatelessWidget {
   }
 }
 
-class _BottomTabSwitcherState extends State<_BottomTabSwitcher>
-    with SingleTickerProviderStateMixin {
+class _BottomTabSwitcherState extends State<_BottomTabSwitcher> {
   @override
   Widget build(BuildContext context) {
-    return _FocusableTabPage(
-      active: true,
-      child: KeyedSubtree(
-        key: ValueKey<int>(widget.index),
-        child: widget.children[widget.index],
-      ),
+    return IndexedStack(
+      index: widget.index,
+      children: [
+        for (final entry in widget.children.indexed)
+          _FocusableTabPage(active: widget.index == entry.$1, child: entry.$2),
+      ],
     );
   }
 }
@@ -678,11 +677,14 @@ class _FocusableTabPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FocusScope(
-      canRequestFocus: active,
-      descendantsAreFocusable: active,
-      descendantsAreTraversable: active,
-      child: child,
+    return TickerMode(
+      enabled: active,
+      child: FocusScope(
+        canRequestFocus: active,
+        descendantsAreFocusable: active,
+        descendantsAreTraversable: active,
+        child: child,
+      ),
     );
   }
 }
@@ -1156,24 +1158,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-            child: TextField(
+            child: _CupertinoSearchField(
               controller: search,
+              placeholder: strings.text('Search conversations'),
               onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: strings.text('Search conversations'),
-                prefixIcon: const Icon(CupertinoIcons.search),
-                suffixIcon: query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: strings.text('Clear'),
-                        onPressed: () {
-                          search.clear();
-                          setState(() {});
-                        },
-                        icon: const Icon(CupertinoIcons.xmark_circle_fill),
-                      ),
-                border: const OutlineInputBorder(),
-              ),
             ),
           ),
           if (widget.state.conversations.isEmpty)
@@ -1265,7 +1253,8 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGroup = conversation.type == ConversationType.group;
-    final colors = Theme.of(context).colorScheme;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     final draft = this.draft;
     final hasDraft = draft != null && draft.hasContent;
     final fallbackSubtitle = conversation.subtitle.isEmpty
@@ -1276,90 +1265,174 @@ class _ConversationTile extends StatelessWidget {
             'text': compactDraftText(draft.previewText, max: 72),
           })
         : fallbackSubtitle;
-    return GestureDetector(
-      onSecondaryTap: onLongPress,
-      child: Card(
-        elevation: 0,
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        color: selected ? colors.secondaryContainer : null,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: _RoundedInkClip(
-          child: ListTile(
-            selected: selected,
-            selectedColor: colors.onSecondaryContainer,
-            selectedTileColor: colors.secondaryContainer,
-            onTap: onTap,
-            onLongPress: onLongPress,
-            leading: _ConversationAvatarHero(
-              conversation: conversation,
-              radius: 22,
-            ),
-            title: Row(
-              children: [
-                if (preference.pinned) ...[
-                  Icon(Icons.push_pin, size: 15, color: colors.primary),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: _ConversationTitleHero(
-                    conversation: conversation,
-                    enabled: !selected,
-                  ),
-                ),
-              ],
-            ),
-            subtitle: Text(
-              subtitleText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: hasDraft ? TextStyle(color: colors.primary) : null,
-            ),
-            trailing: conversation.unreadCount > 0
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (preference.muted) ...[
-                        Icon(
-                          Icons.notifications_off_outlined,
-                          size: 18,
-                          color: colors.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Badge(
-                        backgroundColor: preference.muted
-                            ? colors.surfaceContainerHighest
-                            : null,
-                        textColor: preference.muted
-                            ? colors.onSurfaceVariant
-                            : null,
-                        label: Text('${conversation.unreadCount}'),
+    final backgroundColor = selected
+        ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
+        : colors.cardBackground;
+    final borderColor = selected
+        ? primary.withValues(alpha: colors.isDark ? 0.34 : 0.24)
+        : colors.separator.withValues(alpha: 0.24);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(_csacControlCornerRadius),
+        border: Border.all(color: borderColor, width: 0.5),
+      ),
+      child: _CupertinoListPressable(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        onSecondaryTap: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          child: Row(
+            children: [
+              _ConversationAvatarHero(conversation: conversation, radius: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DefaultTextStyle.merge(
+                      style: TextStyle(
+                        color: selected ? primary : colors.label,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 1.18,
                       ),
-                    ],
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (preference.muted)
-                        Icon(
-                          Icons.notifications_off_outlined,
-                          size: 18,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      if (preference.archived) ...[
-                        if (preference.muted) const SizedBox(width: 8),
-                        Icon(
-                          Icons.archive_outlined,
-                          size: 18,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ],
-                      const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          if (preference.pinned) ...[
+                            Icon(
+                              CupertinoIcons.pin_fill,
+                              size: 13,
+                              color: primary,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: _ConversationTitleHero(
+                              conversation: conversation,
+                              enabled: !selected,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitleText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasDraft ? primary : colors.secondaryLabel,
+                        fontSize: 13,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _ConversationTileTrailing(
+                unreadCount: conversation.unreadCount,
+                muted: preference.muted,
+                archived: preference.archived,
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationTileTrailing extends StatelessWidget {
+  const _ConversationTileTrailing({
+    required this.unreadCount,
+    required this.muted,
+    required this.archived,
+  });
+
+  final int unreadCount;
+  final bool muted;
+  final bool archived;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    if (unreadCount > 0) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (muted) ...[
+            Icon(
+              CupertinoIcons.bell_slash,
+              size: 17,
+              color: colors.tertiaryLabel,
+            ),
+            const SizedBox(width: 8),
+          ],
+          _ConversationUnreadBadge(count: unreadCount, muted: muted),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (muted) ...[
+          Icon(
+            CupertinoIcons.bell_slash,
+            size: 17,
+            color: colors.tertiaryLabel,
+          ),
+          const SizedBox(width: 8),
+        ],
+        if (archived) ...[
+          Icon(
+            CupertinoIcons.archivebox,
+            size: 17,
+            color: colors.tertiaryLabel,
+          ),
+          const SizedBox(width: 8),
+        ],
+        Icon(
+          CupertinoIcons.chevron_right,
+          size: 14,
+          color: colors.tertiaryLabel,
+        ),
+      ],
+    );
+  }
+}
+
+class _ConversationUnreadBadge extends StatelessWidget {
+  const _ConversationUnreadBadge({required this.count, required this.muted});
+
+  final int count;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: muted
+            ? colors.tertiaryFill
+            : CupertinoColors.systemRed.resolveFrom(context),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: TextStyle(
+          color: muted ? colors.secondaryLabel : CupertinoColors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          height: 1,
         ),
       ),
     );

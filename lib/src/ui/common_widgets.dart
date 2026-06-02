@@ -1252,9 +1252,24 @@ class TextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final label = decoration.labelText;
     final helper = decoration.helperText;
     final hint = decoration.hintText ?? decoration.labelText;
+    final inputBorder = decoration.enabledBorder ?? decoration.border;
+    final noBorder = inputBorder == InputBorder.none;
+    final outlineBorder = inputBorder is OutlineInputBorder
+        ? inputBorder
+        : null;
+    final borderSide = outlineBorder?.borderSide;
+    final usesDefaultBorderSide = borderSide == const BorderSide();
+    final showBorder = !noBorder && borderSide != BorderSide.none;
+    final fillColor = decoration.filled == true
+        ? decoration.fillColor ?? colors.cardBackground
+        : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context);
+    final contentPadding =
+        decoration.contentPadding ??
+        EdgeInsets.symmetric(horizontal: 12, vertical: noBorder ? 9 : 12);
     final field = CupertinoTextField(
       controller: controller,
       focusNode: focusNode,
@@ -1277,23 +1292,34 @@ class TextField extends StatelessWidget {
           ? null
           : Padding(
               padding: const EdgeInsets.only(left: 10),
-              child: decoration.prefixIcon,
+              child: IconTheme.merge(
+                data: IconThemeData(color: colors.tertiaryLabel, size: 20),
+                child: decoration.prefixIcon!,
+              ),
             ),
       suffix: decoration.suffixIcon == null
           ? null
           : Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: decoration.suffixIcon,
+              child: IconTheme.merge(
+                data: IconThemeData(color: colors.tertiaryLabel, size: 20),
+                child: decoration.suffixIcon!,
+              ),
             ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: contentPadding,
       decoration: BoxDecoration(
-        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-          context,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: CupertinoColors.separator.resolveFrom(context),
-        ),
+        color: fillColor,
+        borderRadius:
+            outlineBorder?.borderRadius ??
+            BorderRadius.circular(noBorder ? 20 : 12),
+        border: showBorder
+            ? Border.all(
+                color: usesDefaultBorderSide
+                    ? colors.separator.withValues(alpha: 0.55)
+                    : borderSide?.color ?? colors.separator,
+                width: usesDefaultBorderSide ? 0.5 : borderSide?.width ?? 0.5,
+              )
+            : null,
       ),
     );
     if (label == null && helper == null) {
@@ -1837,20 +1863,15 @@ class _ConversationAvatarHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final isGroup = conversation.type == ConversationType.group;
     return _Avatar(
       url: conversation.avatar,
-      fallback: isGroup ? Icons.groups_rounded : Icons.person_rounded,
+      fallback: isGroup
+          ? CupertinoIcons.group_solid
+          : CupertinoIcons.person_fill,
       radius: radius,
       heroTag: enabled ? conversationAvatarHeroTag(conversation) : null,
       name: conversation.name,
-      backgroundColor: isGroup
-          ? colors.secondaryContainer
-          : colors.primaryContainer,
-      foregroundColor: isGroup
-          ? colors.onSecondaryContainer
-          : colors.onPrimaryContainer,
     );
   }
 }

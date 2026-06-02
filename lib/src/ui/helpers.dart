@@ -191,6 +191,8 @@ const double _csacPageHorizontalPadding = 16;
 const double _csacGroupedCornerRadius = 18;
 const double _csacControlCornerRadius = 16;
 const double _csacListMinHeight = 52;
+const Duration _csacPressFeedbackDuration = Duration(milliseconds: 120);
+const Duration _csacListHighlightDuration = Duration(milliseconds: 110);
 
 class _AdaptivePageFrame extends StatelessWidget {
   const _AdaptivePageFrame({required this.child, this.maxWidth = 720});
@@ -243,15 +245,136 @@ class _CsacPressableState extends State<_CsacPressable> {
       onTapUp: (_) => setPressed(false),
       onTapCancel: () => setPressed(false),
       child: AnimatedScale(
-        scale: enabled && pressed ? 0.985 : 1,
-        duration: 150.ms,
+        scale: enabled && pressed ? 0.992 : 1,
+        duration: _csacPressFeedbackDuration,
         curve: Curves.easeOutCubic,
         child: AnimatedOpacity(
-          opacity: enabled && pressed ? 0.72 : 1,
-          duration: 150.ms,
+          opacity: enabled && pressed ? 0.84 : 1,
+          duration: _csacPressFeedbackDuration,
           curve: Curves.easeOutCubic,
           child: widget.child,
         ),
+      ),
+    );
+  }
+}
+
+class _CupertinoListPressable extends StatefulWidget {
+  const _CupertinoListPressable({
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.onSecondaryTap,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onSecondaryTap;
+
+  @override
+  State<_CupertinoListPressable> createState() =>
+      _CupertinoListPressableState();
+}
+
+class _CupertinoListPressableState extends State<_CupertinoListPressable> {
+  bool pressed = false;
+
+  void setPressed(bool value) {
+    if (pressed == value || !enabled) {
+      return;
+    }
+    setState(() => pressed = value);
+  }
+
+  bool get enabled =>
+      widget.onTap != null ||
+      widget.onLongPress != null ||
+      widget.onSecondaryTap != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onLongPressEnd: (_) => setPressed(false),
+      onLongPressCancel: () => setPressed(false),
+      onSecondaryTap: widget.onSecondaryTap,
+      onTapDown: (_) => setPressed(true),
+      onTapUp: (_) => setPressed(false),
+      onTapCancel: () => setPressed(false),
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: enabled && pressed ? 1 : 0,
+                duration: _csacListHighlightDuration,
+                curve: Curves.easeOutCubic,
+                child: ColoredBox(color: colors.fill),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CupertinoSearchField extends StatelessWidget {
+  const _CupertinoSearchField({
+    required this.controller,
+    required this.placeholder,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final ValueChanged<String>? onChanged;
+
+  void clear() {
+    controller.clear();
+    onChanged?.call('');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CupertinoTextField(
+      controller: controller,
+      placeholder: placeholder,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      prefix: Padding(
+        padding: const EdgeInsets.only(left: 10, right: 6),
+        child: Icon(
+          CupertinoIcons.search,
+          size: 18,
+          color: colors.tertiaryLabel,
+        ),
+      ),
+      suffix: controller.text.isEmpty
+          ? null
+          : CupertinoButton(
+              padding: const EdgeInsets.only(left: 4, right: 8),
+              minimumSize: Size.zero,
+              onPressed: clear,
+              child: Icon(
+                CupertinoIcons.xmark_circle_fill,
+                size: 18,
+                color: colors.tertiaryLabel,
+              ),
+            ),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 9),
+      placeholderStyle: TextStyle(color: colors.tertiaryLabel, fontSize: 16),
+      style: TextStyle(color: colors.label, fontSize: 16),
+      cursorColor: colors.primaryColor,
+      decoration: BoxDecoration(
+        color: colors.tertiaryFill,
+        borderRadius: BorderRadius.circular(12),
       ),
     );
   }
@@ -350,14 +473,20 @@ class _CupertinoListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
-    return _CsacPressable(
+    return _CupertinoListPressable(
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: _csacListMinHeight),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 12)],
+            if (leading != null) ...[
+              IconTheme.merge(
+                data: IconThemeData(color: colors.secondaryLabel, size: 22),
+                child: leading!,
+              ),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,7 +575,7 @@ class _CupertinoExpansionTileState extends State<_CupertinoExpansionTile> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _CsacPressable(
+        _CupertinoListPressable(
           onTap: toggleExpanded,
           child: Container(
             constraints: const BoxConstraints(minHeight: _csacListMinHeight),
@@ -454,7 +583,10 @@ class _CupertinoExpansionTileState extends State<_CupertinoExpansionTile> {
             child: Row(
               children: [
                 if (widget.leading != null) ...[
-                  widget.leading!,
+                  IconTheme.merge(
+                    data: IconThemeData(color: colors.secondaryLabel, size: 22),
+                    child: widget.leading!,
+                  ),
                   const SizedBox(width: 12),
                 ],
                 Expanded(
