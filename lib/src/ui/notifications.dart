@@ -68,25 +68,32 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
                     onTap: () => setState(() => _selectedIndex = 0),
                   ),
                   _NoticeTab(
+                    icon: CupertinoIcons.at,
+                    label: strings.text('Mentions'),
+                    badge: counts.mentions + counts.replies,
+                    selected: _selectedIndex == 1,
+                    onTap: () => setState(() => _selectedIndex = 1),
+                  ),
+                  _NoticeTab(
                     icon: CupertinoIcons.person_badge_minus,
                     label: strings.text('Friend changes'),
                     badge: counts.friendChanges,
-                    selected: _selectedIndex == 1,
-                    onTap: () => setState(() => _selectedIndex = 1),
+                    selected: _selectedIndex == 2,
+                    onTap: () => setState(() => _selectedIndex = 2),
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.person_badge_plus,
                     label: strings.text('Friends'),
                     badge: counts.friendRequests,
-                    selected: _selectedIndex == 2,
-                    onTap: () => setState(() => _selectedIndex = 2),
+                    selected: _selectedIndex == 3,
+                    onTap: () => setState(() => _selectedIndex = 3),
                   ),
                   _NoticeTab(
                     icon: CupertinoIcons.group,
                     label: strings.text('Groups'),
                     badge: counts.groupApplications,
-                    selected: _selectedIndex == 3,
-                    onTap: () => setState(() => _selectedIndex = 3),
+                    selected: _selectedIndex == 4,
+                    onTap: () => setState(() => _selectedIndex = 4),
                   ),
                 ],
               ),
@@ -97,6 +104,7 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
                 index: _selectedIndex,
                 children: [
                   NoticesPage(state: widget.state),
+                  MentionNoticesPage(state: widget.state),
                   FriendDeletedNoticesPage(state: widget.state),
                   FriendRequestsPage(state: widget.state),
                   GroupApplicationsPage(state: widget.state),
@@ -194,6 +202,373 @@ class _NoticeBadge extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: CupertinoColors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class MentionNoticesPage extends StatefulWidget {
+  const MentionNoticesPage({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<MentionNoticesPage> createState() => _MentionNoticesPageState();
+}
+
+class _MentionNoticesPageState extends State<MentionNoticesPage> {
+  MentionNoticeBundle bundle = const MentionNoticeBundle(items: []);
+  bool loading = true;
+  bool acting = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final loaded = await widget.state.loadVisibleMentionNotices();
+      if (!mounted) {
+        return;
+      }
+      setState(() => bundle = loaded);
+      widget.state.updateNotificationCounts(
+        mentions: loaded.mentionCount,
+        replies: loaded.replyCount,
+      );
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> markAllRead() async {
+    setState(() => acting = true);
+    try {
+      await widget.state.markMentionSummaryRead();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        bundle = bundle.copyWith(
+          items: [for (final item in bundle.items) item.copyWith(isRead: true)],
+          mentionCount: 0,
+          replyCount: 0,
+        );
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => acting = false);
+      }
+    }
+  }
+
+  Future<void> markOneRead(MentionNotice notice) async {
+    setState(() => acting = true);
+    try {
+      await widget.state.markMentionNoticeRead(notice);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final items = [
+          for (final item in bundle.items)
+            MentionNoticeStore.readKey(item) ==
+                    MentionNoticeStore.readKey(notice)
+                ? item.copyWith(isRead: true)
+                : item,
+        ];
+        final unread = items.where((item) => !item.isRead);
+        bundle = bundle.copyWith(
+          items: items,
+          mentionCount: unread.where((item) => !item.isReply).length,
+          replyCount: unread.where((item) => item.isReply).length,
+        );
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => acting = false);
+      }
+    }
+  }
+
+  Future<void> openMention(MentionNotice notice) async {
+    if (!notice.isRead) {
+      await markOneRead(notice);
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => ChatScreen(
+          state: widget.state,
+          conversation: notice.conversation,
+          focusMessageId: notice.message.id > 0 ? notice.message.id : null,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final unreadCount = bundle.mentionCount + bundle.replyCount;
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: load),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      strings.format('{count} unread mentions or replies', {
+                        'count': unreadCount,
+                      }),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: colors.label,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: acting || unreadCount <= 0 ? null : markAllRead,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CupertinoTheme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.checkmark_seal,
+                            size: 14,
+                            color: CupertinoTheme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            strings.text('Mark all read'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: CupertinoTheme.of(context).primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              if (!loading && bundle.items.isEmpty) ...[
+                if (unreadCount > 0)
+                  _MentionSummaryCard(bundle: bundle)
+                else
+                  _EmptyPanel(message: strings.text('No mentions or replies.')),
+              ] else
+                for (final notice in bundle.items)
+                  _MentionNoticeTile(
+                    notice: notice,
+                    acting: acting,
+                    onTap: () => openMention(notice),
+                    onMarkRead: notice.isRead
+                        ? null
+                        : () => markOneRead(notice),
+                  ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MentionSummaryCard extends StatelessWidget {
+  const _MentionSummaryCard({required this.bundle});
+
+  final MentionNoticeBundle bundle;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.text('Mention list unavailable'),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colors.label,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            [
+              strings.format('@ me: {count}', {'count': bundle.mentionCount}),
+              strings.format('Replies: {count}', {'count': bundle.replyCount}),
+            ].join(' | '),
+            style: TextStyle(color: colors.secondaryLabel),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            strings.text(
+              'The server returned counts only, so there is no message position to open yet.',
+            ),
+            style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MentionNoticeTile extends StatelessWidget {
+  const _MentionNoticeTile({
+    required this.notice,
+    required this.acting,
+    required this.onTap,
+    this.onMarkRead,
+  });
+
+  final MentionNotice notice;
+  final bool acting;
+  final VoidCallback onTap;
+  final VoidCallback? onMarkRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final text = compactMessage(chatMessagePlainText(notice.message, strings));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                notice.isReply ? CupertinoIcons.reply : CupertinoIcons.at,
+                size: 24,
+                color: notice.isRead
+                    ? colors.secondaryLabel
+                    : colors.primaryColor,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.text(notice.displayTitle),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: notice.isRead
+                            ? FontWeight.w500
+                            : FontWeight.w700,
+                        color: colors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        notice.conversation.name,
+                        if (notice.message.sender.isNotEmpty)
+                          notice.message.sender,
+                        if (notice.message.time.isNotEmpty) notice.message.time,
+                      ].join(' | '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.secondaryLabel,
+                      ),
+                    ),
+                    if (text.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        text,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, color: colors.label),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (onMarkRead == null)
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 16,
+                  color: colors.tertiaryLabel,
+                )
+              else
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(28, 28),
+                  onPressed: acting ? null : onMarkRead,
+                  child: const Icon(CupertinoIcons.checkmark_circle, size: 22),
+                ),
+            ],
+          ),
         ),
       ),
     );

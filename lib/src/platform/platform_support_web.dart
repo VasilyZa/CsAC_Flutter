@@ -27,6 +27,8 @@ http.Client createPlatformHttpClient({
   return http.Client();
 }
 
+String? lastPlatformHttpProtocol(http.Client client) => null;
+
 void hidePlatformTextInput() {
   FocusManager.instance.primaryFocus?.unfocus();
 }

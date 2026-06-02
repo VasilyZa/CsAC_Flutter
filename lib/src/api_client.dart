@@ -123,6 +123,8 @@ class CsacApiClient {
 
   String get originUrl => apiOriginFromBaseUrl(_baseUrl);
 
+  String get connectionProtocol => lastPlatformHttpProtocol(_http) ?? '';
+
   Map<String, String> get sessionSnapshot => Map<String, String>.from(_cookies);
 
   void setBaseUrl(String value) {

@@ -42,6 +42,30 @@ http.Client createPlatformHttpClient({
   return http.Client();
 }
 
+String? lastPlatformHttpProtocol(http.Client client) {
+  if (client is AndroidOkHttpClient) {
+    return client.lastProtocol;
+  }
+  if (isDesktopPlatform) {
+    return 'HTTP/1.1';
+  }
+  return null;
+}
+
+String? _normalizeHttpProtocol(String? value) {
+  final text = value?.trim().toLowerCase() ?? '';
+  if (text.isEmpty) {
+    return null;
+  }
+  if (text == 'h2' || text == 'http_2' || text == 'http/2') {
+    return 'HTTP/2';
+  }
+  if (text == 'http/1.1' || text == 'http_1_1') {
+    return 'HTTP/1.1';
+  }
+  return value;
+}
+
 class _AcceptAllCertificatesHttpOverrides extends HttpOverrides {
   _AcceptAllCertificatesHttpOverrides(this.previous);
 
@@ -63,6 +87,9 @@ class AndroidOkHttpClient extends http.BaseClient {
 
   final String userAgent;
   bool _closed = false;
+  String? _lastProtocol;
+
+  String? get lastProtocol => _lastProtocol;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -89,6 +116,7 @@ class AndroidOkHttpClient extends http.BaseClient {
     final responseHeaders = (result['headers'] as Map<Object?, Object?>? ?? {})
         .map((key, value) => MapEntry('$key'.toLowerCase(), '$value'));
     final responseBody = result['body'];
+    _lastProtocol = _normalizeProtocol(result['protocol']?.toString());
     final bytes = responseBody is Uint8List
         ? responseBody
         : utf8.encode(responseBody?.toString() ?? '');
@@ -105,6 +133,10 @@ class AndroidOkHttpClient extends http.BaseClient {
   @override
   void close() {
     _closed = true;
+  }
+
+  String? _normalizeProtocol(String? value) {
+    return _normalizeHttpProtocol(value);
   }
 }
 

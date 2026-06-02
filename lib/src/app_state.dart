@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -53,6 +54,8 @@ class CsacAppState extends ChangeNotifier {
 
   final CsacApiClient client;
   final CsacLocalCache cache;
+
+  String get connectionProtocol => client.connectionProtocol;
 
   CsacUser? user;
   List<Conversation> conversations = const <Conversation>[];
@@ -654,9 +657,16 @@ class CsacAppState extends ChangeNotifier {
   Future<void> refreshNotificationCounts() async {
     try {
       final baseCounts = await client.notificationCounts();
+      var noticeCount = baseCounts.notices;
       var mentionCount = 0;
       var replyCount = baseCounts.replies;
       var friendChangeCount = baseCounts.friendChanges;
+      if (noticeCount > 0) {
+        try {
+          final notices = await client.notices();
+          noticeCount = notices.where((notice) => !notice.isRead).length;
+        } catch (_) {}
+      }
       try {
         final visibleMentions = await loadVisibleMentionNotices();
         mentionCount = visibleMentions.mentionCount;
@@ -672,7 +682,7 @@ class CsacAppState extends ChangeNotifier {
         } catch (_) {}
       }
       notificationCounts = NotificationCounts(
-        notices: baseCounts.notices,
+        notices: noticeCount,
         mentions: mentionCount,
         replies: replyCount,
         friendChanges: friendChangeCount,
@@ -741,11 +751,15 @@ class CsacAppState extends ChangeNotifier {
               replyCount: summaryRead ? 0 : bundle.replyCount,
             );
     }
-    return MentionNoticeBundle(
-      items: visible,
-      mentionCount: bundle.mentionCount,
-      replyCount: bundle.replyCount,
-    );
+    if (visible.isNotEmpty) {
+      final unread = visible.where((notice) => !notice.isRead);
+      return MentionNoticeBundle(
+        items: visible,
+        mentionCount: unread.where((notice) => !notice.isReply).length,
+        replyCount: unread.where((notice) => notice.isReply).length,
+      );
+    }
+    return MentionNoticeBundle(items: visible, mentionCount: 0, replyCount: 0);
   }
 
   Future<void> markMentionNoticeRead(MentionNotice notice) async {
@@ -758,12 +772,14 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> markMentionSummaryRead() async {
-    await MentionNoticeStore.markSummaryRead();
-    final visible = await loadVisibleMentionNotices();
-    updateNotificationCounts(
-      mentions: visible.mentionCount,
-      replies: visible.replyCount,
-    );
+    final bundle = await client.mentionNotices();
+    final clearedKeys = await MentionNoticeStore.loadClearedKeys();
+    final visible = <MentionNotice>[
+      for (final item in bundle.items)
+        if (!clearedKeys.contains(MentionNoticeStore.clearedKey(item))) item,
+    ];
+    await MentionNoticeStore.markAllRead(visible);
+    updateNotificationCounts(mentions: 0, replies: 0);
   }
 
   Future<void> clearMentionNotice(MentionNotice notice) async {
@@ -790,6 +806,13 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> markNoticeRead({int? noticeId, bool readAll = false}) async {
     await client.markNoticeRead(noticeId: noticeId, readAll: readAll);
+    if (readAll) {
+      updateNotificationCounts(notices: 0);
+    } else if (noticeId != null) {
+      updateNotificationCounts(
+        notices: math.max(0, notificationCounts.notices - 1),
+      );
+    }
     await refreshNotificationCounts();
   }
 

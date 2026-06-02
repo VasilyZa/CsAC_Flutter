@@ -321,18 +321,27 @@ jobs:
             "keyPassword=$ANDROID_KEY_PASSWORD" \
             > android/key.properties
 
-      - name: Build Android APK
+      - name: Build Android APKs
         env:
           ORG_GRADLE_PROJECT_csacDisableAliyunMaven: "true"
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 
-      - name: Upload Android APK
+      - name: Upload Android armeabi-v7a APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-android-release-apk
+          name: ${{ env.APP_NAME }}-android-armeabi-v7a-release-apk
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-release.apk.sha1
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk.sha1
+          if-no-files-found: error
+
+      - name: Upload Android arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-android-arm64-v8a-release-apk
+          path: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk.sha1
           if-no-files-found: error
 
   ios:

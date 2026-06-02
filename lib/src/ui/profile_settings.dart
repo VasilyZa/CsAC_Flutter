@@ -142,27 +142,35 @@ class ProfileScreen extends StatelessWidget {
                   _CupertinoListTile(
                     title: strings.text('Unread notices'),
                     leading: const Icon(CupertinoIcons.bell),
-                    trailing: Badge(label: Text('${counts.notices}')),
+                    trailing: _ProfileNotificationBadge(count: counts.notices),
                   ),
                   _CupertinoListTile(
                     title: strings.text('Mentions and replies'),
                     leading: const Icon(CupertinoIcons.at),
-                    trailing: Badge(label: Text('${counts.mentions}')),
+                    trailing: _ProfileNotificationBadge(
+                      count: counts.mentions + counts.replies,
+                    ),
                   ),
                   _CupertinoListTile(
                     title: strings.text('Friend changes'),
                     leading: const Icon(CupertinoIcons.person_2),
-                    trailing: Badge(label: Text('${counts.friendChanges}')),
+                    trailing: _ProfileNotificationBadge(
+                      count: counts.friendChanges,
+                    ),
                   ),
                   _CupertinoListTile(
                     title: strings.text('Friend requests'),
                     leading: const Icon(CupertinoIcons.person_add),
-                    trailing: Badge(label: Text('${counts.friendRequests}')),
+                    trailing: _ProfileNotificationBadge(
+                      count: counts.friendRequests,
+                    ),
                   ),
                   _CupertinoListTile(
                     title: strings.text('Group reviews'),
                     leading: const Icon(CupertinoIcons.group),
-                    trailing: Badge(label: Text('${counts.groupApplications}')),
+                    trailing: _ProfileNotificationBadge(
+                      count: counts.groupApplications,
+                    ),
                   ),
                 ],
               ),
@@ -197,6 +205,20 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ProfileNotificationBadge extends StatelessWidget {
+  const _ProfileNotificationBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) {
+      return const SizedBox.shrink();
+    }
+    return Badge(label: Text('$count'));
   }
 }
 
@@ -5038,6 +5060,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final title = category == null
         ? strings.text('Settings')
         : settingsCategoryTitle(category);
+    final connectionProtocol = widget.state.connectionProtocol.trim();
+    final connectionProtocolLabel = connectionProtocol.isEmpty
+        ? strings.text('Unknown')
+        : connectionProtocol;
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       backgroundColor: colors.systemBackground,
@@ -5695,6 +5721,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       )
                                     : const Icon(Icons.chevron_right),
                                 onTap: refreshing ? null : refreshAll,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.network_check_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('Connection protocol'),
+                                ),
+                                subtitle: Text(
+                                  strings.text('Current HTTP protocol'),
+                                ),
+                                trailing: Text(connectionProtocolLabel),
                               ),
                               const Divider(height: 1),
                               SwitchListTile(

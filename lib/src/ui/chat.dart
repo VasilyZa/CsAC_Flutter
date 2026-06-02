@@ -112,6 +112,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   int initialUnreadCount = 0;
   int nextPendingId = -1;
   int refreshTicks = 0;
+  int fastRefreshCycles = 0;
   bool loading = true;
   bool refreshing = false;
   bool pickingImage = false;
@@ -129,6 +130,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool loadingMemberAvatars = false;
   bool keyboardShouldKeepBottom = false;
   bool composeMenuOpen = false;
+  bool chatLifecyclePaused = false;
   double keyboardInsetBottom = 0;
   int? pressedMessageId;
   String? error;
@@ -184,10 +186,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     loadGroupAnnouncement();
     loadInitial();
     unawaited(loadChatHint());
-    timer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => refresh(silent: true),
-    );
+    boostChatRefresh(cycles: 8);
+    scheduleNextRefresh();
   }
 
   @override
@@ -233,6 +233,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       scrollToEndAfterKeyboardResize();
     }
     keyboardInsetBottom = nextInset;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final paused =
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.inactive;
+    if (paused == chatLifecyclePaused) {
+      return;
+    }
+    chatLifecyclePaused = paused;
+    if (paused) {
+      timer?.cancel();
+      timer = null;
+    } else {
+      boostChatRefresh(cycles: 4);
+      scheduleNextRefresh(immediate: true);
+    }
   }
 
   void handleAppStateChanged() {
@@ -315,10 +334,44 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final next = distance < 96;
     if (next != nearBottom && mounted) {
       setState(() => nearBottom = next);
+      if (next) {
+        boostChatRefresh(cycles: 4);
+        scheduleNextRefresh(immediate: true);
+      }
     }
     if (olderPaginationReady && scroll.offset < 96) {
       unawaited(loadOlderMessages());
     }
+  }
+
+  void boostChatRefresh({int cycles = 6}) {
+    fastRefreshCycles = math.max(fastRefreshCycles, cycles);
+  }
+
+  Duration nextRefreshDelay() {
+    if (chatLifecyclePaused) {
+      return const Duration(seconds: 12);
+    }
+    if (fastRefreshCycles > 0 || pendingSends.isNotEmpty) {
+      return const Duration(seconds: 1);
+    }
+    if (!nearBottom || offline || loadingOlder) {
+      return const Duration(seconds: 6);
+    }
+    return const Duration(seconds: 3);
+  }
+
+  void scheduleNextRefresh({bool immediate = false}) {
+    timer?.cancel();
+    if (!mounted || chatLifecyclePaused) {
+      return;
+    }
+    timer = Timer(immediate ? Duration.zero : nextRefreshDelay(), () async {
+      await refresh(silent: true);
+      if (mounted) {
+        scheduleNextRefresh();
+      }
+    });
   }
 
   Future<void> loadDraft() async {
@@ -550,6 +603,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         offline = false;
         hasMoreOlderMessages = messages.length >= 80;
       });
+      if (loaded.isNotEmpty) {
+        boostChatRefresh(cycles: 6);
+      }
       await markCurrentConversationRead();
       scrollAfterLoad();
       unawaited(loadMemberAvatars());
@@ -656,6 +712,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ..addAll(merged);
           offline = false;
         });
+        if (loaded.isNotEmpty) {
+          boostChatRefresh(cycles: 6);
+        }
         await markCurrentConversationRead();
         return;
       }
@@ -696,6 +755,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ..addAll(merged);
         offline = false;
       });
+      boostChatRefresh(cycles: 6);
       await markCurrentConversationRead();
       if (widget.focusMessageId == null) {
         scrollToEnd();
@@ -711,6 +771,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() => offline = messages.isNotEmpty);
       }
     } finally {
+      if (fastRefreshCycles > 0) {
+        fastRefreshCycles -= 1;
+      }
       refreshing = false;
     }
   }
@@ -818,6 +881,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
     await clearDraft();
     scrollToEnd();
+    boostChatRefresh(cycles: 10);
+    scheduleNextRefresh(immediate: true);
     unawaited(performPendingSend(pending.localId));
   }
 
@@ -833,6 +898,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       error = null;
     });
     scrollToEnd();
+    boostChatRefresh(cycles: 10);
+    scheduleNextRefresh(immediate: true);
     unawaited(performPendingSend(pending.localId));
   }
 
@@ -912,6 +979,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
       unawaited(saveDraftNow());
       scrollToEnd();
+      boostChatRefresh(cycles: 10);
+      scheduleNextRefresh(immediate: true);
       unawaited(performPendingSend(pending.localId));
     } catch (err) {
       if (mounted) {
@@ -1022,6 +1091,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     await EmojiRecentStore.record(sticker);
     await clearDraft();
     scrollToEnd();
+    boostChatRefresh(cycles: 10);
+    scheduleNextRefresh(immediate: true);
     unawaited(performPendingSend(pending.localId));
   }
 
@@ -1074,6 +1145,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
       unawaited(saveDraftNow());
       scrollToEnd();
+      boostChatRefresh(cycles: 10);
+      scheduleNextRefresh(immediate: true);
       unawaited(performPendingSend(pending.localId));
     } finally {
       if (mounted) {
@@ -1132,6 +1205,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
       unawaited(saveDraftNow());
       scrollToEnd();
+      boostChatRefresh(cycles: 10);
+      scheduleNextRefresh(immediate: true);
       unawaited(performPendingSend(pending.localId));
     } catch (err) {
       if (mounted) {
@@ -1230,6 +1305,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         localId,
         (item) => item.copyWith(status: _PendingSendStatus.sent, error: ''),
       );
+      boostChatRefresh(cycles: 10);
+      unawaited(refresh(silent: true));
       await Future<void>.delayed(260.ms);
       if (!mounted) {
         return;
@@ -1238,7 +1315,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         () => pendingSends.removeWhere((item) => item.localId == localId),
       );
       await widget.state.markConversationRead(widget.conversation);
-      await refresh(silent: true);
       scrollToEnd();
     } catch (err) {
       replacePendingSend(

@@ -18,11 +18,18 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    widget.state.addListener(handleStateChanged);
     lastUnreadChats = totalUnreadChats();
     timer = Timer.periodic(
       const Duration(seconds: 12),
       (_) => refreshHomeWithHint(),
     );
+  }
+
+  void handleStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   int totalUnreadChats() {
@@ -105,6 +112,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    widget.state.removeListener(handleStateChanged);
     timer?.cancel();
     super.dispose();
   }

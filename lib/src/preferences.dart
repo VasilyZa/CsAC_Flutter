@@ -978,6 +978,14 @@ class MentionNoticeStore {
     await prefs.setBool(_summaryReadKey, true);
   }
 
+  static Future<void> markAllRead(Iterable<MentionNotice> notices) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_summaryReadKey, true);
+    for (final notice in notices) {
+      await prefs.setBool(readKey(notice), true);
+    }
+  }
+
   static Future<void> clear(MentionNotice notice) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(readKey(notice), true);
