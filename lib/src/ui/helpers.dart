@@ -15,6 +15,26 @@ double chatBubbleMaxWidth(BuildContext context, {bool showAvatar = false}) {
   return math.min(360.0, math.max(176.0, available * 0.72));
 }
 
+Color cupertinoChatBubbleDefaultColor(
+  BuildContext context, {
+  required bool mine,
+}) {
+  final colors = CsacColors.of(context);
+  return mine
+      ? CupertinoTheme.of(context).primaryColor
+      : colors.tertiaryBackground;
+}
+
+Color cupertinoChatBubbleTextColor(BuildContext context, Color bubbleColor) {
+  final solidColor = Color.alphaBlend(
+    bubbleColor,
+    CsacColors.of(context).systemBackground,
+  );
+  return ThemeData.estimateBrightnessForColor(solidColor) == Brightness.dark
+      ? CupertinoColors.white
+      : CupertinoColors.black;
+}
+
 String chatMessagePlainText(ChatMessage message, CsacStrings strings) {
   if (message.isRecalled) {
     return strings.text('[recalled]');
@@ -35,6 +55,89 @@ String chatMessagePlainText(ChatMessage message, CsacStrings strings) {
     return strings.text('[file]');
   }
   return message.body;
+}
+
+String notificationTextForMessage(ChatMessage message, CsacStrings strings) {
+  final text = chatMessagePlainText(message, strings).trim();
+  if (text.isEmpty) {
+    return strings.text('New message');
+  }
+  return compactMessage(text, max: 120);
+}
+
+String notificationTitleForConversation(
+  Conversation conversation,
+  ChatMessage? message,
+) {
+  if (conversation.type == ConversationType.group) {
+    return conversation.name.trim().isEmpty ? 'CsAC' : conversation.name;
+  }
+  final sender = message?.sender.trim() ?? '';
+  if (sender.isNotEmpty && !sender.startsWith('UID 0')) {
+    return sender;
+  }
+  return conversation.name.trim().isEmpty ? 'CsAC' : conversation.name;
+}
+
+String notificationBodyForConversation(
+  Conversation conversation,
+  int newCount,
+  ChatMessage? message,
+  CsacStrings strings,
+) {
+  if (message != null) {
+    final text = notificationTextForMessage(message, strings);
+    if (conversation.type == ConversationType.group) {
+      final sender = message.sender.trim();
+      return sender.isEmpty || sender.startsWith('UID 0')
+          ? text
+          : '$sender: $text';
+    }
+    return text;
+  }
+  final subtitle = conversation.lastMessagePreview.trim().isNotEmpty
+      ? conversation.lastMessagePreview.trim()
+      : conversation.subtitle.trim();
+  if (subtitle.isNotEmpty) {
+    return compactMessage(subtitle, max: 120);
+  }
+  return strings.format('New messages: {count}', {'count': newCount});
+}
+
+ChatMessage? latestIncomingNotificationMessage(
+  Conversation conversation,
+  List<ChatMessage> messages, {
+  required int currentUserId,
+}) {
+  final incoming = messages.where((message) {
+    if (message.id <= 0) {
+      return false;
+    }
+    if (currentUserId > 0 && message.senderId == currentUserId) {
+      return false;
+    }
+    return conversation.type == ConversationType.group ||
+        message.senderId == conversation.id ||
+        message.senderId != 0;
+  }).toList();
+  if (incoming.isEmpty) {
+    return null;
+  }
+  incoming.sort((a, b) => a.id.compareTo(b.id));
+  return incoming.last;
+}
+
+int latestIncomingNotificationMessageId(
+  Conversation conversation,
+  List<ChatMessage> messages, {
+  required int currentUserId,
+}) {
+  return latestIncomingNotificationMessage(
+        conversation,
+        messages,
+        currentUserId: currentUserId,
+      )?.id ??
+      0;
 }
 
 CsacTimestampPattern timestampPatternForPreference(MessageTimeFormat format) {
@@ -393,7 +496,6 @@ class _CupertinoGroupedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = CsacColors.of(context);
     return Padding(
       padding:
           margin ??
@@ -401,55 +503,13 @@ class _CupertinoGroupedCard extends StatelessWidget {
             horizontal: _csacPageHorizontalPadding,
             vertical: 7,
           ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (header != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 6),
-              child: Text(
-                header!.toUpperCase(),
-                style: TextStyle(
-                  color: colors.secondaryLabel,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.35,
-                ),
-              ),
-            ),
-          Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: colors.cardBackground,
-              borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
-              border: Border.all(
-                color: colors.separator.withValues(alpha: 0.3),
-                width: 0.5,
-              ),
-            ),
-            child: Column(children: _separated(children, colors.separator)),
-          ),
-        ],
+      child: CupertinoListSection.insetGrouped(
+        margin: EdgeInsets.zero,
+        header: header == null ? null : Text(header!.toUpperCase()),
+        backgroundColor: Colors.transparent,
+        children: children,
       ),
     );
-  }
-
-  static List<Widget> _separated(List<Widget> children, Color color) {
-    final result = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      result.add(children[i]);
-      if (i != children.length - 1) {
-        result.add(
-          Container(
-            height: 0.5,
-            margin: const EdgeInsets.only(left: 60),
-            color: color.withValues(alpha: 0.55),
-          ),
-        );
-      }
-    }
-    return result;
   }
 }
 
@@ -473,66 +533,38 @@ class _CupertinoListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
-    return _CupertinoListPressable(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: _csacListMinHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            if (leading != null) ...[
-              IconTheme.merge(
-                data: IconThemeData(color: colors.secondaryLabel, size: 22),
-                child: leading!,
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: titleColor ?? colors.label,
-                      fontSize: 16,
-                      height: 1.18,
-                    ),
-                  ),
-                  if (subtitle?.isNotEmpty == true)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.secondaryLabel,
-                          fontSize: 13,
-                          height: 1.22,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+    return CupertinoListTile(
+      leading: leading == null
+          ? null
+          : IconTheme.merge(
+              data: IconThemeData(color: colors.secondaryLabel, size: 22),
+              child: leading!,
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              trailing!,
-            ] else if (onTap != null) ...[
-              const SizedBox(width: 8),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 14,
-                color: colors.tertiaryLabel,
-              ),
-            ],
-          ],
-        ),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: titleColor ?? colors.label),
       ),
+      subtitle: subtitle?.isNotEmpty == true
+          ? Text(
+              subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.secondaryLabel),
+            )
+          : null,
+      trailing:
+          trailing ??
+          (onTap == null
+              ? null
+              : Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 14,
+                  color: colors.tertiaryLabel,
+                )),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      onTap: onTap,
     );
   }
 }

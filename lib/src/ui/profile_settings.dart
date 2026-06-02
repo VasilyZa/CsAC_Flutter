@@ -940,6 +940,7 @@ class _FollowThemeColorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final primary = CupertinoTheme.of(context).primaryColor;
     return Tooltip(
       message: context.strings.text('Follow theme'),
       child: _CsacPressable(
@@ -954,7 +955,7 @@ class _FollowThemeColorButton extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [colors.primaryContainer, colors.surfaceContainerHigh],
+                colors: [primary, colors.surfaceContainerHigh],
               ),
               border: Border.all(
                 color: selected ? colors.primary : colors.outlineVariant,
@@ -962,7 +963,15 @@ class _FollowThemeColorButton extends StatelessWidget {
               ),
             ),
             child: selected
-                ? Icon(Icons.check, size: 16, color: colors.onPrimaryContainer)
+                ? Icon(
+                    Icons.check,
+                    size: 16,
+                    color:
+                        ThemeData.estimateBrightnessForColor(primary) ==
+                            Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  )
                 : null,
           ),
         ),
@@ -1057,11 +1066,7 @@ class _PreviewBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final fallback = mine
-        ? colors.primaryContainer
-        : colors.surfaceContainerHighest;
+    final fallback = cupertinoChatBubbleDefaultColor(context, mine: mine);
     final colorValue = mine
         ? preferences.ownChatBubbleColorValue
         : preferences.otherChatBubbleColorValue;
@@ -1070,14 +1075,7 @@ class _PreviewBubble extends StatelessWidget {
                 ? fallback
                 : Color(colorValue))
             .withValues(alpha: preferences.chatBubbleOpacity);
-    final solidTextSource = Color.alphaBlend(
-      color,
-      theme.scaffoldBackgroundColor,
-    );
-    final textColor =
-        ThemeData.estimateBrightnessForColor(solidTextSource) == Brightness.dark
-        ? Colors.white
-        : Colors.black87;
+    final textColor = cupertinoChatBubbleTextColor(context, color);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color,
@@ -1085,7 +1083,12 @@ class _PreviewBubble extends StatelessWidget {
           preferences.chatBubbleCornerStyle,
           mine,
         ),
-        border: Border.all(color: textColor.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: mine
+              ? Colors.transparent
+              : CsacColors.of(context).separator.withValues(alpha: 0.18),
+          width: mine ? 0 : 0.5,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -3814,6 +3817,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  String get conversationSubtitleModeLabel {
+    final strings = context.strings;
+    switch (widget.state.preferences.conversationSubtitleMode) {
+      case ConversationSubtitleMode.recentMessage:
+        return strings.text('Recent message');
+      case ConversationSubtitleMode.status:
+        return strings.text('Members and online status');
+    }
+  }
+
+  String get groupMemberBadgeModeLabel {
+    final strings = context.strings;
+    switch (widget.state.preferences.groupMemberBadgeMode) {
+      case GroupMemberBadgeMode.title:
+        return strings.text('Member title');
+      case GroupMemberBadgeMode.role:
+        return strings.text('Member role');
+    }
+  }
+
   String get messageTimeFormatLabel {
     return messageTimeFormatLabelFor(
       context,
@@ -4293,43 +4316,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await enableAppLock();
       return;
     }
-    final action = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final biometricEnabled = widget.state.preferences.appLockBiometricEnabled;
+    final action = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (supportsLocalAuth) ...[
-                SwitchListTile(
-                  secondary: const Icon(Icons.fingerprint),
-                  title: Text(context.strings.text('Biometric unlock')),
-                  subtitle: Text(
-                    context.strings.text(
-                      'Use device biometrics when available',
-                    ),
-                  ),
-                  value: widget.state.preferences.appLockBiometricEnabled,
-                  onChanged: (value) => Navigator.of(
-                    context,
-                  ).pop(value ? 'biometricOn' : 'biometricOff'),
-                ),
-                const Divider(height: 1),
-              ],
-              ListTile(
-                leading: const Icon(Icons.pin_outlined),
-                title: Text(context.strings.text('Change PIN')),
-                onTap: () => Navigator.of(context).pop('changePin'),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.lock_open_outlined),
-                title: Text(context.strings.text('Disable app lock')),
-                onTap: () => Navigator.of(context).pop('disable'),
-              ),
-            ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('App lock')),
+        message: Text(strings.text('Use a PIN to protect this app.')),
+        actions: [
+          if (supportsLocalAuth)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(biometricEnabled ? 'biometricOff' : 'biometricOn'),
+              child: Text(strings.text('Biometric unlock')),
+            ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('changePin'),
+            child: Text(strings.text('Change PIN')),
           ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop('disable'),
+            child: Text(strings.text('Disable app lock')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -4405,39 +4419,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseTheme() async {
-    final selected = await showModalBottomSheet<ThemeMode>(
+    final selected = await showCupertinoOptionSheet<ThemeMode>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.system
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('System')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.system),
-              ),
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.light
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Light')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.light),
-              ),
-              ListTile(
-                leading: widget.state.preferences.themeMode == ThemeMode.dark
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Dark')),
-                onTap: () => Navigator.of(context).pop(ThemeMode.dark),
-              ),
-            ],
-          ),
+      selected: widget.state.preferences.themeMode,
+      title: context.strings.text('Theme'),
+      options: [
+        CupertinoOption(
+          value: ThemeMode.system,
+          title: context.strings.text('System'),
         ),
-      ),
+        CupertinoOption(
+          value: ThemeMode.light,
+          title: context.strings.text('Light'),
+        ),
+        CupertinoOption(
+          value: ThemeMode.dark,
+          title: context.strings.text('Dark'),
+        ),
+      ],
     );
     if (selected != null) {
       await widget.state.updateThemeMode(selected);
@@ -4500,32 +4499,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseLanguage() async {
-    final selected = await showModalBottomSheet<CsacLanguage>(
+    final selected = await showCupertinoOptionSheet<CsacLanguage>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: widget.state.preferences.language == CsacLanguage.en
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: const Text('English'),
-                onTap: () => Navigator.of(context).pop(CsacLanguage.en),
-              ),
-              ListTile(
-                leading: widget.state.preferences.language == CsacLanguage.zh
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: const Text('中文'),
-                onTap: () => Navigator.of(context).pop(CsacLanguage.zh),
-              ),
-            ],
-          ),
-        ),
-      ),
+      selected: widget.state.preferences.language,
+      title: context.strings.text('Language'),
+      options: const [
+        CupertinoOption(value: CsacLanguage.en, title: 'English'),
+        CupertinoOption(value: CsacLanguage.zh, title: '中文'),
+      ],
     );
     if (selected != null) {
       await widget.state.updateLanguage(selected);
@@ -4536,39 +4517,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseFontStyle() async {
-    final selected = await showModalBottomSheet<CsacFontStyle>(
+    final selected = await showCupertinoOptionSheet<CsacFontStyle>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final style in CsacFontStyle.values)
-                ListTile(
-                  leading: widget.state.preferences.fontStyle == style
-                      ? const Icon(Icons.check)
-                      : const SizedBox(width: 24),
-                  title: Text(
-                    fontStyleLabelFor(context, style),
-                    style: TextStyle(
-                      fontFamily: fontFamilyForStyle(style),
-                      fontFamilyFallback: fontFamilyFallbackForStyle(style),
-                    ),
-                  ),
-                  subtitle: Text(
-                    fontStyleDescriptionFor(context, style),
-                    style: TextStyle(
-                      fontFamily: fontFamilyForStyle(style),
-                      fontFamilyFallback: fontFamilyFallbackForStyle(style),
-                    ),
-                  ),
-                  onTap: () => Navigator.of(context).pop(style),
-                ),
-            ],
+      selected: widget.state.preferences.fontStyle,
+      title: context.strings.text('Font style'),
+      options: [
+        for (final style in CsacFontStyle.values)
+          CupertinoOption(
+            value: style,
+            title: fontStyleLabelFor(context, style),
+            subtitle: fontStyleDescriptionFor(context, style),
           ),
-        ),
-      ),
+      ],
     );
     if (selected != null) {
       await widget.state.updateFontStyle(selected);
@@ -4579,44 +4539,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseConversationSortMode() async {
-    final selected = await showModalBottomSheet<ConversationSortMode>(
+    final selected = await showCupertinoOptionSheet<ConversationSortMode>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading:
-                    widget.state.preferences.conversationSortMode ==
-                        ConversationSortMode.latest
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Latest message')),
-                subtitle: Text(
-                  context.strings.text('Show chats with recent activity first'),
-                ),
-                onTap: () =>
-                    Navigator.of(context).pop(ConversationSortMode.latest),
-              ),
-              ListTile(
-                leading:
-                    widget.state.preferences.conversationSortMode ==
-                        ConversationSortMode.type
-                    ? const Icon(Icons.check)
-                    : const SizedBox(width: 24),
-                title: Text(context.strings.text('Conversation type')),
-                subtitle: Text(
-                  context.strings.text('Group friends and groups separately'),
-                ),
-                onTap: () =>
-                    Navigator.of(context).pop(ConversationSortMode.type),
-              ),
-            ],
+      selected: widget.state.preferences.conversationSortMode,
+      title: context.strings.text('Conversation sort'),
+      options: [
+        CupertinoOption(
+          value: ConversationSortMode.latest,
+          title: context.strings.text('Latest message'),
+          subtitle: context.strings.text(
+            'Show chats with recent activity first',
           ),
         ),
-      ),
+        CupertinoOption(
+          value: ConversationSortMode.type,
+          title: context.strings.text('Conversation type'),
+          subtitle: context.strings.text('Group friends and groups separately'),
+        ),
+      ],
     );
     if (selected != null) {
       await widget.state.updateConversationSortMode(selected);
@@ -4626,28 +4566,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> chooseMessageTimeFormat() async {
-    final selected = await showModalBottomSheet<MessageTimeFormat>(
+  Future<void> chooseConversationSubtitleMode() async {
+    final selected = await showCupertinoOptionSheet<ConversationSubtitleMode>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final format in MessageTimeFormat.values)
-                ListTile(
-                  leading: widget.state.preferences.messageTimeFormat == format
-                      ? const Icon(Icons.check)
-                      : const SizedBox(width: 24),
-                  title: Text(messageTimeFormatLabelFor(context, format)),
-                  subtitle: Text(messageTimeFormatExampleFor(format)),
-                  onTap: () => Navigator.of(context).pop(format),
-                ),
-            ],
+      selected: widget.state.preferences.conversationSubtitleMode,
+      title: context.strings.text('Conversation subtitle'),
+      options: [
+        CupertinoOption(
+          value: ConversationSubtitleMode.recentMessage,
+          title: context.strings.text('Recent message'),
+          subtitle: context.strings.text(
+            'Show the latest message in each chat row',
           ),
         ),
-      ),
+        CupertinoOption(
+          value: ConversationSubtitleMode.status,
+          title: context.strings.text('Members and online status'),
+          subtitle: context.strings.text(
+            'Show group member count and online status',
+          ),
+        ),
+      ],
+    );
+    if (selected != null) {
+      await widget.state.updateConversationSubtitleMode(selected);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> chooseGroupMemberBadgeMode() async {
+    final selected = await showCupertinoOptionSheet<GroupMemberBadgeMode>(
+      context: context,
+      selected: widget.state.preferences.groupMemberBadgeMode,
+      title: context.strings.text('Group badge content'),
+      options: [
+        CupertinoOption(
+          value: GroupMemberBadgeMode.title,
+          title: context.strings.text('Member title'),
+          subtitle: context.strings.text('Display group titles set by admins'),
+        ),
+        CupertinoOption(
+          value: GroupMemberBadgeMode.role,
+          title: context.strings.text('Member role'),
+          subtitle: context.strings.text('Display owner/admin/member role'),
+        ),
+      ],
+    );
+    if (selected != null) {
+      await widget.state.updateGroupMemberBadgeMode(selected);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> chooseMessageTimeFormat() async {
+    final selected = await showCupertinoOptionSheet<MessageTimeFormat>(
+      context: context,
+      selected: widget.state.preferences.messageTimeFormat,
+      title: context.strings.text('Message time format'),
+      options: [
+        for (final format in MessageTimeFormat.values)
+          CupertinoOption(
+            value: format,
+            title: messageTimeFormatLabelFor(context, format),
+            subtitle: messageTimeFormatExampleFor(format),
+          ),
+      ],
     );
     if (selected != null) {
       await widget.state.updateMessageTimeFormat(selected);
@@ -4658,27 +4645,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> chooseChatBubbleCornerStyle() async {
-    final selected = await showModalBottomSheet<ChatBubbleCornerStyle>(
+    final selected = await showCupertinoOptionSheet<ChatBubbleCornerStyle>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final style in ChatBubbleCornerStyle.values)
-                ListTile(
-                  leading:
-                      widget.state.preferences.chatBubbleCornerStyle == style
-                      ? const Icon(Icons.check)
-                      : const SizedBox(width: 24),
-                  title: Text(chatBubbleCornerStyleLabelFor(context, style)),
-                  onTap: () => Navigator.of(context).pop(style),
-                ),
-            ],
+      selected: widget.state.preferences.chatBubbleCornerStyle,
+      title: context.strings.text('Bubble corners'),
+      options: [
+        for (final style in ChatBubbleCornerStyle.values)
+          CupertinoOption(
+            value: style,
+            title: chatBubbleCornerStyleLabelFor(context, style),
           ),
-        ),
-      ),
+      ],
     );
     if (selected != null) {
       await widget.state.updateChatBubbleCornerStyle(selected);
@@ -4772,27 +4749,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       return;
     }
-    final action = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.image_outlined),
-                title: Text(context.strings.text('Choose background image')),
-                onTap: () => Navigator.of(context).pop('choose'),
-              ),
-              if (widget.state.preferences.chatBackgroundPath.trim().isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.delete_outline),
-                  title: Text(context.strings.text('Reset background')),
-                  onTap: () => Navigator.of(context).pop('reset'),
-                ),
-            ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('Chat background')),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('choose'),
+            child: Text(strings.text('Choose background image')),
           ),
+          if (widget.state.preferences.chatBackgroundPath.trim().isNotEmpty)
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(context).pop('reset'),
+              child: Text(strings.text('Reset background')),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -5116,6 +5092,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Font',
                 'Typography',
                 'Conversation sorting',
+                'Conversation subtitle',
+                'Recent message',
+                'Members and online status',
                 'Message time format',
                 'Chat bubble theme',
                 'Own bubble color',
@@ -5129,6 +5108,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Double tap avatar pat',
                 'Pat',
                 'Group member level',
+                'Group badge content',
+                'Member title',
+                'Member role',
                 'Level',
                 'Reduce motion',
                 'Animation',
@@ -5243,33 +5225,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showAccount) ...[
                         settingsCard(
                           child: ListTile(
-                              leading: _Avatar(
-                                url: user?.avatar ?? '',
-                                fallback: Icons.person_rounded,
-                                name: user?.nickname ?? '',
-                              ),
-                              title: Text(
-                                user?.nickname ?? strings.text('Not logged in'),
-                              ),
-                              subtitle: Text(
-                                [
-                                  if (user?.username.isNotEmpty == true)
-                                    '@${user!.username}',
-                                  if (user != null) 'UID ${user.uid}',
-                                ].join(' | '),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: user == null
-                                  ? null
-                                  : () {
-                                      Navigator.of(context).push(
-                                        CsacPageRoute<void>(
-                                          builder: (_) => AccountSettingsScreen(
-                                            state: widget.state,
-                                          ),
+                            leading: _Avatar(
+                              url: user?.avatar ?? '',
+                              fallback: Icons.person_rounded,
+                              name: user?.nickname ?? '',
+                            ),
+                            title: Text(
+                              user?.nickname ?? strings.text('Not logged in'),
+                            ),
+                            subtitle: Text(
+                              [
+                                if (user?.username.isNotEmpty == true)
+                                  '@${user!.username}',
+                                if (user != null) 'UID ${user.uid}',
+                              ].join(' | '),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: user == null
+                                ? null
+                                : () {
+                                    Navigator.of(context).push(
+                                      CsacPageRoute<void>(
+                                        builder: (_) => AccountSettingsScreen(
+                                          state: widget.state,
                                         ),
-                                      );
-                                    },
+                                      ),
+                                    );
+                                  },
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -5277,91 +5259,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showInfo) ...[
                         settingsCard(
                           child: Column(
-                              children: [
-                                ListTile(
-                                  leading: const _AppIconImage(
-                                    size: 28,
-                                    borderRadius: 7,
-                                  ),
-                                  title: Text(strings.text('App information')),
-                                  subtitle: const _AppInfoSubtitle(),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CsacPageRoute<void>(
-                                        builder: (_) =>
-                                            AppInfoScreen(state: widget.state),
-                                      ),
-                                    );
-                                  },
+                            children: [
+                              ListTile(
+                                leading: const _AppIconImage(
+                                  size: 28,
+                                  borderRadius: 7,
                                 ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.event_repeat_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Automatic update checks'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Silently check GitHub Releases once on startup',
+                                title: Text(strings.text('App information')),
+                                subtitle: const _AppInfoSubtitle(),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CsacPageRoute<void>(
+                                      builder: (_) =>
+                                          AppInfoScreen(state: widget.state),
                                     ),
-                                  ),
-                                  value: widget
-                                      .state
-                                      .preferences
-                                      .autoCheckVersionUpdates,
-                                  onChanged: widget
-                                      .state
-                                      .updateAutoCheckVersionUpdates,
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.event_repeat_outlined,
                                 ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.update),
-                                  title: Text(
-                                    strings.text('Check for updates'),
+                                title: Text(
+                                  strings.text('Automatic update checks'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Silently check GitHub Releases once on startup',
                                   ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Check the latest GitHub Release manually',
+                                ),
+                                value: widget
+                                    .state
+                                    .preferences
+                                    .autoCheckVersionUpdates,
+                                onChanged:
+                                    widget.state.updateAutoCheckVersionUpdates,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.update),
+                                title: Text(strings.text('Check for updates')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Check the latest GitHub Release manually',
+                                  ),
+                                ),
+                                trailing: checkingVersionUpdate
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.chevron_right),
+                                onTap: checkingVersionUpdate
+                                    ? null
+                                    : checkVersionUpdateManually,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.article_outlined),
+                                title: Text(
+                                  strings.text('Open-source licenses'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'View licenses for included libraries',
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CsacPageRoute<void>(
+                                      builder: (_) =>
+                                          const OpenSourceLicensesScreen(),
                                     ),
-                                  ),
-                                  trailing: checkingVersionUpdate
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.chevron_right),
-                                  onTap: checkingVersionUpdate
-                                      ? null
-                                      : checkVersionUpdateManually,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.article_outlined),
-                                  title: Text(
-                                    strings.text('Open-source licenses'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'View licenses for included libraries',
-                                    ),
-                                  ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CsacPageRoute<void>(
-                                        builder: (_) =>
-                                            const OpenSourceLicensesScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -5369,25 +5348,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showFeedback) ...[
                         settingsCard(
                           child: ListTile(
-                              leading: const Icon(Icons.feedback_outlined),
-                              title: Text(strings.text('Report a problem')),
-                              subtitle: Text(
-                                strings.text(
-                                  'Send app feedback to administrators',
-                                ),
+                            leading: const Icon(Icons.feedback_outlined),
+                            title: Text(strings.text('Report a problem')),
+                            subtitle: Text(
+                              strings.text(
+                                'Send app feedback to administrators',
                               ),
-                              trailing: submittingBugReport
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.chevron_right),
-                              onTap: submittingBugReport
-                                  ? null
-                                  : submitBugReport,
+                            ),
+                            trailing: submittingBugReport
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.chevron_right),
+                            onTap: submittingBugReport ? null : submitBugReport,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -5395,272 +5372,284 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showAppearance) ...[
                         settingsCard(
                           child: Column(
-                              children: [
-                                ListTile(
-                                  leading: const Icon(Icons.dark_mode_outlined),
-                                  title: Text(strings.text('Theme')),
-                                  subtitle: Text(themeLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseTheme,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.palette_outlined),
-                                  title: Text(strings.text('Theme color')),
-                                  subtitle: Text(themeColorLabel),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _ThemeColorDot(
-                                        color: Color(
-                                          widget
-                                              .state
-                                              .preferences
-                                              .themeColorValue,
-                                        ),
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.dark_mode_outlined),
+                                title: Text(strings.text('Theme')),
+                                subtitle: Text(themeLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseTheme,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.palette_outlined),
+                                title: Text(strings.text('Theme color')),
+                                subtitle: Text(themeColorLabel),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _ThemeColorDot(
+                                      color: Color(
+                                        widget
+                                            .state
+                                            .preferences
+                                            .themeColorValue,
                                       ),
-                                      const SizedBox(width: 12),
-                                      const Icon(Icons.chevron_right),
-                                    ],
-                                  ),
-                                  onTap: chooseThemeColor,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.translate),
-                                  title: Text(strings.text('Language')),
-                                  subtitle: Text(languageLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseLanguage,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.text_fields),
-                                  title: Text(strings.text('Font style')),
-                                  subtitle: Text(fontStyleLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseFontStyle,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.sort),
-                                  title: Text(
-                                    strings.text('Conversation sorting'),
-                                  ),
-                                  subtitle: Text(conversationSortLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseConversationSortMode,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.schedule_outlined),
-                                  title: Text(
-                                    strings.text('Message time format'),
-                                  ),
-                                  subtitle: Text(messageTimeFormatLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseMessageTimeFormat,
-                                ),
-                                const Divider(height: 1),
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    14,
-                                    16,
-                                    12,
-                                  ),
-                                  child: _ChatBubbleThemePreview(
-                                    preferences: widget.state.preferences,
-                                  ),
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(
-                                    Icons.chat_bubble_outline,
-                                  ),
-                                  title: Text(strings.text('Own bubble color')),
-                                  subtitle: Text(
-                                    chatBubbleColorLabel(
-                                      widget
-                                          .state
-                                          .preferences
-                                          .ownChatBubbleColorValue,
                                     ),
-                                  ),
-                                  trailing: _ChatBubbleColorTrailing(
-                                    colorValue: widget
+                                    const SizedBox(width: 12),
+                                    const Icon(Icons.chevron_right),
+                                  ],
+                                ),
+                                onTap: chooseThemeColor,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.translate),
+                                title: Text(strings.text('Language')),
+                                subtitle: Text(languageLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseLanguage,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.text_fields),
+                                title: Text(strings.text('Font style')),
+                                subtitle: Text(fontStyleLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseFontStyle,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.sort),
+                                title: Text(
+                                  strings.text('Conversation sorting'),
+                                ),
+                                subtitle: Text(conversationSortLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseConversationSortMode,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.notes_outlined),
+                                title: Text(
+                                  strings.text('Conversation subtitle'),
+                                ),
+                                subtitle: Text(conversationSubtitleModeLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseConversationSubtitleMode,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.schedule_outlined),
+                                title: Text(
+                                  strings.text('Message time format'),
+                                ),
+                                subtitle: Text(messageTimeFormatLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseMessageTimeFormat,
+                              ),
+                              const Divider(height: 1),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  16,
+                                  12,
+                                ),
+                                child: _ChatBubbleThemePreview(
+                                  preferences: widget.state.preferences,
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.chat_bubble_outline),
+                                title: Text(strings.text('Own bubble color')),
+                                subtitle: Text(
+                                  chatBubbleColorLabel(
+                                    widget
                                         .state
                                         .preferences
                                         .ownChatBubbleColorValue,
-                                    fallback: Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
                                   ),
-                                  onTap: () =>
-                                      chooseChatBubbleColor(mine: true),
                                 ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(
-                                    Icons.chat_bubble_outline,
-                                  ),
-                                  title: Text(
-                                    strings.text('Other bubble color'),
-                                  ),
-                                  subtitle: Text(
-                                    chatBubbleColorLabel(
-                                      widget
-                                          .state
-                                          .preferences
-                                          .otherChatBubbleColorValue,
-                                    ),
-                                  ),
-                                  trailing: _ChatBubbleColorTrailing(
-                                    colorValue: widget
+                                trailing: _ChatBubbleColorTrailing(
+                                  colorValue: widget
+                                      .state
+                                      .preferences
+                                      .ownChatBubbleColorValue,
+                                  fallback: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                ),
+                                onTap: () => chooseChatBubbleColor(mine: true),
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.chat_bubble_outline),
+                                title: Text(strings.text('Other bubble color')),
+                                subtitle: Text(
+                                  chatBubbleColorLabel(
+                                    widget
                                         .state
                                         .preferences
                                         .otherChatBubbleColorValue,
-                                    fallback: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                  ),
-                                  onTap: () =>
-                                      chooseChatBubbleColor(mine: false),
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.rounded_corner),
-                                  title: Text(
-                                    strings.text('Bubble corner style'),
-                                  ),
-                                  subtitle: Text(chatBubbleCornerStyleLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseChatBubbleCornerStyle,
-                                ),
-                                const Divider(height: 1),
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    8,
-                                    16,
-                                    12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.opacity),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              strings.text('Bubble opacity'),
-                                            ),
-                                            Text(
-                                              chatBubbleOpacityLabel,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                            ),
-                                            CupertinoSlider(
-                                              value: widget
-                                                  .state
-                                                  .preferences
-                                                  .chatBubbleOpacity,
-                                              min: 0.45,
-                                              max: 1,
-                                              divisions: 11,
-                                              onChanged:
-                                                  updateChatBubbleOpacity,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.wallpaper_outlined),
-                                  title: Text(strings.text('Chat background')),
-                                  subtitle: Text(chatBackgroundLabel),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: chooseChatBackground,
-                                ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.account_circle_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Show chat avatars'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Display sender avatars beside message bubbles',
-                                    ),
-                                  ),
-                                  value:
-                                      widget.state.preferences.showChatAvatars,
-                                  onChanged: widget.state.updateShowChatAvatars,
-                                ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.waving_hand_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Double tap avatar pat'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Double tap a group member avatar to send a pat',
-                                    ),
-                                  ),
-                                  value: widget.state.preferences.enablePat,
-                                  onChanged: widget.state.updateEnablePat,
-                                ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.military_tech_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Show group member level'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Display member level beside names in group chats',
-                                    ),
-                                  ),
-                                  value: widget
+                                trailing: _ChatBubbleColorTrailing(
+                                  colorValue: widget
                                       .state
                                       .preferences
-                                      .showGroupMemberLevel,
-                                  onChanged:
-                                      widget.state.updateShowGroupMemberLevel,
+                                      .otherChatBubbleColorValue,
+                                  fallback: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                                 ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.motion_photos_off_outlined,
-                                  ),
-                                  title: Text(strings.text('Reduce motion')),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Use simpler transitions and fewer decorative animations',
+                                onTap: () => chooseChatBubbleColor(mine: false),
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.rounded_corner),
+                                title: Text(
+                                  strings.text('Bubble corner style'),
+                                ),
+                                subtitle: Text(chatBubbleCornerStyleLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseChatBubbleCornerStyle,
+                              ),
+                              const Divider(height: 1),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.opacity),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(strings.text('Bubble opacity')),
+                                          Text(
+                                            chatBubbleOpacityLabel,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                          CupertinoSlider(
+                                            value: widget
+                                                .state
+                                                .preferences
+                                                .chatBubbleOpacity,
+                                            min: 0.45,
+                                            max: 1,
+                                            divisions: 11,
+                                            onChanged: updateChatBubbleOpacity,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  value: widget.state.preferences.reduceMotion,
-                                  onChanged: widget.state.updateReduceMotion,
+                                  ],
                                 ),
-                              ],
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.wallpaper_outlined),
+                                title: Text(strings.text('Chat background')),
+                                subtitle: Text(chatBackgroundLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: chooseChatBackground,
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.account_circle_outlined,
+                                ),
+                                title: Text(strings.text('Show chat avatars')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Display sender avatars beside message bubbles',
+                                  ),
+                                ),
+                                value: widget.state.preferences.showChatAvatars,
+                                onChanged: widget.state.updateShowChatAvatars,
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.waving_hand_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('Double tap avatar pat'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Double tap a group member avatar to send a pat',
+                                  ),
+                                ),
+                                value: widget.state.preferences.enablePat,
+                                onChanged: widget.state.updateEnablePat,
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.military_tech_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('Show group member level'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Display member level beside names in group chats',
+                                  ),
+                                ),
+                                value: widget
+                                    .state
+                                    .preferences
+                                    .showGroupMemberLevel,
+                                onChanged:
+                                    widget.state.updateShowGroupMemberLevel,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.badge_outlined),
+                                title: Text(
+                                  strings.text('Group badge content'),
+                                ),
+                                subtitle: Text(groupMemberBadgeModeLabel),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap:
+                                    widget
+                                        .state
+                                        .preferences
+                                        .showGroupMemberLevel
+                                    ? chooseGroupMemberBadgeMode
+                                    : null,
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.motion_photos_off_outlined,
+                                ),
+                                title: Text(strings.text('Reduce motion')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Use simpler transitions and fewer decorative animations',
+                                  ),
+                                ),
+                                value: widget.state.preferences.reduceMotion,
+                                onChanged: widget.state.updateReduceMotion,
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -5668,17 +5657,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showLock) ...[
                         settingsCard(
                           child: ListTile(
-                              leading: const Icon(Icons.lock_outline),
-                              title: Text(strings.text('App lock')),
-                              subtitle: Text(
-                                widget.state.preferences.effectiveAppLockEnabled
-                                    ? strings.text(
-                                        'PIN required when returning to CsAC',
-                                      )
-                                    : strings.text('Off'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: openAppLockSettings,
+                            leading: const Icon(Icons.lock_outline),
+                            title: Text(strings.text('App lock')),
+                            subtitle: Text(
+                              widget.state.preferences.effectiveAppLockEnabled
+                                  ? strings.text(
+                                      'PIN required when returning to CsAC',
+                                    )
+                                  : strings.text('Off'),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: openAppLockSettings,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -5686,370 +5675,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showData) ...[
                         settingsCard(
                           child: Column(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    14,
-                                    12,
-                                    10,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.speed_outlined,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              strings.text(
-                                                'Performance and cache',
-                                              ),
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleMedium,
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              performanceStats == null
-                                                  ? strings.text(
-                                                      'Measure local storage and memory cache',
-                                                    )
-                                                  : strings.format(
-                                                      'Total cache: {size}',
-                                                      {
-                                                        'size':
-                                                            formatCacheBytes(
-                                                              performanceStats!
-                                                                  .totalBytes,
-                                                            ),
-                                                      },
-                                                    ),
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip: strings.text('Refresh'),
-                                        onPressed: loadingPerformanceStats
-                                            ? null
-                                            : () => loadPerformanceStats(
-                                                showError: true,
-                                              ),
-                                        icon: loadingPerformanceStats
-                                            ? const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : const Icon(Icons.refresh),
-                                      ),
-                                    ],
-                                  ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  12,
+                                  10,
                                 ),
-                                if (performanceStats == null)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      16,
-                                      0,
-                                      16,
-                                      12,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.speed_outlined,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
-                                    child: LinearProgressIndicator(
-                                      minHeight: 2,
-                                      borderRadius: BorderRadius.circular(999),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            strings.text(
+                                              'Performance and cache',
+                                            ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            performanceStats == null
+                                                ? strings.text(
+                                                    'Measure local storage and memory cache',
+                                                  )
+                                                : strings.format(
+                                                    'Total cache: {size}',
+                                                    {
+                                                      'size': formatCacheBytes(
+                                                        performanceStats!
+                                                            .totalBytes,
+                                                      ),
+                                                    },
+                                                  ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  )
-                                else
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      0,
-                                      12,
-                                      12,
+                                    IconButton(
+                                      tooltip: strings.text('Refresh'),
+                                      onPressed: loadingPerformanceStats
+                                          ? null
+                                          : () => loadPerformanceStats(
+                                              showError: true,
+                                            ),
+                                      icon: loadingPerformanceStats
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.refresh),
                                     ),
-                                    child: Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        for (final metric in performanceMetrics(
-                                          performanceStats!,
-                                        ))
-                                          _CacheMetricTile(metric: metric),
-                                      ],
-                                    ),
-                                  ),
+                                  ],
+                                ),
+                              ),
+                              if (performanceStats == null)
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     16,
                                     0,
                                     16,
-                                    14,
+                                    12,
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
+                                  child: LinearProgressIndicator(
+                                    minHeight: 2,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                )
+                              else
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    0,
+                                    12,
+                                    12,
+                                  ),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
                                     children: [
-                                      OutlinedButton.icon(
-                                        onPressed: enablingLowPerformanceMode
-                                            ? null
-                                            : enableLowPerformanceMode,
-                                        icon: enablingLowPerformanceMode
-                                            ? const SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : const Icon(
-                                                Icons.battery_saver_outlined,
-                                              ),
-                                        label: Text(
-                                          strings.text('Low performance mode'),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      OutlinedButton.icon(
-                                        onPressed: clearingPerformanceCaches
-                                            ? null
-                                            : clearPerformanceCaches,
-                                        icon: clearingPerformanceCaches
-                                            ? const SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : const Icon(
-                                                Icons.auto_delete_outlined,
-                                              ),
-                                        label: Text(
-                                          strings.text(
-                                            'Clear performance caches',
-                                          ),
-                                        ),
-                                      ),
+                                      for (final metric in performanceMetrics(
+                                        performanceStats!,
+                                      ))
+                                        _CacheMetricTile(metric: metric),
                                     ],
                                   ),
                                 ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.sync),
-                                  title: Text(strings.text('Refresh app data')),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Reload conversations and counters',
-                                    ),
-                                  ),
-                                  trailing: refreshing
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.chevron_right),
-                                  onTap: refreshing ? null : refreshAll,
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  14,
                                 ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(
-                                    Icons.network_check_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Connection protocol'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text('Current HTTP protocol'),
-                                  ),
-                                  trailing: Text(
-                                    connectionProtocolLabel,
-                                    style: TextStyle(
-                                      color: colors.secondaryLabel,
-                                    ),
-                                  ),
-                                ),
-                                const Divider(height: 1),
-                                SwitchListTile(
-                                  secondary: const Icon(
-                                    Icons.notifications_active_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('System notifications'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Show local system alerts for new messages',
-                                    ),
-                                  ),
-                                  value: widget
-                                      .state
-                                      .preferences
-                                      .localSystemNotificationsEnabled,
-                                  onChanged: widget
-                                      .state
-                                      .updateLocalSystemNotifications,
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(
-                                    Icons.network_check_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Connection diagnostics'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Test server latency, API, login and image domain',
-                                    ),
-                                  ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CsacPageRoute<void>(
-                                        builder: (_) =>
-                                            NetworkDiagnosticsScreen(
-                                              state: widget.state,
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.article_outlined),
-                                  title: Text(strings.text('App logs')),
-                                  subtitle: Text(
-                                    strings.text('View local diagnostic logs'),
-                                  ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CsacPageRoute<void>(
-                                        builder: (_) =>
-                                            AppLogsScreen(state: widget.state),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(
-                                    Icons.cleaning_services_outlined,
-                                  ),
-                                  title: Text(
-                                    strings.text('Clear local cache'),
-                                  ),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Remove cached conversations and message history',
-                                    ),
-                                  ),
-                                  trailing: clearing
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.chevron_right),
-                                  onTap: clearing ? null : clearCache,
-                                ),
-                              ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (showDeveloper) ...[
-                        settingsCard(
-                          child: _CupertinoExpansionTile(
-                              initiallyExpanded: developerOptionsExpanded,
-                              onExpansionChanged: (value) {
-                                setState(
-                                  () => developerOptionsExpanded = value,
-                                );
-                              },
-                              leading: const Icon(
-                                Icons.developer_mode_outlined,
-                              ),
-                              title: Text(strings.text('Developer options')),
-                              subtitle: Text(
-                                strings.format('Current server: {server}', {
-                                  'server':
-                                      widget.state.preferences.serverUrl
-                                          .trim()
-                                          .isEmpty
-                                      ? strings.text('Default server')
-                                      : widget.state.preferences.serverUrl
-                                            .trim(),
-                                }),
-                              ),
-                              childrenPadding: const EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                16,
-                              ),
-                              children: [
-                                TextField(
-                                  controller: serverUrl,
-                                  keyboardType: TextInputType.url,
-                                  textInputAction: TextInputAction.done,
-                                  onSubmitted: (_) {
-                                    if (!savingServer) {
-                                      saveServerUrl();
-                                    }
-                                  },
-                                  decoration: InputDecoration(
-                                    labelText: strings.text(
-                                      'CsAC server address',
-                                    ),
-                                    hintText: '192.168.1.10:8080',
-                                    helperText: strings.text(
-                                      'Leave empty to use the default server.',
-                                    ),
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                OverflowBar(
-                                  alignment: MainAxisAlignment.end,
-                                  spacing: 12,
-                                  overflowSpacing: 8,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     OutlinedButton.icon(
-                                      onPressed: savingServer
+                                      onPressed: enablingLowPerformanceMode
                                           ? null
-                                          : resetServerUrl,
-                                      icon: const Icon(Icons.restart_alt),
-                                      label: Text(
-                                        strings.text('Reset to default'),
-                                      ),
-                                    ),
-                                    FilledButton.icon(
-                                      onPressed: savingServer
-                                          ? null
-                                          : saveServerUrl,
-                                      icon: savingServer
+                                          : enableLowPerformanceMode,
+                                      icon: enablingLowPerformanceMode
                                           ? const SizedBox(
                                               width: 18,
                                               height: 18,
@@ -6057,33 +5802,264 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                                 strokeWidth: 2,
                                               ),
                                             )
-                                          : const Icon(Icons.save_outlined),
-                                      label: Text(strings.text('Apply server')),
+                                          : const Icon(
+                                              Icons.battery_saver_outlined,
+                                            ),
+                                      label: Text(
+                                        strings.text('Low performance mode'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: clearingPerformanceCaches
+                                          ? null
+                                          : clearPerformanceCaches,
+                                      icon: clearingPerformanceCaches
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.auto_delete_outlined,
+                                            ),
+                                      label: Text(
+                                        strings.text(
+                                          'Clear performance caches',
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(Icons.api_outlined),
-                                  title: Text(strings.text('API explorer')),
-                                  subtitle: Text(
-                                    strings.text(
-                                      'Search API docs, inspect parameters and run requests',
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.sync),
+                                title: Text(strings.text('Refresh app data')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Reload conversations and counters',
+                                  ),
+                                ),
+                                trailing: refreshing
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.chevron_right),
+                                onTap: refreshing ? null : refreshAll,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.network_check_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('Connection protocol'),
+                                ),
+                                subtitle: Text(
+                                  strings.text('Current HTTP protocol'),
+                                ),
+                                trailing: Text(
+                                  connectionProtocolLabel,
+                                  style: TextStyle(
+                                    color: colors.secondaryLabel,
+                                  ),
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.notifications_active_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('System notifications'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Show local system alerts for new messages',
+                                  ),
+                                ),
+                                value: widget
+                                    .state
+                                    .preferences
+                                    .localSystemNotificationsEnabled,
+                                onChanged:
+                                    widget.state.updateLocalSystemNotifications,
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.network_check_outlined,
+                                ),
+                                title: Text(
+                                  strings.text('Connection diagnostics'),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Test server latency, API, login and image domain',
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CsacPageRoute<void>(
+                                      builder: (_) => NetworkDiagnosticsScreen(
+                                        state: widget.state,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(Icons.article_outlined),
+                                title: Text(strings.text('App logs')),
+                                subtitle: Text(
+                                  strings.text('View local diagnostic logs'),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CsacPageRoute<void>(
+                                      builder: (_) =>
+                                          AppLogsScreen(state: widget.state),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.cleaning_services_outlined,
+                                ),
+                                title: Text(strings.text('Clear local cache')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Remove cached conversations and message history',
+                                  ),
+                                ),
+                                trailing: clearing
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.chevron_right),
+                                onTap: clearing ? null : clearCache,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (showDeveloper) ...[
+                        settingsCard(
+                          child: _CupertinoExpansionTile(
+                            initiallyExpanded: developerOptionsExpanded,
+                            onExpansionChanged: (value) {
+                              setState(() => developerOptionsExpanded = value);
+                            },
+                            leading: const Icon(Icons.developer_mode_outlined),
+                            title: Text(strings.text('Developer options')),
+                            subtitle: Text(
+                              strings.format('Current server: {server}', {
+                                'server':
+                                    widget.state.preferences.serverUrl
+                                        .trim()
+                                        .isEmpty
+                                    ? strings.text('Default server')
+                                    : widget.state.preferences.serverUrl.trim(),
+                              }),
+                            ),
+                            childrenPadding: const EdgeInsets.fromLTRB(
+                              16,
+                              0,
+                              16,
+                              16,
+                            ),
+                            children: [
+                              TextField(
+                                controller: serverUrl,
+                                keyboardType: TextInputType.url,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) {
+                                  if (!savingServer) {
+                                    saveServerUrl();
+                                  }
+                                },
+                                decoration: InputDecoration(
+                                  labelText: strings.text(
+                                    'CsAC server address',
+                                  ),
+                                  hintText: '192.168.1.10:8080',
+                                  helperText: strings.text(
+                                    'Leave empty to use the default server.',
+                                  ),
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              OverflowBar(
+                                alignment: MainAxisAlignment.end,
+                                spacing: 12,
+                                overflowSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: savingServer
+                                        ? null
+                                        : resetServerUrl,
+                                    icon: const Icon(Icons.restart_alt),
+                                    label: Text(
+                                      strings.text('Reset to default'),
                                     ),
                                   ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CsacPageRoute<void>(
-                                        builder: (_) => ApiExplorerScreen(
-                                          state: widget.state,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  FilledButton.icon(
+                                    onPressed: savingServer
+                                        ? null
+                                        : saveServerUrl,
+                                    icon: savingServer
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.save_outlined),
+                                    label: Text(strings.text('Apply server')),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.api_outlined),
+                                title: Text(strings.text('API explorer')),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Search API docs, inspect parameters and run requests',
+                                  ),
                                 ),
-                              ],
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CsacPageRoute<void>(
+                                      builder: (_) => ApiExplorerScreen(
+                                        state: widget.state,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -6091,14 +6067,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (showLogout) ...[
                         settingsCard(
                           child: ListTile(
-                              leading: const Icon(Icons.logout),
-                              title: Text(strings.text('Logout')),
-                              subtitle: Text(
-                                strings.text(
-                                  'Clear session and return to login',
-                                ),
-                              ),
-                              onTap: logoutToLogin,
+                            leading: const Icon(Icons.logout),
+                            title: Text(strings.text('Logout')),
+                            subtitle: Text(
+                              strings.text('Clear session and return to login'),
+                            ),
+                            onTap: logoutToLogin,
                           ),
                         ),
                       ],

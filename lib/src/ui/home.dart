@@ -39,13 +39,31 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  String conversationKey(Conversation conversation) {
+    return '${conversation.type.name}:${conversation.id}';
+  }
+
+  int newUnreadDelta(Map<String, int> beforeUnread) {
+    var total = 0;
+    for (final conversation in widget.state.conversations) {
+      if (widget.state.isVisibleActiveConversation(conversation)) {
+        continue;
+      }
+      final previous = beforeUnread[conversationKey(conversation)] ?? 0;
+      final delta = conversation.unreadCount - previous;
+      if (delta > 0) {
+        total += delta;
+      }
+    }
+    return total;
+  }
+
   Future<void> refreshHomeWithHint() async {
     final strings = context.strings;
     final messenger = ScaffoldMessenger.of(context);
     final beforeUnread = <String, int>{
       for (final conversation in widget.state.conversations)
-        '${conversation.type.name}:${conversation.id}':
-            conversation.unreadCount,
+        conversationKey(conversation): conversation.unreadCount,
     };
     try {
       await widget.state.refreshHome();
@@ -70,16 +88,19 @@ class _MainShellState extends State<MainShell> {
         if (selectedConversation != null) {
           selectedConversation = latestSelected.copyWith(unreadCount: 0);
         }
-        await widget.state.markConversationRead(
-          latestSelected,
-          syncServer: false,
-        );
+        if (widget.state.appInForeground) {
+          await widget.state.markConversationRead(
+            latestSelected,
+            syncServer: false,
+          );
+        }
       }
     }
+    final newCount = newUnreadDelta(beforeUnread);
     final after = totalUnreadChats();
-    if (after > lastUnreadChats) {
+    if (newCount > 0) {
       final message = strings.format('New messages: {count}', {
-        'count': after - lastUnreadChats,
+        'count': newCount,
       });
       messenger.showSnackBar(SnackBar(content: Text(message)));
       await showNewMessageNotifications(beforeUnread);
@@ -94,20 +115,67 @@ class _MainShellState extends State<MainShell> {
       return;
     }
     for (final conversation in widget.state.conversations) {
-      if (widget.state.isActiveConversation(conversation)) {
+      if (widget.state.isVisibleActiveConversation(conversation)) {
         continue;
       }
-      final key = '${conversation.type.name}:${conversation.id}';
+      final key = conversationKey(conversation);
       final previous = beforeUnread[key] ?? 0;
       final delta = conversation.unreadCount - previous;
       if (delta > 0) {
+        final latestMessage = await latestNotificationMessage(conversation);
+        if (!mounted) {
+          return;
+        }
         await CsacLocalNotificationService.instance
             .showConversationNotification(
               conversation: conversation,
               newCount: delta,
+              title: notificationTitleForConversation(
+                conversation,
+                latestMessage,
+              ),
+              body: notificationBodyForConversation(
+                conversation,
+                delta,
+                latestMessage,
+                context.strings,
+              ),
             );
       }
     }
+  }
+
+  Future<ChatMessage?> latestNotificationMessage(
+    Conversation conversation,
+  ) async {
+    if (conversation.type == ConversationType.group) {
+      final cached = await widget.state.loadCachedMessages(conversation);
+      final afterId = cached.isEmpty ? 0 : cached.last.id;
+      final previousIncomingId = latestIncomingNotificationMessageId(
+        conversation,
+        cached,
+        currentUserId: widget.state.user?.uid ?? 0,
+      );
+      final loaded = await widget.state.syncMessages(
+        conversation,
+        afterId: afterId,
+      );
+      final latestIncoming = latestIncomingNotificationMessage(
+        conversation,
+        loaded,
+        currentUserId: widget.state.user?.uid ?? 0,
+      );
+      if (latestIncoming != null && latestIncoming.id > previousIncomingId) {
+        return latestIncoming;
+      }
+      return null;
+    }
+    final cached = await widget.state.loadCachedMessages(conversation);
+    return latestIncomingNotificationMessage(
+      conversation,
+      cached,
+      currentUserId: widget.state.user?.uid ?? 0,
+    );
   }
 
   @override
@@ -183,29 +251,51 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     } else {
-      shell = CupertinoPageScaffold(
-        backgroundColor: colors.systemBackground,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _BottomTabSwitcher(index: index, children: pages),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                minimum: const EdgeInsets.only(bottom: 8),
-                child: _FloatingTabBar(
-                  index: index,
-                  unreadChats: unreadChats,
-                  noticeCount: noticeCount,
-                  onChanged: selectTab,
-                ),
+      shell = CupertinoTabScaffold(
+        tabBar: CupertinoTabBar(
+          currentIndex: index,
+          onTap: selectTab,
+          backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
+          activeColor: CupertinoTheme.of(context).primaryColor,
+          inactiveColor: colors.secondaryLabel,
+          items: [
+            BottomNavigationBarItem(
+              icon: _TabBadgeIcon(
+                icon: CupertinoIcons.chat_bubble_2,
+                count: unreadChats,
               ),
+              activeIcon: _TabBadgeIcon(
+                icon: CupertinoIcons.chat_bubble_2_fill,
+                count: unreadChats,
+              ),
+              label: context.strings.text('Chats'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(CupertinoIcons.search),
+              activeIcon: const Icon(CupertinoIcons.search_circle_fill),
+              label: context.strings.text('Search'),
+            ),
+            BottomNavigationBarItem(
+              icon: _TabBadgeIcon(
+                icon: CupertinoIcons.bell,
+                count: noticeCount,
+              ),
+              activeIcon: _TabBadgeIcon(
+                icon: CupertinoIcons.bell_fill,
+                count: noticeCount,
+              ),
+              label: context.strings.text('Notices'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(CupertinoIcons.person),
+              activeIcon: const Icon(CupertinoIcons.person_fill),
+              label: context.strings.text('Me'),
             ),
           ],
+        ),
+        tabBuilder: (context, tabIndex) => _FocusableTabPage(
+          active: index == tabIndex,
+          child: pages[tabIndex],
         ),
       );
     }
@@ -349,308 +439,50 @@ class _SideRailItem extends StatelessWidget {
   }
 }
 
-class _FloatingTabBar extends StatelessWidget {
-  const _FloatingTabBar({
-    required this.index,
-    required this.unreadChats,
-    required this.noticeCount,
-    required this.onChanged,
-  });
+class _TabBadgeIcon extends StatelessWidget {
+  const _TabBadgeIcon({required this.icon, required this.count});
 
-  final int index;
-  final int unreadChats;
-  final int noticeCount;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-    final items = [
-      (
-        CupertinoIcons.chat_bubble,
-        CupertinoIcons.chat_bubble_fill,
-        strings.text('Chats'),
-        unreadChats,
-      ),
-      (CupertinoIcons.search, CupertinoIcons.search, strings.text('Search'), 0),
-      (
-        CupertinoIcons.bell,
-        CupertinoIcons.bell_fill,
-        strings.text('Notices'),
-        noticeCount,
-      ),
-      (
-        CupertinoIcons.person,
-        CupertinoIcons.person_fill,
-        strings.text('Me'),
-        0,
-      ),
-    ];
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 398),
-          child: _LiquidGlassTabBarSurface(
-            child: Row(
-              children: [
-                for (final item in items.indexed)
-                  Expanded(
-                    child: _FloatingTabButton(
-                      selected: index == item.$1,
-                      icon: item.$2.$1,
-                      activeIcon: item.$2.$2,
-                      label: item.$2.$3,
-                      badge: item.$2.$4,
-                      onTap: () => onChanged(item.$1),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LiquidGlassTabBarSurface extends StatelessWidget {
-  const _LiquidGlassTabBarSurface({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = CsacColors.of(context);
-    final primary = CupertinoTheme.of(context).primaryColor;
-    final radius = BorderRadius.circular(30);
-    final glassTint = colors.isDark
-        ? const Color(0xFF121216).withValues(alpha: 0.64)
-        : CupertinoColors.white.withValues(alpha: 0.68);
-    final edgeHighlight = CupertinoColors.white.withValues(
-      alpha: colors.isDark ? 0.18 : 0.46,
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-            color: CupertinoColors.black.withValues(
-              alpha: colors.isDark ? 0.30 : 0.10,
-            ),
-            blurRadius: 24,
-            spreadRadius: -10,
-            offset: const Offset(0, 14),
-          ),
-          BoxShadow(
-            color: primary.withValues(alpha: colors.isDark ? 0.08 : 0.05),
-            blurRadius: 18,
-            spreadRadius: -14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: SizedBox(
-            height: 60,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: glassTint,
-                      borderRadius: radius,
-                      border: Border.all(
-                        color: colors.separator.withValues(alpha: 0.18),
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          edgeHighlight,
-                          CupertinoColors.white.withValues(alpha: 0.06),
-                          primary.withValues(
-                            alpha: colors.isDark ? 0.06 : 0.04,
-                          ),
-                          colors.cardBackground.withValues(
-                            alpha: colors.isDark ? 0.05 : 0.10,
-                          ),
-                        ],
-                        stops: const [0, 0.28, 0.62, 1],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.78, -0.92),
-                        radius: 1.0,
-                        colors: [
-                          CupertinoColors.white.withValues(
-                            alpha: colors.isDark ? 0.10 : 0.28,
-                          ),
-                          CupertinoColors.white.withValues(alpha: 0.00),
-                        ],
-                        stops: const [0, 0.72],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      border: Border.all(
-                        color: edgeHighlight.withValues(alpha: 0.72),
-                        width: 0.6,
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 7,
-                  ),
-                  child: child,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatingTabButton extends StatelessWidget {
-  const _FloatingTabButton({
-    required this.selected,
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.badge,
-    required this.onTap,
-  });
-
-  final bool selected;
   final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final int badge;
-  final VoidCallback onTap;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    final primary = CupertinoTheme.of(context).primaryColor;
-    final colors = CsacColors.of(context);
-    return _CsacPressable(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: 180.ms,
-        curve: Curves.easeOutCubic,
-        height: 46,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? primary.withValues(alpha: colors.isDark ? 0.14 : 0.10)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(23),
-          border: selected
-              ? Border.all(
-                  color: CupertinoColors.white.withValues(
-                    alpha: colors.isDark ? 0.18 : 0.36,
+    final label = count > 99 ? '99+' : '$count';
+    return SizedBox(
+      width: 30,
+      height: 26,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Icon(icon),
+          if (count > 0)
+            Positioned(
+              top: -3,
+              right: -6,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemRed.resolveFrom(context),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
                   ),
-                  width: 0.5,
-                )
-              : null,
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: primary.withValues(
-                      alpha: colors.isDark ? 0.10 : 0.06,
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
                     ),
-                    blurRadius: 12,
-                    spreadRadius: -8,
-                    offset: const Offset(0, 6),
                   ),
-                ]
-              : null,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(23),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(
-              sigmaX: selected ? 8 : 0.001,
-              sigmaY: selected ? 8 : 0.001,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: selected
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          CupertinoColors.white.withValues(
-                            alpha: colors.isDark ? 0.07 : 0.22,
-                          ),
-                          primary.withValues(
-                            alpha: colors.isDark ? 0.06 : 0.05,
-                          ),
-                          CupertinoColors.white.withValues(alpha: 0.02),
-                        ],
-                      )
-                    : null,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _BadgeIcon(
-                    icon: selected ? activeIcon : icon,
-                    count: badge,
-                    color: selected ? primary : colors.secondaryLabel,
-                    size: 21,
-                  ),
-                  AnimatedSize(
-                    duration: 140.ms,
-                    curve: Curves.easeOutCubic,
-                    child: selected
-                        ? Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.fade,
-                              softWrap: false,
-                              style: TextStyle(
-                                color: primary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -904,55 +736,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> showConversationActions(Conversation conversation) async {
     final pref = localPref(conversation);
-    final selected = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final selected = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: _RoundedInkClip(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  pref.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-                title: Text(
-                  context.strings.text(
-                    pref.pinned ? 'Unpin conversation' : 'Pin conversation',
-                  ),
-                ),
-                onTap: () => Navigator.of(context).pop('pin'),
+      builder: (context) => CupertinoActionSheet(
+        title: Text(conversation.name),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('pin'),
+            child: Text(
+              strings.text(
+                pref.pinned ? 'Unpin conversation' : 'Pin conversation',
               ),
-              ListTile(
-                leading: Icon(
-                  pref.muted
-                      ? Icons.notifications_active_outlined
-                      : Icons.notifications_off_outlined,
-                ),
-                title: Text(
-                  context.strings.text(
-                    pref.muted ? 'Unmute conversation' : 'Mute conversation',
-                  ),
-                ),
-                onTap: () => Navigator.of(context).pop('mute'),
-              ),
-              ListTile(
-                leading: Icon(
-                  pref.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
-                ),
-                title: Text(
-                  context.strings.text(
-                    pref.archived
-                        ? 'Unarchive conversation'
-                        : 'Archive conversation',
-                  ),
-                ),
-                onTap: () => Navigator.of(context).pop('archive'),
-              ),
-            ],
+            ),
           ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('mute'),
+            child: Text(
+              strings.text(
+                pref.muted ? 'Unmute conversation' : 'Mute conversation',
+              ),
+            ),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: !pref.archived,
+            onPressed: () => Navigator.of(context).pop('archive'),
+            child: Text(
+              strings.text(
+                pref.archived
+                    ? 'Unarchive conversation'
+                    : 'Archive conversation',
+              ),
+            ),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -1079,9 +899,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final colors = CsacColors.of(context);
     final query = search.text.trim().toLowerCase();
     final conversations = visibleConversations(query);
-    final bottomPadding = widget.embedded
-        ? 24.0
-        : MediaQuery.paddingOf(context).bottom + 92;
+    final bottomPadding = widget.embedded ? 24.0 : 24.0;
     final content = RefreshIndicator(
       onRefresh: refresh,
       child: ListView(
@@ -1182,6 +1000,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   conversation: entry.$2,
                   draft: drafts[draftKey(entry.$2)],
                   preference: localPref(entry.$2),
+                  subtitleMode:
+                      widget.state.preferences.conversationSubtitleMode,
                   selected:
                       widget.selectedConversation?.type == entry.$2.type &&
                       widget.selectedConversation?.id == entry.$2.id,
@@ -1240,12 +1060,14 @@ class _ConversationTile extends StatelessWidget {
     required this.onLongPress,
     this.draft,
     this.preference = ConversationLocalPreference.defaults,
+    this.subtitleMode = ConversationSubtitleMode.recentMessage,
     this.selected = false,
   });
 
   final Conversation conversation;
   final ConversationDraft? draft;
   final ConversationLocalPreference preference;
+  final ConversationSubtitleMode subtitleMode;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final bool selected;
@@ -1260,11 +1082,21 @@ class _ConversationTile extends StatelessWidget {
     final fallbackSubtitle = conversation.subtitle.isEmpty
         ? context.strings.text(isGroup ? 'Group chat' : 'Private chat')
         : conversation.subtitle;
+    final preferredSubtitle = switch (subtitleMode) {
+      ConversationSubtitleMode.recentMessage =>
+        conversation.lastMessagePreview.trim().isNotEmpty
+            ? conversation.lastMessagePreview.trim()
+            : fallbackSubtitle,
+      ConversationSubtitleMode.status =>
+        conversation.statusSubtitle.trim().isNotEmpty
+            ? conversation.statusSubtitle.trim()
+            : fallbackSubtitle,
+    };
     final subtitleText = hasDraft
         ? context.strings.format('Draft: {text}', {
             'text': compactDraftText(draft.previewText, max: 72),
           })
-        : fallbackSubtitle;
+        : preferredSubtitle;
     final backgroundColor = selected
         ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
         : colors.cardBackground;

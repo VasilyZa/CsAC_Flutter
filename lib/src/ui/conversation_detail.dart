@@ -604,50 +604,41 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Future<void> showMemberActions(GroupMember member) async {
-    final action = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.military_tech_outlined),
-              title: Text(context.strings.text('Set member title')),
-              onTap: () => Navigator.of(context).pop('title'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.volume_off_outlined),
-              title: Text(context.strings.text('Mute 10 minutes')),
-              onTap: () => Navigator.of(context).pop('mute10'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.volume_up_outlined),
-              title: Text(context.strings.text('Unmute')),
-              onTap: () => Navigator.of(context).pop('unmute'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: Text(context.strings.text('Set admin')),
-              onTap: () => Navigator.of(context).pop('admin'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.remove_moderator_outlined),
-              title: Text(context.strings.text('Remove admin')),
-              onTap: () => Navigator.of(context).pop('removeAdmin'),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.person_remove_outlined,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(
-                context.strings.text('Kick member'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () => Navigator.of(context).pop('kick'),
-            ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(member.name),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('title'),
+            child: Text(strings.text('Set member title')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('mute10'),
+            child: Text(strings.text('Mute 10 minutes')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('unmute'),
+            child: Text(strings.text('Unmute')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('admin'),
+            child: Text(strings.text('Set admin')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('removeAdmin'),
+            child: Text(strings.text('Remove admin')),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop('kick'),
+            child: Text(strings.text('Kick member')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );
@@ -1681,56 +1672,47 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       ],
       if (!member.hasOwnerRole) 'kick',
     ];
-    final selected = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final selected = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (actions.contains('title'))
-              ListTile(
-                leading: const Icon(Icons.military_tech_outlined),
-                title: Text(context.strings.text('Set member title')),
-                onTap: () => Navigator.of(context).pop('title'),
-              ),
-            if (actions.contains('mute10'))
-              ListTile(
-                leading: const Icon(Icons.volume_off_outlined),
-                title: Text(context.strings.text('Mute 10 minutes')),
-                onTap: () => Navigator.of(context).pop('mute10'),
-              ),
-            if (actions.contains('unmute'))
-              ListTile(
-                leading: const Icon(Icons.volume_up_outlined),
-                title: Text(context.strings.text('Unmute')),
-                onTap: () => Navigator.of(context).pop('unmute'),
-              ),
-            if (actions.contains('admin'))
-              ListTile(
-                leading: const Icon(Icons.admin_panel_settings_outlined),
-                title: Text(context.strings.text('Set admin')),
-                onTap: () => Navigator.of(context).pop('admin'),
-              ),
-            if (actions.contains('removeAdmin'))
-              ListTile(
-                leading: const Icon(Icons.remove_moderator_outlined),
-                title: Text(context.strings.text('Remove admin')),
-                onTap: () => Navigator.of(context).pop('removeAdmin'),
-              ),
-            if (actions.contains('kick'))
-              ListTile(
-                leading: Icon(
-                  Icons.person_remove_outlined,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  context.strings.text('Kick member'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                onTap: () => Navigator.of(context).pop('kick'),
-              ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(member.name),
+        actions: [
+          if (actions.contains('title'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('title'),
+              child: Text(strings.text('Set member title')),
+            ),
+          if (actions.contains('mute10'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('mute10'),
+              child: Text(strings.text('Mute 10 minutes')),
+            ),
+          if (actions.contains('unmute'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('unmute'),
+              child: Text(strings.text('Unmute')),
+            ),
+          if (actions.contains('admin'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('admin'),
+              child: Text(strings.text('Set admin')),
+            ),
+          if (actions.contains('removeAdmin'))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('removeAdmin'),
+              child: Text(strings.text('Remove admin')),
+            ),
+          if (actions.contains('kick'))
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(context).pop('kick'),
+              child: Text(strings.text('Kick member')),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );

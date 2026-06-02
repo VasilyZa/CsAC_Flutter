@@ -336,19 +336,26 @@ class Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final borderRadius = shape is RoundedRectangleBorder
+        ? (shape! as RoundedRectangleBorder).borderRadius
+        : BorderRadius.circular(10);
     return Padding(
       padding: margin ?? EdgeInsets.zero,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: color ?? colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
+          color:
+              color ??
+              CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+                context,
+              ),
+          borderRadius: borderRadius,
           border: Border.all(
-            color: colors.outlineVariant.withValues(alpha: 0.55),
+            color: CupertinoColors.separator.resolveFrom(context),
+            width: 0.5,
           ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: borderRadius.resolve(Directionality.of(context)),
           child: child ?? const SizedBox.shrink(),
         ),
       ),
@@ -402,71 +409,153 @@ class ListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = CsacColors.of(context);
     final foreground = enabled
         ? (selected
-              ? selectedColor ?? colors.primary
-              : textColor ?? colors.onSurface)
-        : colors.onSurface.withValues(alpha: 0.36);
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: enabled ? onTap : null,
-      onLongPress: enabled ? onLongPress : null,
-      child: Container(
-        color: selected ? selectedTileColor : tileColor,
-        padding:
-            contentPadding ??
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            if (leading != null) ...[
-              IconTheme(
-                data: IconThemeData(
-                  color: iconColor ?? colors.onSurfaceVariant,
-                ),
-                child: leading!,
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: DefaultTextStyle(
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (title != null) title!,
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 3),
-                      DefaultTextStyle.merge(
-                        style: TextStyle(
-                          color: colors.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
-                        child: subtitle!,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              ? selectedColor ?? colors.primaryColor
+              : textColor ?? colors.label)
+        : colors.tertiaryLabel;
+    final titleChild = DefaultTextStyle.merge(
+      style: TextStyle(color: foreground, fontSize: 17),
+      child: title ?? const SizedBox.shrink(),
+    );
+    final subtitleChild = subtitle == null
+        ? null
+        : DefaultTextStyle.merge(
+            style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+            child: subtitle!,
+          );
+    final leadingChild = leading == null
+        ? null
+        : IconTheme.merge(
+            data: IconThemeData(
+              color: enabled
+                  ? iconColor ?? colors.secondaryLabel
+                  : colors.tertiaryLabel,
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 10),
-              IconTheme(
-                data: IconThemeData(color: colors.onSurfaceVariant),
-                child: trailing!,
-              ),
-            ],
-          ],
-        ),
-      ),
+            child: leading!,
+          );
+    final trailingChild = trailing == null
+        ? null
+        : IconTheme.merge(
+            data: IconThemeData(color: colors.tertiaryLabel),
+            child: trailing!,
+          );
+    final tile = CupertinoListTile(
+      leading: leadingChild,
+      title: titleChild,
+      subtitle: subtitleChild,
+      trailing: trailingChild,
+      padding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16),
+      backgroundColor: selected ? selectedTileColor : tileColor,
+      onTap: enabled ? onTap : null,
+    );
+    if (onLongPress == null || !enabled) {
+      return tile;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onLongPress,
+      child: tile,
     );
   }
+}
+
+class _CupertinoSelectionMark extends StatelessWidget {
+  const _CupertinoSelectionMark({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      child: selected
+          ? Icon(
+              CupertinoIcons.check_mark,
+              color: CupertinoTheme.of(context).primaryColor,
+              size: 21,
+            )
+          : null,
+    );
+  }
+}
+
+class CupertinoOption<T> {
+  const CupertinoOption({
+    required this.value,
+    required this.title,
+    this.subtitle,
+    this.destructive = false,
+  });
+
+  final T value;
+  final String title;
+  final String? subtitle;
+  final bool destructive;
+}
+
+Future<T?> showCupertinoOptionSheet<T>({
+  required BuildContext context,
+  required List<CupertinoOption<T>> options,
+  T? selected,
+  String? title,
+  String? message,
+}) {
+  return showCupertinoModalPopup<T>(
+    context: context,
+    builder: (sheetContext) => CupertinoActionSheet(
+      title: title == null ? null : Text(title),
+      message: message == null ? null : Text(message),
+      actions: [
+        for (final option in options)
+          CupertinoActionSheetAction(
+            isDestructiveAction: option.destructive,
+            onPressed: () => Navigator.of(sheetContext).pop(option.value),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _CupertinoSelectionMark(selected: option.value == selected),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        option.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (option.subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          option.subtitle!,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              sheetContext,
+                            ),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 30),
+              ],
+            ),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(sheetContext).pop(),
+        child: Text(sheetContext.strings.text('Cancel')),
+      ),
+    ),
+  );
 }
 
 class FilledButton extends StatelessWidget {

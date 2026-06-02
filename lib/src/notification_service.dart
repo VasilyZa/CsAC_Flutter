@@ -102,6 +102,8 @@ class CsacLocalNotificationService {
   Future<void> showConversationNotification({
     required Conversation conversation,
     required int newCount,
+    String? title,
+    String? body,
   }) async {
     if (!isSupported || newCount <= 0) {
       return;
@@ -112,16 +114,16 @@ class CsacLocalNotificationService {
         return;
       }
       final countText = newCount > 99 ? '99+' : '$newCount';
-      final title = conversation.name.trim().isEmpty
-          ? 'CsAC'
-          : conversation.name;
-      final body = conversation.subtitle.trim().isEmpty
+      final notificationTitle = (title ?? '').trim().isEmpty
+          ? (conversation.name.trim().isEmpty ? 'CsAC' : conversation.name)
+          : (title ?? '').trim();
+      final notificationBody = (body ?? '').trim().isEmpty
           ? '$countText new message${newCount == 1 ? '' : 's'}'
-          : conversation.subtitle.trim();
+          : (body ?? '').trim();
       await _plugin.show(
         id: _nextNotificationId++,
-        title: title,
-        body: body,
+        title: notificationTitle,
+        body: notificationBody,
         notificationDetails: _notificationDetails(conversation),
         payload: _payloadFor(conversation),
       );

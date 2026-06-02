@@ -103,6 +103,9 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   late final CsacAppState state;
   final updateChecker = VersionUpdateChecker();
   final localNotifications = CsacLocalNotificationService.instance;
+  final backgroundRefreshChannel = const MethodChannel(
+    'ink.jjmm.csacflutter/background_refresh',
+  );
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<Conversation>? notificationTapSub;
@@ -112,7 +115,19 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   bool appLockStateSeen = false;
   bool lastCanUseAppLock = false;
   bool startupUpdateCheckStarted = false;
+  bool localNotificationPermissionPrimed = false;
   int appLockUserId = 0;
+
+  Map<String, int> unreadSnapshot() {
+    return <String, int>{
+      for (final conversation in state.conversations)
+        conversationKey(conversation): conversation.unreadCount,
+    };
+  }
+
+  String conversationKey(Conversation conversation) {
+    return '${conversation.type.name}:${conversation.id}';
+  }
 
   @override
   void initState() {
@@ -120,6 +135,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     WidgetsBinding.instance.addObserver(this);
     state = CsacAppState();
     state.addListener(handleStateChanged);
+    backgroundRefreshChannel.setMethodCallHandler(handleBackgroundRefreshCall);
     unawaited(state.initialize());
     unawaited(localNotifications.initialize());
     notificationTapSub = localNotifications.taps.listen(openNotificationChat);
@@ -132,6 +148,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   void dispose() {
     state.removeListener(handleStateChanged);
     WidgetsBinding.instance.removeObserver(this);
+    backgroundRefreshChannel.setMethodCallHandler(null);
     notificationTapSub?.cancel();
     updateChecker.close();
     super.dispose();
@@ -161,11 +178,35 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     );
   }
 
+  Future<dynamic> handleBackgroundRefreshCall(MethodCall call) async {
+    if (call.method != 'performBackgroundFetch') {
+      throw MissingPluginException('Unknown method ${call.method}');
+    }
+    if (state.user == null || state.bootstrapping) {
+      return false;
+    }
+    final wasForeground = state.appInForeground;
+    state.setAppInForeground(false);
+    final beforeUnread = unreadSnapshot();
+    try {
+      await state.refreshHome();
+      final newCount = await showNewMessageNotificationsFromSnapshot(
+        beforeUnread,
+      );
+      return newCount > 0;
+    } catch (_) {
+      return false;
+    } finally {
+      state.setAppInForeground(wasForeground);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
     if (lifecycleState == AppLifecycleState.paused ||
         lifecycleState == AppLifecycleState.hidden ||
         lifecycleState == AppLifecycleState.inactive) {
+      state.setAppInForeground(false);
       wasBackgrounded = true;
       if (canUseAppLock()) {
         appLockSessionUnlocked = false;
@@ -177,12 +218,97 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     }
     if (lifecycleState == AppLifecycleState.resumed && wasBackgrounded) {
       wasBackgrounded = false;
+      unawaited(refreshAfterResume());
       lockIfNeeded();
+      return;
     }
+    if (lifecycleState == AppLifecycleState.resumed) {
+      state.setAppInForeground(true);
+    }
+  }
+
+  Future<void> refreshAfterResume() async {
+    if (state.user == null || state.bootstrapping) {
+      state.setAppInForeground(true);
+      return;
+    }
+    final beforeUnread = unreadSnapshot();
+    try {
+      await state.refreshHome();
+      await showNewMessageNotificationsFromSnapshot(beforeUnread);
+    } catch (_) {
+      // Resume refresh should not interrupt unlock or normal foregrounding.
+    } finally {
+      state.setAppInForeground(true);
+    }
+  }
+
+  Future<int> showNewMessageNotificationsFromSnapshot(
+    Map<String, int> beforeUnread,
+  ) async {
+    if (!state.preferences.localSystemNotificationsEnabled) {
+      return 0;
+    }
+    var newCount = 0;
+    for (final conversation in state.conversations) {
+      if (state.isVisibleActiveConversation(conversation)) {
+        continue;
+      }
+      final previous = beforeUnread[conversationKey(conversation)] ?? 0;
+      final delta = conversation.unreadCount - previous;
+      if (delta <= 0) {
+        continue;
+      }
+      newCount += delta;
+      final latestMessage = await latestNotificationMessage(conversation);
+      await localNotifications.showConversationNotification(
+        conversation: conversation,
+        newCount: delta,
+        title: notificationTitleForConversation(conversation, latestMessage),
+        body: notificationBodyForConversation(
+          conversation,
+          delta,
+          latestMessage,
+          CsacStrings(localeForLanguage(state.preferences.language)),
+        ),
+      );
+    }
+    return newCount;
+  }
+
+  Future<ChatMessage?> latestNotificationMessage(
+    Conversation conversation,
+  ) async {
+    if (conversation.type == ConversationType.group) {
+      final cached = await state.loadCachedMessages(conversation);
+      final afterId = cached.isEmpty ? 0 : cached.last.id;
+      final previousIncomingId = latestIncomingNotificationMessageId(
+        conversation,
+        cached,
+        currentUserId: state.user?.uid ?? 0,
+      );
+      final loaded = await state.syncMessages(conversation, afterId: afterId);
+      final latestIncoming = latestIncomingNotificationMessage(
+        conversation,
+        loaded,
+        currentUserId: state.user?.uid ?? 0,
+      );
+      if (latestIncoming != null && latestIncoming.id > previousIncomingId) {
+        return latestIncoming;
+      }
+      return null;
+    }
+    final cached = await state.loadCachedMessages(conversation);
+    return latestIncomingNotificationMessage(
+      conversation,
+      cached,
+      currentUserId: state.user?.uid ?? 0,
+    );
   }
 
   void handleStateChanged() {
     maybeCheckForUpdatesOnStartup();
+    maybePrimeLocalNotificationPermission();
     final userId = state.user?.uid ?? 0;
     if (userId != appLockUserId) {
       appLockUserId = userId;
@@ -211,8 +337,19 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     }
   }
 
+  void maybePrimeLocalNotificationPermission() {
+    if (localNotificationPermissionPrimed ||
+        state.bootstrapping ||
+        !state.preferences.localSystemNotificationsEnabled) {
+      return;
+    }
+    localNotificationPermissionPrimed = true;
+    unawaited(localNotifications.ensurePermissions());
+  }
+
   void maybeCheckForUpdatesOnStartup() {
     if (startupUpdateCheckStarted ||
+        !supportsVersionUpdateChecks ||
         state.bootstrapping ||
         !state.preferences.autoCheckVersionUpdates) {
       return;
@@ -304,9 +441,12 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
-        final appTitle = CsacStrings(
+        final strings = CsacStrings(
           localeForLanguage(state.preferences.language),
-        ).text('CsAC Mobile');
+        );
+        final appTitle = strings.text(
+          isDesktopPlatform ? 'CsAC Desktop' : 'CsAC Mobile',
+        );
         final platformBrightness = MediaQuery.maybePlatformBrightnessOf(
           context,
         );
@@ -335,7 +475,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
             state.preferences.fontStyle,
           ),
           builder: (context, child) {
-            return _DesktopCommandPaletteHost(
+            final appContent = _DesktopCommandPaletteHost(
               state: state,
               navigatorKey: navigatorKey,
               scaffoldMessengerKey: scaffoldMessengerKey,
@@ -353,6 +493,10 @@ class _CsacMobileAppState extends State<CsacMobileApp>
                   child: child ?? const SizedBox.shrink(),
                 ),
               ),
+            );
+            return _CupertinoDesktopWindowFrame(
+              title: appTitle,
+              child: appContent,
             );
           },
           home: _MotionPreference(
@@ -438,6 +582,243 @@ class _StartupTransition extends StatelessWidget {
         );
       },
       child: child,
+    );
+  }
+}
+
+class _CupertinoDesktopWindowFrame extends StatelessWidget {
+  const _CupertinoDesktopWindowFrame({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!supportsCustomDesktopWindowChrome) {
+      return child;
+    }
+    return buildDesktopWindowStateListener(
+      builder: (context, frameState) {
+        final colors = CsacColors.of(context);
+        final expanded = frameState.isExpanded;
+        final radius = expanded ? 0.0 : 12.0;
+        final borderColor =
+            (frameState.isFocused
+                    ? CupertinoTheme.of(context).primaryColor
+                    : colors.separator)
+                .withValues(alpha: frameState.isFocused ? 0.36 : 0.28);
+        final window = DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.systemBackground,
+            borderRadius: BorderRadius.circular(radius),
+            border: expanded
+                ? null
+                : Border.all(color: borderColor, width: 0.8),
+            boxShadow: [
+              if (!expanded)
+                BoxShadow(
+                  color: CupertinoColors.black.withValues(
+                    alpha: colors.isDark ? 0.40 : 0.16,
+                  ),
+                  blurRadius: frameState.isFocused ? 28 : 18,
+                  offset: const Offset(0, 12),
+                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: Column(
+              children: [
+                _CupertinoDesktopTitleBar(
+                  title: title,
+                  isMaximized: frameState.isMaximized,
+                  isFocused: frameState.isFocused,
+                  expanded: expanded,
+                ),
+                Expanded(
+                  child: ClipRect(
+                    child: ColoredBox(
+                      color: colors.systemBackground,
+                      child: child,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        return buildDesktopWindowResizeFrame(enabled: !expanded, child: window);
+      },
+    );
+  }
+}
+
+class _CupertinoDesktopTitleBar extends StatelessWidget {
+  const _CupertinoDesktopTitleBar({
+    required this.title,
+    required this.isMaximized,
+    required this.isFocused,
+    required this.expanded,
+  });
+
+  final String title;
+  final bool isMaximized;
+  final bool isFocused;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final bar = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          primary.withValues(alpha: isFocused ? 0.04 : 0.0),
+          colors.systemBackground,
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.separator.withValues(alpha: 0.28),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: SizedBox(
+        height: 46,
+        child: Padding(
+          padding: EdgeInsetsDirectional.only(
+            start: expanded ? 12 : 14,
+            end: 8,
+          ),
+          child: Row(
+            children: [
+              _CupertinoWindowControlButton(
+                tooltip: 'Close',
+                label: 'x',
+                color: CupertinoColors.systemRed.resolveFrom(context),
+                onPressed: () => unawaited(closeDesktopWindow()),
+              ),
+              _CupertinoWindowControlButton(
+                tooltip: 'Minimize',
+                label: '-',
+                color: CupertinoColors.systemYellow.resolveFrom(context),
+                onPressed: () => unawaited(minimizeDesktopWindow()),
+              ),
+              _CupertinoWindowControlButton(
+                tooltip: isMaximized ? 'Restore' : 'Maximize',
+                label: '+',
+                color: CupertinoColors.systemGreen.resolveFrom(context),
+                onPressed: () => unawaited(toggleMaximizeDesktopWindow()),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: buildDesktopWindowMoveArea(
+                  child: Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.chat_bubble_2_fill,
+                        size: 16,
+                        color: isFocused ? primary : colors.secondaryLabel,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isFocused
+                                ? colors.label
+                                : colors.secondaryLabel,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return bar;
+  }
+}
+
+class _CupertinoWindowControlButton extends StatefulWidget {
+  const _CupertinoWindowControlButton({
+    required this.tooltip,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  State<_CupertinoWindowControlButton> createState() =>
+      _CupertinoWindowControlButtonState();
+}
+
+class _CupertinoWindowControlButtonState
+    extends State<_CupertinoWindowControlButton> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: widget.tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => hovering = true),
+        onExit: (_) => setState(() => hovering = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onPressed,
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: Center(
+              child: Container(
+                width: 13,
+                height: 13,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(alpha: hovering ? 1 : 0.86),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: CupertinoColors.black.withValues(alpha: 0.08),
+                    width: 0.5,
+                  ),
+                ),
+                child: AnimatedOpacity(
+                  opacity: hovering ? 1 : 0,
+                  duration: 100.ms,
+                  child: Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: CupertinoColors.black,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

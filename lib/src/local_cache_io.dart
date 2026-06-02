@@ -116,8 +116,9 @@ class CsacLocalCache {
   Future<List<Conversation>> loadConversations() async {
     final db = await _database();
     final rows = db.select('''
-      SELECT type, remote_id, name, avatar, subtitle, unread_count, search_text,
-        last_message_at, display_order
+      SELECT type, remote_id, name, avatar, subtitle, status_subtitle,
+        last_message_preview, unread_count, search_text, last_message_at,
+        display_order
       FROM conversations
       ORDER BY display_order ASC, updated_at DESC, name COLLATE NOCASE ASC
       ''');
@@ -129,6 +130,8 @@ class CsacLocalCache {
           name: row['name'] as String,
           avatar: row['avatar'] as String,
           subtitle: row['subtitle'] as String,
+          statusSubtitle: asString(row['status_subtitle']),
+          lastMessagePreview: asString(row['last_message_preview']),
           unreadCount: row['unread_count'] as int,
           searchText: row['search_text'] as String,
           lastMessageAt: row['last_message_at'] as int,
@@ -141,8 +144,9 @@ class CsacLocalCache {
     final db = await _database();
     final rows = db.select(
       '''
-      SELECT type, remote_id, name, avatar, subtitle, unread_count, search_text,
-        last_message_at, display_order
+      SELECT type, remote_id, name, avatar, subtitle, status_subtitle,
+        last_message_preview, unread_count, search_text, last_message_at,
+        display_order
       FROM conversations
       WHERE type = ? AND remote_id = ?
       LIMIT 1
@@ -184,14 +188,17 @@ class CsacLocalCache {
       ''');
     final insertStatement = db.prepare('''
       INSERT INTO conversations (
-        type, remote_id, name, avatar, subtitle, unread_count, search_text,
-        last_message_at, updated_at, display_order
+        type, remote_id, name, avatar, subtitle, status_subtitle,
+        last_message_preview, unread_count, search_text, last_message_at,
+        updated_at, display_order
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(type, remote_id) DO UPDATE SET
         name = excluded.name,
         avatar = excluded.avatar,
         subtitle = excluded.subtitle,
+        status_subtitle = excluded.status_subtitle,
+        last_message_preview = excluded.last_message_preview,
         unread_count = excluded.unread_count,
         search_text = excluded.search_text,
         last_message_at = excluded.last_message_at,
@@ -210,6 +217,8 @@ class CsacLocalCache {
           conversation.name,
           conversation.avatar,
           conversation.subtitle,
+          conversation.statusSubtitle,
+          conversation.lastMessagePreview,
           conversation.unreadCount,
           conversation.searchText,
           conversation.lastMessageAt,
@@ -681,6 +690,52 @@ class CsacLocalCache {
     await saveMessages(conversation, messages);
   }
 
+  Future<void> removeMessagesMissingFromWindow(
+    Conversation conversation,
+    List<ChatMessage> serverMessages,
+  ) async {
+    final firstId = serverMessages.isEmpty ? 0 : serverMessages.first.id;
+    if (firstId < 0) {
+      return;
+    }
+    final serverIds = serverMessages.map((message) => message.id).toSet();
+    final db = await _database();
+    final type = _conversationTypeName(conversation.type);
+    final rows = db.select(
+      '''
+      SELECT id
+      FROM messages
+      WHERE conversation_type = ?
+        AND conversation_id = ?
+        AND id >= ?
+      ''',
+      [type, conversation.id, firstId],
+    );
+    final missingIds = rows
+        .map((row) => asInt(row['id']))
+        .where((id) => id > 0 && !serverIds.contains(id))
+        .toList();
+    if (missingIds.isEmpty) {
+      return;
+    }
+    final statement = db.prepare('''
+      DELETE FROM messages
+      WHERE conversation_type = ? AND conversation_id = ? AND id = ?
+      ''');
+    try {
+      db.execute('BEGIN IMMEDIATE');
+      for (final id in missingIds) {
+        statement.execute([type, conversation.id, id]);
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    } finally {
+      statement.dispose();
+    }
+  }
+
   Future<List<ChatMessage>> filterLocallyDeletedMessages(
     Conversation conversation,
     List<ChatMessage> messages,
@@ -800,6 +855,8 @@ class CsacLocalCache {
         name TEXT NOT NULL,
         avatar TEXT NOT NULL DEFAULT '',
         subtitle TEXT NOT NULL DEFAULT '',
+        status_subtitle TEXT NOT NULL DEFAULT '',
+        last_message_preview TEXT NOT NULL DEFAULT '',
         unread_count INTEGER NOT NULL DEFAULT 0,
         search_text TEXT NOT NULL DEFAULT '',
         last_message_at INTEGER NOT NULL DEFAULT 0,
@@ -824,6 +881,18 @@ class CsacLocalCache {
       db,
       'conversations',
       'search_text',
+      "TEXT NOT NULL DEFAULT ''",
+    );
+    _addColumnIfMissing(
+      db,
+      'conversations',
+      'status_subtitle',
+      "TEXT NOT NULL DEFAULT ''",
+    );
+    _addColumnIfMissing(
+      db,
+      'conversations',
+      'last_message_preview',
       "TEXT NOT NULL DEFAULT ''",
     );
     _addColumnIfMissing(
@@ -970,6 +1039,8 @@ class CsacLocalCache {
       name: row['name'] as String,
       avatar: row['avatar'] as String,
       subtitle: row['subtitle'] as String,
+      statusSubtitle: asString(row['status_subtitle']),
+      lastMessagePreview: asString(row['last_message_preview']),
       unreadCount: row['unread_count'] as int,
       searchText: row['search_text'] as String,
       lastMessageAt: row['last_message_at'] as int,

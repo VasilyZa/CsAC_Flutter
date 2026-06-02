@@ -107,6 +107,11 @@ class CsacLocalCache {
     List<ChatMessage> messages,
   ) async {}
 
+  Future<void> removeMessagesMissingFromWindow(
+    Conversation conversation,
+    List<ChatMessage> serverMessages,
+  ) async {}
+
   Future<List<ChatMessage>> filterLocallyDeletedMessages(
     Conversation conversation,
     List<ChatMessage> messages,

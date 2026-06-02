@@ -12,6 +12,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -27,7 +28,9 @@ import 'src/l10n.dart';
 import 'src/models.dart';
 import 'src/notification_service.dart';
 import 'src/platform/chat_export_writer.dart';
+import 'src/platform/desktop_window_chrome.dart';
 import 'src/platform/platform_support.dart';
+import 'src/platform/windows_tray.dart';
 import 'src/preferences.dart';
 import 'src/update_checker.dart';
 
@@ -47,7 +50,10 @@ part 'src/ui/media.dart';
 part 'src/ui/conversation_media.dart';
 part 'src/ui/helpers.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   installGlobalBadCertificateOverride();
+  await configureDesktopWindowChrome();
+  await configureWindowsTray();
   runApp(const CsacMobileApp());
 }

@@ -95,6 +95,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final mentionTargets = <GroupMember>[];
   final selectedMessageIds = <int>{};
   final memberAvatars = <int, String>{};
+  final groupMembersByUid = <int, GroupMember>{};
   Timer? timer;
   Timer? draftTimer;
   StreamSubscription<PlayerState>? voicePlayerStateSub;
@@ -129,7 +130,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool showChatHint = false;
   bool loadingMemberAvatars = false;
   bool keyboardShouldKeepBottom = false;
-  bool composeMenuOpen = false;
   bool chatLifecyclePaused = false;
   double keyboardInsetBottom = 0;
   int? pressedMessageId;
@@ -138,6 +138,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool get selectionMode => selectedMessageIds.isNotEmpty;
 
   bool get canSendText => input.text.trim().isNotEmpty;
+
+  Conversation get displayedConversation {
+    final latest = widget.state.conversations
+        .where(
+          (conversation) =>
+              conversation.type == widget.conversation.type &&
+              conversation.id == widget.conversation.id,
+        )
+        .firstOrNull;
+    if (latest == null) {
+      return widget.conversation;
+    }
+    return latest.copyWith(
+      name: latest.name.trim().isEmpty ? widget.conversation.name : latest.name,
+      avatar: latest.avatar.trim().isEmpty
+          ? widget.conversation.avatar
+          : latest.avatar,
+      subtitle: latest.subtitle.trim().isEmpty
+          ? widget.conversation.subtitle
+          : latest.subtitle,
+      statusSubtitle: latest.statusSubtitle.trim().isEmpty
+          ? widget.conversation.statusSubtitle
+          : latest.statusSubtitle,
+      lastMessagePreview: latest.lastMessagePreview.trim().isEmpty
+          ? widget.conversation.lastMessagePreview
+          : latest.lastMessagePreview,
+    );
+  }
+
+  GroupProfile? get displayedGroupProfile {
+    final profile = groupProfile;
+    if (profile != null) {
+      return profile;
+    }
+    if (widget.conversation.type != ConversationType.group) {
+      return null;
+    }
+    return GroupProfile(
+      id: widget.conversation.id,
+      name: displayedConversation.name,
+      avatar: displayedConversation.avatar,
+    );
+  }
 
   void setExporting(bool value) {
     setState(() => refreshing = value);
@@ -258,9 +301,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
-    if (widget.state.preferences.showChatAvatars &&
-        widget.conversation.type == ConversationType.group &&
-        memberAvatars.isEmpty) {
+    if (widget.conversation.type == ConversationType.group &&
+        groupMembersByUid.isEmpty) {
       unawaited(loadMemberAvatars());
     }
     setState(() {});
@@ -506,7 +548,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> loadMemberAvatars() async {
     if (widget.conversation.type != ConversationType.group ||
-        !widget.state.preferences.showChatAvatars ||
         loadingMemberAvatars) {
       return;
     }
@@ -519,6 +560,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() {
+        groupMembersByUid
+          ..clear()
+          ..addEntries(members.map((member) => MapEntry(member.uid, member)));
         memberAvatars
           ..clear()
           ..addEntries(
@@ -536,7 +580,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   String avatarForMessage(ChatMessage message, bool mine) {
     if (mine) {
-      return widget.state.user?.avatar ?? '';
+      return widget.state.currentUserAvatar;
     }
     if (message.senderAvatar.trim().isNotEmpty) {
       return message.senderAvatar;
@@ -546,9 +590,72 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return memberAvatar;
     }
     if (widget.conversation.type == ConversationType.private) {
-      return widget.conversation.avatar;
+      return displayedConversation.avatar;
     }
     return '';
+  }
+
+  GroupMember memberForMessage(ChatMessage message) {
+    final cached = groupMembersByUid[message.senderId];
+    if (cached != null) {
+      return cached;
+    }
+    return GroupMember(
+      uid: message.senderId,
+      name: message.sender.trim().isEmpty
+          ? 'UID ${message.senderId}'
+          : message.sender,
+      avatar: avatarForMessage(message, false),
+      memberTitle: message.memberTitle,
+      memberLevel: message.memberLevel,
+    );
+  }
+
+  void mentionMessageSender(ChatMessage message) {
+    if (widget.conversation.type != ConversationType.group ||
+        message.senderId <= 0) {
+      return;
+    }
+    final member = memberForMessage(message);
+    setState(() {
+      if (!mentionTargets.any((item) => item.uid == member.uid)) {
+        mentionTargets.add(member);
+      }
+    });
+    final mentionText = '@${member.name} ';
+    if (!input.text.endsWith(mentionText)) {
+      final selection = input.selection;
+      final insertAt = selection.isValid ? selection.end : input.text.length;
+      final prefix = input.text.substring(0, insertAt);
+      final suffix = input.text.substring(insertAt);
+      final spacer = prefix.isEmpty || RegExp(r'\s$').hasMatch(prefix)
+          ? ''
+          : ' ';
+      final nextText = '$prefix$spacer$mentionText$suffix';
+      final nextOffset = ('$prefix$spacer$mentionText').length;
+      input.value = input.value.copyWith(
+        text: nextText,
+        selection: TextSelection.collapsed(offset: nextOffset),
+        composing: TextRange.empty,
+      );
+    }
+    inputFocus.requestFocus();
+    unawaited(saveDraftNow());
+  }
+
+  Future<void> openMessageSenderProfile(ChatMessage message) async {
+    if (message.senderId <= 0) {
+      return;
+    }
+    await openUserProfile(
+      context,
+      widget.state,
+      message.senderId,
+      group: displayedGroupProfile,
+      member: widget.conversation.type == ConversationType.group
+          ? memberForMessage(message)
+          : null,
+    );
   }
 
   Future<void> markCurrentConversationRead() async {
@@ -656,7 +763,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         messages
           ..clear()
-          ..addAll(merged);
+          ..addAll(
+            widget.conversation.type == ConversationType.private &&
+                    loaded.isNotEmpty
+                ? reconcilePrivateMessages(merged, loaded)
+                : merged,
+          );
         offline = false;
       });
       await markCurrentConversationRead();
@@ -692,7 +804,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     return message.senderId == widget.state.user?.uid &&
                         !message.isRead;
                   })));
-      if (shouldFullReload) {
+      final shouldReconcilePrivateDeletes =
+          widget.conversation.type == ConversationType.private &&
+          silent &&
+          refreshTicks % 3 == 0;
+      if (shouldFullReload || shouldReconcilePrivateDeletes) {
         final loaded = await widget.state.reloadMessagesFromNetwork(
           widget.conversation,
         );
@@ -709,7 +825,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           messages
             ..clear()
-            ..addAll(merged);
+            ..addAll(
+              widget.conversation.type == ConversationType.private
+                  ? reconcilePrivateMessages(merged, loaded)
+                  : merged,
+            );
           offline = false;
         });
         if (loaded.isNotEmpty) {
@@ -797,6 +917,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     }
     return widget.state.loadCachedMessages(widget.conversation);
+  }
+
+  List<ChatMessage> reconcilePrivateMessages(
+    List<ChatMessage> currentMessages,
+    List<ChatMessage> serverMessages,
+  ) {
+    if (serverMessages.isEmpty) {
+      return const <ChatMessage>[];
+    }
+    final firstServerId = serverMessages.first.id;
+    final serverIds = serverMessages.map((message) => message.id).toSet();
+    return currentMessages
+        .where(
+          (message) =>
+              message.id < firstServerId || serverIds.contains(message.id),
+        )
+        .toList();
   }
 
   Future<void> loadOlderMessages() async {
@@ -1530,16 +1667,70 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> showMessageActions(ChatMessage message, bool mine) async {
     HapticFeedback.mediumImpact();
     setState(() => pressedMessageId = message.id);
+    final strings = context.strings;
+    final canRecall = message.canRecall || mine;
+    final canEssence = widget.conversation.type == ConversationType.group;
     final action =
-        await showModalBottomSheet<_MessageAction>(
+        await showCupertinoModalPopup<_MessageAction>(
           context: context,
-          showDragHandle: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          builder: (context) => _SpringSheet(
-            child: _MessageActionSheet(
-              message: message,
-              canRecall: message.canRecall || mine,
-              canEssence: widget.conversation.type == ConversationType.group,
+          builder: (context) => CupertinoActionSheet(
+            title: Text(strings.text('Message actions')),
+            message: Text('#${message.id} ${message.sender}'),
+            actions: [
+              CupertinoActionSheetAction(
+                onPressed: () =>
+                    Navigator.of(context).pop(_MessageAction.reply),
+                child: Text(strings.text('Reply')),
+              ),
+              CupertinoActionSheetAction(
+                onPressed: () =>
+                    Navigator.of(context).pop(_MessageAction.select),
+                child: Text(strings.text('Select messages')),
+              ),
+              CupertinoActionSheetAction(
+                onPressed: () =>
+                    Navigator.of(context).pop(_MessageAction.copyText),
+                child: Text(strings.text('Copy text')),
+              ),
+              if (message.imageUrl.isNotEmpty)
+                CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.copyImage),
+                  child: Text(strings.text('Copy image link')),
+                ),
+              if (message.imageUrl.isNotEmpty)
+                CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.openImage),
+                  child: Text(strings.text('Open image')),
+                ),
+              if (message.imageUrl.isNotEmpty)
+                CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.downloadImage),
+                  child: Text(strings.text('Download image')),
+                ),
+              if (canRecall)
+                CupertinoActionSheetAction(
+                  isDestructiveAction: true,
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.recall),
+                  child: Text(strings.text('Recall')),
+                ),
+              if (canEssence)
+                CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.essence),
+                  child: Text(
+                    strings.text(
+                      message.isEssence ? 'Remove essence' : 'Set essence',
+                    ),
+                  ),
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(strings.text('Cancel')),
             ),
           ),
         ).whenComplete(() {
@@ -1625,69 +1816,51 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   List<_ComposeMenuAction> composeMenuActions(CsacStrings strings) {
     return [
-      _ComposeMenuAction(
-        value: 'image',
-        icon: Icons.image_outlined,
-        label: strings.text('Image'),
-      ),
-      _ComposeMenuAction(
-        value: 'camera',
-        icon: Icons.photo_camera_outlined,
-        label: strings.text('Take photo'),
-      ),
-      _ComposeMenuAction(
-        value: 'emoji',
-        icon: Icons.emoji_emotions_outlined,
-        label: strings.text('Emoji stickers'),
-      ),
+      _ComposeMenuAction(value: 'image', label: strings.text('Image')),
+      _ComposeMenuAction(value: 'camera', label: strings.text('Take photo')),
+      _ComposeMenuAction(value: 'emoji', label: strings.text('Emoji stickers')),
       if (supportsVoiceRecording)
         _ComposeMenuAction(
           value: 'recordVoice',
-          icon: Icons.mic,
           label: strings.text('Record voice'),
         ),
-      _ComposeMenuAction(
-        value: 'voiceFile',
-        icon: Icons.audio_file_outlined,
-        label: strings.text('Voice file'),
-      ),
+      _ComposeMenuAction(value: 'voiceFile', label: strings.text('Voice file')),
       if (widget.conversation.type == ConversationType.group)
-        _ComposeMenuAction(
-          value: 'mention',
-          icon: Icons.alternate_email,
-          label: strings.text('Mention'),
-        ),
+        _ComposeMenuAction(value: 'mention', label: strings.text('Mention')),
       if (widget.conversation.type == ConversationType.group)
-        _ComposeMenuAction(
-          value: 'essence',
-          icon: Icons.star_outline,
-          label: strings.text('Essence'),
-        ),
-      _ComposeMenuAction(
-        value: 'media',
-        icon: Icons.perm_media_outlined,
-        label: strings.text('Media'),
-      ),
+        _ComposeMenuAction(value: 'essence', label: strings.text('Essence')),
+      _ComposeMenuAction(value: 'media', label: strings.text('Media')),
       if (supportsLocalFiles)
-        _ComposeMenuAction(
-          value: 'export',
-          icon: Icons.ios_share_outlined,
-          label: strings.text('Export'),
-        ),
+        _ComposeMenuAction(value: 'export', label: strings.text('Export')),
     ];
   }
 
-  void toggleComposeMenu() {
-    setState(() => composeMenuOpen = !composeMenuOpen);
-    if (composeMenuOpen) {
-      FocusManager.instance.primaryFocus?.unfocus();
+  Future<void> showComposeActions() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final strings = context.strings;
+    final selected = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('Add to message')),
+        actions: [
+          for (final action in composeMenuActions(strings))
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(action.value),
+              child: Text(action.label),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      await handleComposeMenuAction(selected);
     }
   }
 
   Future<void> handleComposeMenuAction(String action) async {
-    if (composeMenuOpen && mounted) {
-      setState(() => composeMenuOpen = false);
-    }
     switch (action) {
       case 'image':
         await pickAndSendImage();
@@ -2189,6 +2362,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
+    final conversation = displayedConversation;
     final announcement = groupProfile?.notice.trim() ?? '';
     final showEmpty = !loading && messages.isEmpty && pendingSends.isEmpty;
     final unreadMessageId = firstUnreadMessageId;
@@ -2216,14 +2390,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             : Row(
                 children: [
                   _ConversationAvatarHero(
-                    conversation: widget.conversation,
+                    conversation: conversation,
                     enabled: !widget.embedded,
                     radius: 16,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _ConversationTitleHero(
-                      conversation: widget.conversation,
+                      conversation: conversation,
                       enabled: !widget.embedded,
                     ),
                   ),
@@ -2271,9 +2445,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           behavior: HitTestBehavior.translucent,
           onTap: () {
             FocusManager.instance.primaryFocus?.unfocus();
-            if (composeMenuOpen) {
-              setState(() => composeMenuOpen = false);
-            }
           },
           child: Stack(
             children: [
@@ -2459,6 +2630,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   final mine =
                                       widget.state.user?.uid ==
                                       message.senderId;
+                                  final member =
+                                      widget.conversation.type ==
+                                          ConversationType.group
+                                      ? memberForMessage(message)
+                                      : null;
                                   if (message.messageType == 4 ||
                                       message.isRecalled) {
                                     return _MotionListItem(
@@ -2495,6 +2671,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         () => GlobalKey(),
                                       ),
                                       message: message,
+                                      member: member,
                                       replyMessage: replyMessage,
                                       mine: mine,
                                       showAvatar: showAvatar,
@@ -2543,6 +2720,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                   .enablePat &&
                                               !mine
                                           ? () => sendPat(message)
+                                          : null,
+                                      onAvatarTap: selectionMode
+                                          ? null
+                                          : () => openMessageSenderProfile(
+                                              message,
+                                            ),
+                                      onAvatarLongPress:
+                                          widget.conversation.type ==
+                                                  ConversationType.group &&
+                                              !mine &&
+                                              !selectionMode
+                                          ? () => mentionMessageSender(message)
                                           : null,
                                       onReplyTap: message.replyTo > 0
                                           ? () =>
@@ -2788,35 +2977,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   CupertinoButton(
                                     padding: EdgeInsets.zero,
                                     minimumSize: const Size(38, 38),
-                                    onPressed: toggleComposeMenu,
-                                    child: AnimatedRotation(
-                                      turns: composeMenuOpen ? 0.125 : 0,
-                                      duration:
-                                          _MotionPreference.reduceOf(context)
-                                          ? Duration.zero
-                                          : 180.ms,
-                                      curve: Curves.easeOutCubic,
-                                      child: Container(
-                                        width: 38,
-                                        height: 38,
-                                        decoration: BoxDecoration(
-                                          color: colors.tertiaryFill,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: colors.separator.withValues(
-                                              alpha: 0.26,
-                                            ),
-                                            width: 0.5,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          CupertinoIcons.plus,
-                                          color: CupertinoTheme.of(
-                                            context,
-                                          ).primaryColor,
-                                          size: 22,
-                                        ),
-                                      ),
+                                    onPressed: () =>
+                                        unawaited(showComposeActions()),
+                                    child: Icon(
+                                      CupertinoIcons.plus_circle,
+                                      color: CupertinoTheme.of(
+                                        context,
+                                      ).primaryColor,
+                                      size: 30,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -2870,50 +3038,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: !composeMenuOpen,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => setState(() => composeMenuOpen = false),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 74 + MediaQuery.paddingOf(context).bottom,
-                child: IgnorePointer(
-                  ignoring: !composeMenuOpen,
-                  child: AnimatedSwitcher(
-                    duration: _MotionPreference.reduceOf(context)
-                        ? Duration.zero
-                        : 260.ms,
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween<double>(
-                            begin: 0.985,
-                            end: 1,
-                          ).animate(animation),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: composeMenuOpen
-                        ? _ComposeMenuPanel(
-                            key: const ValueKey('compose-menu-panel'),
-                            actions: composeMenuActions(strings),
-                            onSelected: handleComposeMenuAction,
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -2926,6 +3050,7 @@ class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     super.key,
     required this.message,
+    this.member,
     this.replyMessage,
     required this.mine,
     this.showAvatar = false,
@@ -2942,6 +3067,8 @@ class _MessageBubble extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.onSwipeReply,
+    this.onAvatarTap,
+    this.onAvatarLongPress,
     this.onAvatarDoubleTap,
     this.onReplyTap,
     this.onImageTap,
@@ -2956,6 +3083,7 @@ class _MessageBubble extends StatefulWidget {
   });
 
   final ChatMessage message;
+  final GroupMember? member;
   final ChatMessage? replyMessage;
   final bool mine;
   final bool showAvatar;
@@ -2972,6 +3100,8 @@ class _MessageBubble extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onSwipeReply;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onAvatarLongPress;
   final VoidCallback? onAvatarDoubleTap;
   final VoidCallback? onReplyTap;
   final VoidCallback? onImageTap;
@@ -3055,9 +3185,12 @@ class _MessageBubbleState extends State<_MessageBubble> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final defaultColor = widget.mine
-        ? colors.primaryContainer
-        : colors.surfaceContainerHighest;
+    final cupertinoColors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final defaultColor = cupertinoChatBubbleDefaultColor(
+      context,
+      mine: widget.mine,
+    );
     final colorValue = widget.mine
         ? widget.preferences.ownChatBubbleColorValue
         : widget.preferences.otherChatBubbleColorValue;
@@ -3068,27 +3201,19 @@ class _MessageBubbleState extends State<_MessageBubble> {
         .clamp(0.45, 1.0)
         .toDouble();
     final color = baseColor.withValues(alpha: bubbleOpacity);
-    final solidTextSource = Color.alphaBlend(
-      color,
-      theme.scaffoldBackgroundColor,
-    );
-    final textColor =
-        ThemeData.estimateBrightnessForColor(solidTextSource) == Brightness.dark
-        ? Colors.white
-        : Colors.black87;
+    final textColor = cupertinoChatBubbleTextColor(context, color);
     final secondaryTextColor = textColor.withValues(alpha: 0.72);
     final replyColor = widget.mine
-        ? colors.primary.withValues(alpha: 0.14)
-        : colors.surfaceContainerHigh.withValues(alpha: bubbleOpacity);
-    final borderColor = Color.alphaBlend(
-      textColor.withValues(alpha: 0.08),
-      color,
-    );
+        ? CupertinoColors.white.withValues(alpha: 0.16)
+        : cupertinoColors.fill.withValues(alpha: bubbleOpacity);
     final borderRadius = chatBubbleBorderRadius(
       widget.preferences.chatBubbleCornerStyle,
       widget.mine,
     );
     final highlighted = widget.pressed || widget.selected || widget.focused;
+    final normalBorderColor = widget.mine
+        ? Colors.transparent
+        : cupertinoColors.separator.withValues(alpha: 0.18);
     final align = widget.mine
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
@@ -3098,12 +3223,19 @@ class _MessageBubbleState extends State<_MessageBubble> {
             url: widget.avatarUrl,
             mine: widget.mine,
             name: widget.message.sender,
+            onTap: widget.onAvatarTap,
+            onLongPress: widget.onAvatarLongPress,
             onDoubleTap: widget.onAvatarDoubleTap,
           )
         : const SizedBox.shrink();
     final messageTime = displayMessageTime(widget.message, widget.preferences);
     final memberLevelText = widget.showMemberLevel
-        ? _memberLevelText(widget.message)
+        ? _groupMemberBadgeText(
+            widget.message,
+            widget.member,
+            widget.preferences,
+            strings,
+          )
         : '';
     final messageText = chatMessagePlainText(widget.message, strings);
     final hasEmoji = widget.message.emojiAddress.isNotEmpty;
@@ -3127,24 +3259,18 @@ class _MessageBubbleState extends State<_MessageBubble> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: widget.pressed
-            ? Color.alphaBlend(colors.primary.withValues(alpha: 0.08), color)
+            ? Color.alphaBlend(
+                (widget.mine ? CupertinoColors.white : primary).withValues(
+                  alpha: 0.10,
+                ),
+                color,
+              )
             : color,
         borderRadius: borderRadius,
         border: Border.all(
-          color: highlighted ? colors.primary : borderColor,
-          width: highlighted ? 2 : 1,
+          color: highlighted ? primary : normalBorderColor,
+          width: highlighted ? 1.2 : (widget.mine ? 0 : 0.5),
         ),
-        boxShadow: armed || widget.pressed
-            ? [
-                BoxShadow(
-                  color: colors.primary.withValues(
-                    alpha: widget.pressed ? 0.26 : 0.22,
-                  ),
-                  blurRadius: widget.pressed ? 22 : 18,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : null,
       ),
       child: Stack(
         clipBehavior: Clip.none,
@@ -3254,10 +3380,10 @@ class _MessageBubbleState extends State<_MessageBubble> {
                     !hasEmoji &&
                     !widget.message.body.startsWith('[image]') &&
                     !widget.message.body.startsWith('[voice]'))
-                  Text(
-                    messageText,
-                    softWrap: true,
-                    style: TextStyle(color: textColor),
+                  _ChatMarkdownText(
+                    text: messageText,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
               ],
             ),
@@ -3436,6 +3562,91 @@ class _ChatBackground extends StatelessWidget {
   }
 }
 
+String _escapeMarkdownHtml(String value) {
+  return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+}
+
+class _ChatMarkdownText extends StatelessWidget {
+  const _ChatMarkdownText({
+    required this.text,
+    required this.textColor,
+    required this.secondaryTextColor,
+  });
+
+  final String text;
+  final Color textColor;
+  final Color secondaryTextColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final codeBackground = Color.alphaBlend(
+      textColor.withValues(alpha: 0.09),
+      Colors.transparent,
+    );
+    final base = theme.textTheme.bodyMedium?.copyWith(color: textColor);
+    final codeStyle = base?.copyWith(
+      color: textColor,
+      fontFamily: 'monospace',
+      backgroundColor: codeBackground,
+    );
+    return MarkdownBody(
+      data: _escapeMarkdownHtml(text),
+      selectable: false,
+      shrinkWrap: true,
+      fitContent: true,
+      softLineBreak: true,
+      sizedImageBuilder: (config) {
+        final label = (config.alt ?? config.uri.toString()).trim();
+        return Text(
+          label.isEmpty ? config.uri.toString() : label,
+          style: base?.copyWith(
+            color: secondaryTextColor,
+            fontStyle: FontStyle.italic,
+          ),
+        );
+      },
+      onTapLink: (_, href, _) {
+        final uri = Uri.tryParse(href ?? '');
+        if (uri == null || !uri.hasScheme) {
+          return;
+        }
+        unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+      },
+      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+        a: base?.copyWith(color: primary, decoration: TextDecoration.underline),
+        p: base,
+        strong: base?.copyWith(fontWeight: FontWeight.w800),
+        em: base?.copyWith(fontStyle: FontStyle.italic),
+        del: base?.copyWith(decoration: TextDecoration.lineThrough),
+        code: codeStyle,
+        codeblockDecoration: BoxDecoration(
+          color: codeBackground,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        blockquote: base?.copyWith(color: secondaryTextColor),
+        blockquoteDecoration: BoxDecoration(
+          color: codeBackground,
+          borderRadius: BorderRadius.circular(6),
+          border: Border(
+            left: BorderSide(
+              color: secondaryTextColor.withValues(alpha: 0.5),
+              width: 3,
+            ),
+          ),
+        ),
+        listBullet: base,
+        tableBody: base,
+        tableHead: base?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
 class _InlineStatusPill extends StatelessWidget {
   const _InlineStatusPill({
     required this.icon,
@@ -3515,15 +3726,37 @@ class _RepeatPlusOneButton extends StatelessWidget {
   }
 }
 
-String _memberLevelText(ChatMessage message) {
-  if (message.memberLevel <= 0) {
-    return '';
+String _groupMemberBadgeText(
+  ChatMessage message,
+  GroupMember? member,
+  CsacPreferences preferences,
+  CsacStrings strings,
+) {
+  final level = member?.memberLevel == 0 || member?.memberLevel == null
+      ? message.memberLevel
+      : member!.memberLevel;
+  final levelText = level > 0 ? 'Lv.$level' : '';
+  final title = [
+    member?.memberTitle.trim() ?? '',
+    message.memberTitle.trim(),
+  ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+  switch (preferences.groupMemberBadgeMode) {
+    case GroupMemberBadgeMode.title:
+      return [
+        levelText,
+        title,
+      ].where((value) => value.trim().isNotEmpty).join(' ');
+    case GroupMemberBadgeMode.role:
+      final role = (member?.hasOwnerRole ?? false)
+          ? strings.text('Owner')
+          : (member?.hasAdminRole ?? false)
+          ? strings.text('Admin')
+          : strings.text('Member');
+      return [
+        levelText,
+        role,
+      ].where((value) => value.trim().isNotEmpty).join(' ');
   }
-  final title = message.memberTitle.trim();
-  if (title.isEmpty) {
-    return 'Lv.${message.memberLevel}';
-  }
-  return 'Lv.${message.memberLevel} $title';
 }
 
 class _SystemMessagePill extends StatefulWidget {
@@ -3727,12 +3960,16 @@ class _ChatMessageAvatar extends StatefulWidget {
     required this.url,
     required this.mine,
     required this.name,
+    this.onTap,
+    this.onLongPress,
     this.onDoubleTap,
   });
 
   final String url;
   final bool mine;
   final String name;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onDoubleTap;
 
   @override
@@ -3772,7 +4009,11 @@ class _ChatMessageAvatarState extends State<_ChatMessageAvatar> {
             : colors.onSurfaceVariant,
       ),
     );
-    if (widget.onDoubleTap == null) {
+    final canInteract =
+        widget.onTap != null ||
+        widget.onLongPress != null ||
+        widget.onDoubleTap != null;
+    if (!canInteract) {
       return avatar;
     }
     final animatedAvatar = reduceMotion
@@ -3825,9 +4066,19 @@ class _ChatMessageAvatarState extends State<_ChatMessageAvatar> {
               ],
             ),
           );
+    final child = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onDoubleTap: widget.onDoubleTap == null ? null : triggerPat,
+      child: animatedAvatar,
+    );
+    if (widget.onDoubleTap == null) {
+      return child;
+    }
     return Tooltip(
       message: context.strings.text('Double tap to pat'),
-      child: GestureDetector(onDoubleTap: triggerPat, child: animatedAvatar),
+      child: child,
     );
   }
 }
@@ -4070,170 +4321,10 @@ class _AnimatedSendButton extends StatelessWidget {
 }
 
 class _ComposeMenuAction {
-  const _ComposeMenuAction({
-    required this.value,
-    required this.icon,
-    required this.label,
-  });
+  const _ComposeMenuAction({required this.value, required this.label});
 
   final String value;
-  final IconData icon;
   final String label;
-}
-
-class _ComposeMenuPanel extends StatelessWidget {
-  const _ComposeMenuPanel({
-    super.key,
-    required this.actions,
-    required this.onSelected,
-  });
-
-  final List<_ComposeMenuAction> actions;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion = _MotionPreference.reduceOf(context);
-    final colors = CsacColors.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 430,
-            maxHeight: math.min(468, MediaQuery.sizeOf(context).height * 0.54),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colors.cardBackground.withValues(alpha: 0.90),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: colors.separator.withValues(alpha: 0.28),
-                    width: 0.5,
-                  ),
-                  boxShadow: reduceMotion
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: CupertinoColors.black.withValues(
-                              alpha: colors.isDark ? 0.30 : 0.12,
-                            ),
-                            blurRadius: 28,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: actions.length,
-                  separatorBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(left: 74),
-                    child: Container(
-                      height: 0.5,
-                      color: colors.separator.withValues(alpha: 0.42),
-                    ),
-                  ),
-                  itemBuilder: (context, index) {
-                    return _ComposeMenuTile(
-                      action: actions[index],
-                      index: index,
-                      onTap: () => onSelected(actions[index].value),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposeMenuTile extends StatelessWidget {
-  const _ComposeMenuTile({
-    required this.action,
-    required this.index,
-    required this.onTap,
-  });
-
-  final _ComposeMenuAction action;
-  final int index;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion = _MotionPreference.reduceOf(context);
-    final colors = CsacColors.of(context);
-    final primary = CupertinoTheme.of(context).primaryColor;
-    final tile = Tooltip(
-      message: action.label,
-      child: _CsacPressable(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: SizedBox.square(
-                  dimension: 46,
-                  child: Icon(action.icon, color: primary, size: 24),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  action.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.label,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 16,
-                color: colors.tertiaryLabel,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (reduceMotion) {
-      return tile;
-    }
-    return tile
-        .animate(delay: Duration(milliseconds: 26 * index))
-        .fadeIn(duration: 170.ms, curve: Curves.easeOutCubic)
-        .slideY(
-          begin: 0.16,
-          end: 0,
-          duration: 330.ms,
-          curve: Curves.easeOutCubic,
-        )
-        .scale(
-          begin: const Offset(0.97, 0.97),
-          end: const Offset(1, 1),
-          duration: 360.ms,
-          curve: Curves.easeOutBack,
-        );
-  }
 }
 
 class _EmojiStickerPicker extends StatefulWidget {
@@ -5267,9 +5358,10 @@ class _PendingMessageBubbleState extends State<_PendingMessageBubble>
     final failed = widget.pending.status == _PendingSendStatus.failed;
     final sent = widget.pending.status == _PendingSendStatus.sent;
     final maxBubbleWidth = chatBubbleMaxWidth(context);
+    final sendingColor = cupertinoChatBubbleDefaultColor(context, mine: true);
     final foreground = failed
         ? colors.onErrorContainer
-        : colors.onPrimaryContainer;
+        : cupertinoChatBubbleTextColor(context, sendingColor);
     return AnimatedBuilder(
       animation: shake,
       builder: (context, child) {
@@ -5311,22 +5403,19 @@ class _PendingMessageBubbleState extends State<_PendingMessageBubble>
                       vertical: 9,
                     ),
                     decoration: BoxDecoration(
-                      color: failed
-                          ? colors.errorContainer
-                          : colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: failed ? colors.error : colors.primaryContainer,
+                      color: failed ? colors.errorContainer : sendingColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(20),
+                        topRight: const Radius.circular(20),
+                        bottomLeft: const Radius.circular(20),
+                        bottomRight: Radius.circular(failed ? 20 : 6),
                       ),
-                      boxShadow: failed
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: colors.primary.withValues(alpha: 0.16),
-                                blurRadius: 14,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
+                      border: Border.all(
+                        color: failed
+                            ? colors.error
+                            : sendingColor.withValues(alpha: 0.88),
+                        width: failed ? 1 : 0,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5389,9 +5478,12 @@ class _PendingMessageBubbleState extends State<_PendingMessageBubble>
                           const SizedBox(height: 8),
                         ],
                         if (widget.pending.text.isNotEmpty)
-                          Text(
-                            widget.pending.text,
-                            style: TextStyle(color: foreground),
+                          _ChatMarkdownText(
+                            text: widget.pending.text,
+                            textColor: foreground,
+                            secondaryTextColor: foreground.withValues(
+                              alpha: 0.72,
+                            ),
                           ),
                         const SizedBox(height: 8),
                         Row(
@@ -5581,113 +5673,6 @@ enum _MessageAction {
   reply,
   recall,
   essence,
-}
-
-class _SpringSheet extends StatelessWidget {
-  const _SpringSheet({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (_MotionPreference.reduceOf(context)) {
-      return child;
-    }
-    return child
-        .animate()
-        .fadeIn(duration: 140.ms, curve: Curves.easeOutCubic)
-        .slideY(
-          begin: 0.08,
-          end: 0,
-          duration: 360.ms,
-          curve: Curves.easeOutBack,
-        )
-        .scale(
-          begin: const Offset(0.98, 0.98),
-          end: const Offset(1, 1),
-          duration: 360.ms,
-          curve: Curves.easeOutBack,
-        );
-  }
-}
-
-class _MessageActionSheet extends StatelessWidget {
-  const _MessageActionSheet({
-    required this.message,
-    required this.canRecall,
-    required this.canEssence,
-  });
-
-  final ChatMessage message;
-  final bool canRecall;
-  final bool canEssence;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-    final actions = <Widget>[
-      _CupertinoListTile(
-        leading: const Icon(CupertinoIcons.checkmark_circle),
-        title: strings.text('Select messages'),
-        subtitle: strings.text('Choose multiple messages'),
-        onTap: () => Navigator.of(context).pop(_MessageAction.select),
-      ),
-      _CupertinoListTile(
-        leading: const Icon(CupertinoIcons.reply),
-        title: strings.text('Reply'),
-        subtitle: '#${message.id} ${message.sender}',
-        onTap: () => Navigator.of(context).pop(_MessageAction.reply),
-      ),
-      _CupertinoListTile(
-        leading: const Icon(CupertinoIcons.doc_on_doc),
-        title: strings.text('Copy text'),
-        onTap: () => Navigator.of(context).pop(_MessageAction.copyText),
-      ),
-      if (message.imageUrl.isNotEmpty)
-        _CupertinoListTile(
-          leading: const Icon(CupertinoIcons.link),
-          title: strings.text('Copy image link'),
-          onTap: () => Navigator.of(context).pop(_MessageAction.copyImage),
-        ),
-      if (message.imageUrl.isNotEmpty)
-        _CupertinoListTile(
-          leading: const Icon(CupertinoIcons.arrow_up_right_square),
-          title: strings.text('Open image'),
-          onTap: () => Navigator.of(context).pop(_MessageAction.openImage),
-        ),
-      if (message.imageUrl.isNotEmpty)
-        _CupertinoListTile(
-          leading: const Icon(CupertinoIcons.arrow_down_circle),
-          title: strings.text('Download image'),
-          onTap: () => Navigator.of(context).pop(_MessageAction.downloadImage),
-        ),
-      if (canRecall)
-        _CupertinoListTile(
-          leading: const Icon(CupertinoIcons.arrow_uturn_left),
-          title: strings.text('Recall'),
-          onTap: () => Navigator.of(context).pop(_MessageAction.recall),
-        ),
-      if (canEssence)
-        _CupertinoListTile(
-          leading: Icon(
-            message.isEssence ? CupertinoIcons.star_fill : CupertinoIcons.star,
-          ),
-          title: strings.text(
-            message.isEssence ? 'Remove essence' : 'Set essence',
-          ),
-          onTap: () => Navigator.of(context).pop(_MessageAction.essence),
-        ),
-    ];
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-        child: _CupertinoGroupedCard(
-          margin: EdgeInsets.zero,
-          children: actions,
-        ),
-      ),
-    );
-  }
 }
 
 class _ComposeTargetsBar extends StatelessWidget {

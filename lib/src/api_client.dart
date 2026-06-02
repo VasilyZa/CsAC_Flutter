@@ -198,25 +198,29 @@ class CsacApiClient {
     await prefs.remove(_sessionKey);
   }
 
-  Future<CsacUser> login(String username, String password) async {
-    final platform = await _clientPlatformIdentifier();
+  Future<CsacUser> login(
+    String username,
+    String password, {
+    String? platform,
+  }) async {
+    final clientPlatform = platform ?? await _clientPlatformIdentifier();
     final data = await postForm('auth/login', <String, String>{
       'username': username,
       'pwd': password,
-      'platform': platform,
+      'platform': clientPlatform,
     });
     final user = data['user'];
     if (user is! Map<String, dynamic>) {
       throw const CsacApiException('Login succeeded but no user was returned.');
     }
     await saveSession();
-    await refreshPlatform();
+    await refreshPlatform(platform: clientPlatform);
     return CsacUser.fromJson(user);
   }
 
-  Future<void> refreshPlatform() async {
+  Future<void> refreshPlatform({String? platform}) async {
     await get('user/get_info', <String, String>{
-      'platform': await _clientPlatformIdentifier(),
+      'platform': platform ?? await _clientPlatformIdentifier(),
     });
   }
 
@@ -225,7 +229,7 @@ class CsacApiClient {
     final version = packageInfo.version.trim().isEmpty
         ? '0.0.0'
         : packageInfo.version.trim();
-    return 'flutter-xiaobai-$version';
+    return '$csacClientName-$csacClientBranch-$version';
   }
 
   Future<CsacUser> register({
@@ -835,9 +839,11 @@ class CsacApiClient {
           name: friend.name,
           avatar: friend.avatar,
           subtitle: friend.subtitle,
+          statusSubtitle: friend.statusSubtitle,
+          lastMessagePreview: friend.lastMessagePreview,
           unreadCount: friend.unreadCount,
           searchText: friend.searchText,
-          lastMessageAt: timestampForSort(friend.subtitle),
+          lastMessageAt: friend.lastMessageAt,
         ),
       for (final group in groupsList)
         Conversation(
@@ -846,9 +852,11 @@ class CsacApiClient {
           name: group.name,
           avatar: group.avatar,
           subtitle: group.subtitle,
+          statusSubtitle: group.statusSubtitle,
+          lastMessagePreview: group.lastMessagePreview,
           unreadCount: group.unreadCount,
           searchText: group.searchText,
-          lastMessageAt: timestampForSort(group.subtitle),
+          lastMessageAt: group.lastMessageAt,
         ),
     ];
   }

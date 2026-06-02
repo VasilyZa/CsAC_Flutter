@@ -149,34 +149,32 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
   }
 
   Future<void> showActions(ConversationMediaItem item) async {
-    final action = await showModalBottomSheet<String>(
+    final strings = context.strings;
+    final action = await showCupertinoModalPopup<String>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.open_in_new),
-              title: Text(context.strings.text('Open original')),
-              onTap: () => Navigator.of(context).pop('open'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: Text(context.strings.text('Download')),
-              onTap: () => Navigator.of(context).pop('download'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: Text(context.strings.text('Copy link')),
-              onTap: () => Navigator.of(context).pop('copy'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.chat_bubble_outline),
-              title: Text(context.strings.text('View in chat')),
-              onTap: () => Navigator.of(context).pop('chat'),
-            ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        title: Text(strings.text('Media and files')),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('open'),
+            child: Text(strings.text('Open original')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('download'),
+            child: Text(strings.text('Download')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('copy'),
+            child: Text(strings.text('Copy link')),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('chat'),
+            child: Text(strings.text('View in chat')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.text('Cancel')),
         ),
       ),
     );

@@ -12,11 +12,15 @@ enum CsacLanguage { en, zh }
 
 enum ConversationSortMode { latest, type }
 
+enum ConversationSubtitleMode { recentMessage, status }
+
 enum MessageTimeFormat { slash, dash, compact, timeOnly }
 
 enum CsacFontStyle { system, serif, rounded, monospace }
 
 enum ChatBubbleCornerStyle { telegram, ios, qq }
+
+enum GroupMemberBadgeMode { title, role }
 
 const defaultThemeColorValue = 0xff2563eb;
 const defaultChatBubbleColorValue = 0;
@@ -29,6 +33,7 @@ class CsacPreferences {
     this.language = CsacLanguage.zh,
     this.fontStyle = CsacFontStyle.system,
     this.conversationSortMode = ConversationSortMode.latest,
+    this.conversationSubtitleMode = ConversationSubtitleMode.recentMessage,
     this.messageTimeFormat = MessageTimeFormat.slash,
     this.chatBubbleCornerStyle = ChatBubbleCornerStyle.telegram,
     this.ownChatBubbleColorValue = defaultChatBubbleColorValue,
@@ -40,6 +45,7 @@ class CsacPreferences {
     this.showChatAvatars = true,
     this.enablePat = true,
     this.showGroupMemberLevel = true,
+    this.groupMemberBadgeMode = GroupMemberBadgeMode.title,
     this.appLockEnabled = false,
     this.appLockPinSalt = '',
     this.appLockPinHash = '',
@@ -53,6 +59,7 @@ class CsacPreferences {
   static const _languageKey = 'csac.language';
   static const _fontStyleKey = 'csac.font_style';
   static const _conversationSortModeKey = 'csac.conversation_sort_mode';
+  static const _conversationSubtitleModeKey = 'csac.conversation_subtitle_mode';
   static const _messageTimeFormatKey = 'csac.message_time_format';
   static const _chatBubbleCornerStyleKey = 'csac.chat.bubble_corner_style';
   static const _ownChatBubbleColorKey = 'csac.chat.own_bubble_color';
@@ -64,6 +71,7 @@ class CsacPreferences {
   static const _showChatAvatarsKey = 'csac.chat.show_avatars';
   static const _enablePatKey = 'csac.chat.enable_pat';
   static const _showGroupMemberLevelKey = 'csac.chat.show_group_member_level';
+  static const _groupMemberBadgeModeKey = 'csac.chat.group_member_badge_mode';
   static const _appLockEnabledKey = 'csac.app_lock.enabled';
   static const _appLockPinSaltKey = 'csac.app_lock.pin_salt';
   static const _appLockPinHashKey = 'csac.app_lock.pin_hash';
@@ -76,6 +84,7 @@ class CsacPreferences {
   final CsacLanguage language;
   final CsacFontStyle fontStyle;
   final ConversationSortMode conversationSortMode;
+  final ConversationSubtitleMode conversationSubtitleMode;
   final MessageTimeFormat messageTimeFormat;
   final ChatBubbleCornerStyle chatBubbleCornerStyle;
   final int ownChatBubbleColorValue;
@@ -87,6 +96,7 @@ class CsacPreferences {
   final bool showChatAvatars;
   final bool enablePat;
   final bool showGroupMemberLevel;
+  final GroupMemberBadgeMode groupMemberBadgeMode;
   final bool appLockEnabled;
   final String appLockPinSalt;
   final String appLockPinHash;
@@ -112,6 +122,7 @@ class CsacPreferences {
     CsacLanguage? language,
     CsacFontStyle? fontStyle,
     ConversationSortMode? conversationSortMode,
+    ConversationSubtitleMode? conversationSubtitleMode,
     MessageTimeFormat? messageTimeFormat,
     ChatBubbleCornerStyle? chatBubbleCornerStyle,
     int? ownChatBubbleColorValue,
@@ -123,6 +134,7 @@ class CsacPreferences {
     bool? showChatAvatars,
     bool? enablePat,
     bool? showGroupMemberLevel,
+    GroupMemberBadgeMode? groupMemberBadgeMode,
     bool? appLockEnabled,
     String? appLockPinSalt,
     String? appLockPinHash,
@@ -136,6 +148,8 @@ class CsacPreferences {
       language: language ?? this.language,
       fontStyle: fontStyle ?? this.fontStyle,
       conversationSortMode: conversationSortMode ?? this.conversationSortMode,
+      conversationSubtitleMode:
+          conversationSubtitleMode ?? this.conversationSubtitleMode,
       messageTimeFormat: messageTimeFormat ?? this.messageTimeFormat,
       chatBubbleCornerStyle:
           chatBubbleCornerStyle ?? this.chatBubbleCornerStyle,
@@ -150,6 +164,7 @@ class CsacPreferences {
       showChatAvatars: showChatAvatars ?? this.showChatAvatars,
       enablePat: enablePat ?? this.enablePat,
       showGroupMemberLevel: showGroupMemberLevel ?? this.showGroupMemberLevel,
+      groupMemberBadgeMode: groupMemberBadgeMode ?? this.groupMemberBadgeMode,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
       appLockPinSalt: appLockPinSalt ?? this.appLockPinSalt,
       appLockPinHash: appLockPinHash ?? this.appLockPinHash,
@@ -173,6 +188,9 @@ class CsacPreferences {
       conversationSortMode: _conversationSortModeFromName(
         prefs.getString(_conversationSortModeKey),
       ),
+      conversationSubtitleMode: _conversationSubtitleModeFromName(
+        prefs.getString(_conversationSubtitleModeKey),
+      ),
       messageTimeFormat: _messageTimeFormatFromName(
         prefs.getString(_messageTimeFormatKey),
       ),
@@ -189,11 +207,14 @@ class CsacPreferences {
       ),
       chatBubbleOpacity: _chatBubbleOpacityFromPrefs(prefs),
       chatBackgroundPath: prefs.getString(_chatBackgroundPathKey) ?? '',
-      serverUrl: (prefs.getString(_serverUrlKey) ?? '').trim(),
+      serverUrl: _serverUrlFromPrefs(prefs.getString(_serverUrlKey)),
       reduceMotion: prefs.getBool(_reduceMotionKey) ?? false,
       showChatAvatars: prefs.getBool(_showChatAvatarsKey) ?? true,
       enablePat: prefs.getBool(_enablePatKey) ?? true,
       showGroupMemberLevel: prefs.getBool(_showGroupMemberLevelKey) ?? true,
+      groupMemberBadgeMode: _groupMemberBadgeModeFromName(
+        prefs.getString(_groupMemberBadgeModeKey),
+      ),
       appLockEnabled: prefs.getBool(_appLockEnabledKey) ?? false,
       appLockPinSalt: prefs.getString(_appLockPinSaltKey) ?? '',
       appLockPinHash: prefs.getString(_appLockPinHashKey) ?? '',
@@ -213,6 +234,10 @@ class CsacPreferences {
     await prefs.setString(_languageKey, language.name);
     await prefs.setString(_fontStyleKey, fontStyle.name);
     await prefs.setString(_conversationSortModeKey, conversationSortMode.name);
+    await prefs.setString(
+      _conversationSubtitleModeKey,
+      conversationSubtitleMode.name,
+    );
     await prefs.setString(_messageTimeFormatKey, messageTimeFormat.name);
     await prefs.setString(
       _chatBubbleCornerStyleKey,
@@ -243,6 +268,7 @@ class CsacPreferences {
     await prefs.setBool(_showChatAvatarsKey, showChatAvatars);
     await prefs.setBool(_enablePatKey, enablePat);
     await prefs.setBool(_showGroupMemberLevelKey, showGroupMemberLevel);
+    await prefs.setString(_groupMemberBadgeModeKey, groupMemberBadgeMode.name);
     await prefs.setBool(_appLockEnabledKey, appLockEnabled);
     if (appLockPinSalt.trim().isEmpty || appLockPinHash.trim().isEmpty) {
       await prefs.remove(_appLockPinSaltKey);
@@ -292,6 +318,20 @@ class CsacPreferences {
     return value.clamp(0.45, 1.0).toDouble();
   }
 
+  static String _serverUrlFromPrefs(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return '';
+    }
+    final normalized = value.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    const oldHosts = <String>{
+      'http://103.40.14.14:24582',
+      'http://103.40.14.14:24582/rpc',
+      'http://103.40.14.14:24582/rpc/unicsac.php',
+    };
+    return oldHosts.contains(normalized) ? '' : value;
+  }
+
   static CsacLanguage _languageFromName(String? value) {
     for (final language in CsacLanguage.values) {
       if (language.name == value) {
@@ -319,6 +359,17 @@ class CsacPreferences {
     return ConversationSortMode.latest;
   }
 
+  static ConversationSubtitleMode _conversationSubtitleModeFromName(
+    String? value,
+  ) {
+    for (final mode in ConversationSubtitleMode.values) {
+      if (mode.name == value) {
+        return mode;
+      }
+    }
+    return ConversationSubtitleMode.recentMessage;
+  }
+
   static MessageTimeFormat _messageTimeFormatFromName(String? value) {
     for (final format in MessageTimeFormat.values) {
       if (format.name == value) {
@@ -335,6 +386,18 @@ class CsacPreferences {
       }
     }
     return ChatBubbleCornerStyle.telegram;
+  }
+
+  static GroupMemberBadgeMode _groupMemberBadgeModeFromName(String? value) {
+    if (value == 'level') {
+      return GroupMemberBadgeMode.title;
+    }
+    for (final mode in GroupMemberBadgeMode.values) {
+      if (mode.name == value) {
+        return mode;
+      }
+    }
+    return GroupMemberBadgeMode.title;
   }
 }
 
@@ -688,6 +751,7 @@ class EmojiPinnedStore {
   const EmojiPinnedStore._();
 
   static const _key = 'csac.emoji.pinned';
+  static const _maxEntries = 48;
 
   static Future<List<EmojiSticker>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -721,6 +785,9 @@ class EmojiPinnedStore {
       }
       seen.add(abbr);
       next.add(sticker);
+      if (next.length >= _maxEntries) {
+        break;
+      }
     }
     if (next.isEmpty) {
       await prefs.remove(_key);
@@ -730,6 +797,24 @@ class EmojiPinnedStore {
       _key,
       jsonEncode(next.map((emoji) => emoji.toJson()).toList()),
     );
+  }
+
+  static Future<bool> toggle(EmojiSticker sticker) async {
+    final abbr = sticker.abbr.trim();
+    if (abbr.isEmpty) {
+      return false;
+    }
+    final current = await load();
+    final exists = current.any((item) => item.abbr == abbr);
+    if (exists) {
+      await save([
+        for (final item in current)
+          if (item.abbr != abbr) item,
+      ]);
+      return false;
+    }
+    await save([sticker, ...current]);
+    return true;
   }
 
   static Future<void> clear() async {

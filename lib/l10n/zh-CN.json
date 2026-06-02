@@ -1,0 +1,22 @@
+{
+  "CsAC Desktop": "CsAC 桌面端",
+  "Conversation subtitle": "会话副标题",
+  "Recent message": "最近一条消息",
+  "Members and online status": "群员数量/在线情况",
+  "Show the latest message in each chat row": "在每个会话项中显示最近一条消息",
+  "Show group member count and online status": "显示群成员数量和在线状态",
+  "Group badge content": "群消息徽标内容",
+  "Member title": "成员头衔",
+  "Member level": "成员等级",
+  "Member role": "成员身份",
+  "Display group titles set by admins": "显示群主或管理员设置的头衔",
+  "Display member level badges": "显示成员等级徽标",
+  "Display owner/admin/member role": "显示群主、管理员或成员身份",
+  "Owner": "群主",
+  "Admin": "管理员",
+  "Member": "成员",
+  "Search friends or enter UID": "搜索好友或输入 UID",
+  "Choose a friend or invite by UID": "选择好友或通过 UID 邀请",
+  "No friends found.": "暂无好友。",
+  "No matching friends.": "没有匹配的好友。"
+}

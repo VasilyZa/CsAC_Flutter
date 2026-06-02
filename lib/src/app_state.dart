@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'api_client.dart';
 import 'l10n.dart';
@@ -68,10 +69,13 @@ class CsacAppState extends ChangeNotifier {
   bool loading = false;
   bool offlineMode = false;
   bool sessionExpired = false;
+  bool appInForeground = true;
   String restoreStatus = const CsacStrings(
     Locale('zh', 'CN'),
   ).text('Restoring session...');
   String? error;
+
+  String get currentUserAvatar => user?.avatar.trim() ?? '';
 
   Future<void> initialize() async {
     bootstrapping = true;
@@ -130,7 +134,11 @@ class CsacAppState extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      user = await client.login(username, password);
+      user = await client.login(
+        username,
+        password,
+        platform: await currentClientPlatform(),
+      );
       await cache.saveUser(user!);
       await LoginAccountStore.upsert(
         user: user!,
@@ -232,6 +240,14 @@ class CsacAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateConversationSubtitleMode(
+    ConversationSubtitleMode mode,
+  ) async {
+    preferences = preferences.copyWith(conversationSubtitleMode: mode);
+    await preferences.save();
+    notifyListeners();
+  }
+
   Future<void> updateMessageTimeFormat(MessageTimeFormat format) async {
     preferences = preferences.copyWith(messageTimeFormat: format);
     await preferences.save();
@@ -290,6 +306,12 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> updateShowGroupMemberLevel(bool enabled) async {
     preferences = preferences.copyWith(showGroupMemberLevel: enabled);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> updateGroupMemberBadgeMode(GroupMemberBadgeMode mode) async {
+    preferences = preferences.copyWith(groupMemberBadgeMode: mode);
     await preferences.save();
     notifyListeners();
   }
@@ -430,11 +452,38 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> refreshCurrentUser() async {
-    user = await client.currentUser();
+    final previous = user;
+    final loaded = await client.currentUser();
+    user = _mergeCurrentUser(previous, loaded);
     await cache.saveUser(user!);
     offlineMode = false;
     sessionExpired = false;
     notifyListeners();
+  }
+
+  CsacUser _mergeCurrentUser(CsacUser? previous, CsacUser loaded) {
+    if (previous == null || previous.uid != loaded.uid) {
+      return loaded;
+    }
+    return CsacUser(
+      uid: loaded.uid,
+      nickname: loaded.nickname.trim().isEmpty
+          ? previous.nickname
+          : loaded.nickname,
+      username: loaded.username.trim().isEmpty
+          ? previous.username
+          : loaded.username,
+      avatar: loaded.avatar.trim().isEmpty ? previous.avatar : loaded.avatar,
+      onlineStatus: loaded.onlineStatus.trim().isEmpty
+          ? previous.onlineStatus
+          : loaded.onlineStatus,
+      platform: loaded.platform.trim().isEmpty || loaded.platform == 'none'
+          ? previous.platform
+          : loaded.platform,
+      patAction: loaded.patAction.trim().isEmpty
+          ? previous.patAction
+          : loaded.patAction,
+    );
   }
 
   Future<void> updateNickname(String nickname) async {
@@ -462,6 +511,20 @@ class CsacAppState extends ChangeNotifier {
 
   void _applyPreferredServer() {
     client.setBaseUrl(preferences.serverUrl);
+  }
+
+  Future<String> currentClientPlatform() async {
+    var rawVersion = '0.0.0';
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (packageInfo.version.trim().isNotEmpty) {
+        rawVersion = packageInfo.version.trim();
+      }
+    } catch (_) {
+      // Login should still work if package metadata is unavailable.
+    }
+    final version = rawVersion.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '.');
+    return '$csacClientName-$csacClientBranch-$version';
   }
 
   Future<List<LoginAccountRecord>> loadLoginAccounts() {
@@ -514,6 +577,14 @@ class CsacAppState extends ChangeNotifier {
         activeConversation?.id == conversation.id;
   }
 
+  bool isVisibleActiveConversation(Conversation conversation) {
+    return appInForeground && isActiveConversation(conversation);
+  }
+
+  void setAppInForeground(bool value) {
+    appInForeground = value;
+  }
+
   void setActiveConversation(Conversation? conversation) {
     activeConversation = conversation;
   }
@@ -540,17 +611,26 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> loadCachedConversations() async {
-    conversations = _sortConversations(await cache.loadConversations());
+    conversations = _sortConversations(
+      await _hydrateConversationPreviews(await cache.loadConversations()),
+    );
     notifyListeners();
   }
 
   Future<void> syncConversations() async {
     final loaded = await client.conversations();
     final cachedActivity = await cache.loadConversationActivity();
+    final cachedConversations = {
+      for (final conversation in await cache.loadConversations())
+        '${conversation.type.name}:${conversation.id}': conversation,
+    };
     final normalized = _sortConversations(<Conversation>[
       for (final entry in loaded.indexed)
         () {
-          final conversation = entry.$2.copyWith(displayOrder: entry.$1);
+          final conversation = _mergeConversationDisplay(
+            cachedConversations['${entry.$2.type.name}:${entry.$2.id}'],
+            entry.$2.copyWith(displayOrder: entry.$1),
+          );
           final cached =
               cachedActivity['${conversation.type.name}:${conversation.id}'] ??
               0;
@@ -570,9 +650,71 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Conversation _normalizeConversation(Conversation conversation) {
-    return isActiveConversation(conversation)
+    return isVisibleActiveConversation(conversation)
         ? conversation.copyWith(unreadCount: 0)
         : conversation;
+  }
+
+  Future<List<Conversation>> _hydrateConversationPreviews(
+    List<Conversation> input,
+  ) async {
+    if (input.isEmpty) {
+      return input;
+    }
+    final hydrated = <Conversation>[];
+    for (final conversation in input) {
+      hydrated.add(await _withLatestCachedPreview(conversation));
+    }
+    return hydrated;
+  }
+
+  Future<Conversation> _withLatestCachedPreview(
+    Conversation conversation,
+  ) async {
+    if (conversation.lastMessagePreview.trim().isNotEmpty) {
+      return conversation;
+    }
+    try {
+      final cached = await cache.loadMessages(conversation, limit: 1);
+      if (cached.isEmpty) {
+        return conversation;
+      }
+      final latest = cached.last;
+      final text = [
+        latest.sender.trim().isEmpty ? '' : latest.sender.trim(),
+        compactConversationPreviewText(latest),
+      ].where((part) => part.trim().isNotEmpty).join(': ');
+      return conversation.copyWith(
+        lastMessagePreview: [
+          text,
+          displayConversationPreviewTime(latest),
+        ].where((part) => part.trim().isNotEmpty).join(' | '),
+      );
+    } catch (_) {
+      return conversation;
+    }
+  }
+
+  Conversation _mergeConversationDisplay(
+    Conversation? cached,
+    Conversation loaded,
+  ) {
+    if (cached == null) {
+      return loaded;
+    }
+    return loaded.copyWith(
+      name: loaded.name.trim().isEmpty ? cached.name : loaded.name,
+      avatar: loaded.avatar.trim().isEmpty ? cached.avatar : loaded.avatar,
+      subtitle: loaded.subtitle.trim().isEmpty
+          ? cached.subtitle
+          : loaded.subtitle,
+      statusSubtitle: loaded.statusSubtitle.trim().isEmpty
+          ? cached.statusSubtitle
+          : loaded.statusSubtitle,
+      lastMessagePreview: loaded.lastMessagePreview.trim().isEmpty
+          ? cached.lastMessagePreview
+          : loaded.lastMessagePreview,
+    );
   }
 
   List<Conversation> _sortConversations(List<Conversation> input) {
@@ -1214,7 +1356,16 @@ class CsacAppState extends ChangeNotifier {
     Conversation conversation,
   ) async {
     if (conversation.type == ConversationType.private) {
-      final loaded = await client.messages(conversation);
+      var loaded = await client.messages(conversation);
+      if (loaded.isEmpty) {
+        loaded = await client.messages(conversation, limit: 20);
+        if (loaded.isEmpty) {
+          await cache.replaceMessages(conversation, const <ChatMessage>[]);
+          await _applyConversationActivity(conversation, const <ChatMessage>[]);
+          return const <ChatMessage>[];
+        }
+      }
+      await cache.removeMessagesMissingFromWindow(conversation, loaded);
       await cache.saveMessages(conversation, loaded);
       await _applyConversationActivity(conversation, loaded);
       return cache.filterLocallyDeletedMessages(conversation, loaded);

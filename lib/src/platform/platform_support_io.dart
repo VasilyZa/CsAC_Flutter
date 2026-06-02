@@ -14,6 +14,8 @@ bool get isWebPlatform => false;
 bool get isDesktopPlatform =>
     Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+bool get supportsVersionUpdateChecks => true;
+
 bool get supportsLocalFiles => true;
 
 bool get supportsVoiceRecording => true;
