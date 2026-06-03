@@ -115,7 +115,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
       color: colors.systemBackground,
       child: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: CsacSingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),

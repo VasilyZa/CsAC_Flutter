@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 part of '../../main.dart';
 
 class CsacThemeBridge extends StatelessWidget {
@@ -15,17 +17,252 @@ class CsacThemeBridge extends StatelessWidget {
   final Widget child;
 
   @override
+  Widget build(BuildContext context) => child;
+}
+
+class WidgetState {
+  const WidgetState._();
+
+  static const selected = WidgetState._();
+  static const hovered = WidgetState._();
+  static const focused = WidgetState._();
+  static const pressed = WidgetState._();
+  static const disabled = WidgetState._();
+}
+
+abstract class WidgetStateProperty<T> {
+  const WidgetStateProperty();
+
+  T resolve(Set<WidgetState> states);
+
+  static WidgetStateProperty<T> resolveWith<T>(
+    T Function(Set<WidgetState> states) callback,
+  ) => _WidgetStatePropertyResolver<T>(callback);
+}
+
+class WidgetStatePropertyAll<T> extends WidgetStateProperty<T> {
+  const WidgetStatePropertyAll(this.value);
+
+  final T value;
+
+  @override
+  T resolve(Set<WidgetState> states) => value;
+}
+
+class _WidgetStatePropertyResolver<T> extends WidgetStateProperty<T> {
+  const _WidgetStatePropertyResolver(this.callback);
+
+  final T Function(Set<WidgetState> states) callback;
+
+  @override
+  T resolve(Set<WidgetState> states) => callback(states);
+}
+
+class ButtonStyle {
+  const ButtonStyle({
+    this.backgroundColor,
+    this.foregroundColor,
+    this.overlayColor,
+    this.padding,
+    this.minimumSize,
+    this.fixedSize,
+    this.visualDensity,
+    this.textStyle,
+    this.shape,
+    this.side,
+    this.elevation,
+  });
+
+  final WidgetStateProperty<Color?>? backgroundColor;
+  final WidgetStateProperty<Color?>? foregroundColor;
+  final WidgetStateProperty<Color?>? overlayColor;
+  final WidgetStateProperty<EdgeInsetsGeometry?>? padding;
+  final WidgetStateProperty<Size?>? minimumSize;
+  final WidgetStateProperty<Size?>? fixedSize;
+  final VisualDensity? visualDensity;
+  final WidgetStateProperty<TextStyle?>? textStyle;
+  final WidgetStateProperty<OutlinedBorder?>? shape;
+  final WidgetStateProperty<BorderSide?>? side;
+  final WidgetStateProperty<double?>? elevation;
+}
+
+class VisualDensity {
+  const VisualDensity._();
+
+  static const compact = VisualDensity._();
+}
+
+abstract class ShapeBorder {
+  const ShapeBorder();
+}
+
+abstract class OutlinedBorder extends ShapeBorder {
+  const OutlinedBorder();
+}
+
+class RoundedRectangleBorder extends OutlinedBorder {
+  const RoundedRectangleBorder({
+    this.borderRadius = BorderRadius.zero,
+    this.side = BorderSide.none,
+  });
+
+  final BorderRadiusGeometry borderRadius;
+  final BorderSide side;
+
+  RoundedRectangleBorder copyWith({
+    BorderRadiusGeometry? borderRadius,
+    BorderSide? side,
+  }) => RoundedRectangleBorder(
+    borderRadius: borderRadius ?? this.borderRadius,
+    side: side ?? this.side,
+  );
+}
+
+class InputBorder {
+  const InputBorder();
+
+  static const none = InputBorder();
+}
+
+class OutlineInputBorder extends InputBorder {
+  const OutlineInputBorder({
+    this.borderRadius = const BorderRadius.all(
+      Radius.circular(_csacControlCornerRadius),
+    ),
+    this.borderSide = const BorderSide(),
+  });
+
+  final BorderRadius borderRadius;
+  final BorderSide borderSide;
+}
+
+class InputDecoration {
+  const InputDecoration({
+    this.labelText,
+    this.helperText,
+    this.hintText,
+    this.prefixIcon,
+    this.suffixIcon,
+    this.border,
+    this.enabledBorder,
+    this.focusedBorder,
+    this.contentPadding,
+    this.isDense,
+    this.alignLabelWithHint,
+    this.filled,
+    this.fillColor,
+    this.enabled = true,
+  });
+
+  final String? labelText;
+  final String? helperText;
+  final String? hintText;
+  final Widget? prefixIcon;
+  final Widget? suffixIcon;
+  final InputBorder? border;
+  final InputBorder? enabledBorder;
+  final InputBorder? focusedBorder;
+  final EdgeInsetsGeometry? contentPadding;
+  final bool? isDense;
+  final bool? alignLabelWithHint;
+  final bool? filled;
+  final Color? fillColor;
+  final bool enabled;
+}
+
+class Tooltip extends StatelessWidget {
+  const Tooltip({super.key, required this.message, required this.child});
+
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(label: message, child: child);
+}
+
+class SelectableText extends StatelessWidget {
+  const SelectableText(
+    this.data, {
+    super.key,
+    this.style,
+    this.textAlign,
+    this.maxLines,
+  }) : textSpan = null;
+
+  const SelectableText.rich(
+    TextSpan this.textSpan, {
+    super.key,
+    this.style,
+    this.textAlign,
+    this.maxLines,
+  }) : data = '';
+
+  final String data;
+  final TextSpan? textSpan;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+  final int? maxLines;
+
+  @override
   Widget build(BuildContext context) {
-    return material.Theme(
-      data: buildCsacTheme(brightness, seedColor, fontStyle).copyWith(
-        platform: TargetPlatform.iOS,
-        splashFactory: NoSplash.splashFactory,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-      ),
-      child: child,
+    return SelectableRegion(
+      focusNode: FocusNode(skipTraversal: true),
+      selectionControls: cupertinoTextSelectionControls,
+      child: textSpan == null
+          ? Text(data, style: style, textAlign: textAlign, maxLines: maxLines)
+          : Text.rich(
+              textSpan!,
+              style: style,
+              textAlign: textAlign,
+              maxLines: maxLines,
+            ),
     );
   }
+}
+
+class CircleAvatar extends StatelessWidget {
+  const CircleAvatar({
+    super.key,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.radius,
+    this.child,
+  });
+
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final double? radius;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = (radius ?? 20) * 2;
+    return ClipOval(
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        color:
+            backgroundColor ??
+            CupertinoColors.secondarySystemFill.resolveFrom(context),
+        child: IconTheme.merge(
+          data: IconThemeData(color: foregroundColor, size: size * 0.52),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: foregroundColor),
+            child: child ?? const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const double kToolbarHeight = kMinInteractiveDimensionCupertino;
+
+class SnackBarBehavior {
+  const SnackBarBehavior._();
+
+  static const floating = SnackBarBehavior._();
 }
 
 class CsacToastHost extends StatefulWidget {
@@ -54,7 +291,7 @@ class CsacToastHostState extends State<CsacToastHost>
   final entries = <_CsacToastEntry>[];
   int nextId = 0;
 
-  CsacToastController showSnackBar(SnackBar snackBar) {
+  CsacToastController showToast(CsacToast snackBar) {
     final id = nextId++;
     final controller = AnimationController(duration: 220.ms, vsync: this);
     final entry = _CsacToastEntry(
@@ -87,15 +324,15 @@ class CsacToastHostState extends State<CsacToastHost>
     });
   }
 
-  void hideCurrentSnackBar() {
+  void hideCurrentToast() {
     if (entries.isNotEmpty) {
       removeToast(entries.last.id);
     }
   }
 
-  void removeCurrentSnackBar() => hideCurrentSnackBar();
+  void removeCurrentToast() => hideCurrentToast();
 
-  void clearSnackBars() {
+  void clearToasts() {
     for (final entry in List<_CsacToastEntry>.from(entries)) {
       removeToast(entry.id);
     }
@@ -147,7 +384,7 @@ class _CsacToastEntry {
   });
 
   final int id;
-  final SnackBar snackBar;
+  final CsacToast snackBar;
   final AnimationController animation;
   Timer? timer;
 }
@@ -242,7 +479,7 @@ class _CsacToast extends StatelessWidget {
   }
 }
 
-class ScaffoldMessenger {
+class CsacToastMessenger {
   static CsacToastHostState of(BuildContext context) =>
       CsacToastHost.of(context) as CsacToastHostState;
 
@@ -250,10 +487,10 @@ class ScaffoldMessenger {
       CsacToastHost.maybeOf(context) as CsacToastHostState?;
 }
 
-typedef ScaffoldMessengerState = CsacToastHostState;
+typedef CsacToastMessengerState = CsacToastHostState;
 
-class SnackBar {
-  const SnackBar({
+class CsacToast {
+  const CsacToast({
     required this.content,
     this.action,
     this.duration = const Duration(milliseconds: 2600),
@@ -268,7 +505,7 @@ class SnackBar {
   });
 
   final Widget content;
-  final SnackBarAction? action;
+  final CsacToastAction? action;
   final Duration duration;
   final Color? backgroundColor;
   final Object? behavior;
@@ -280,8 +517,8 @@ class SnackBar {
   final double? width;
 }
 
-class SnackBarAction extends StatelessWidget {
-  const SnackBarAction({
+class CsacToastAction extends StatelessWidget {
+  const CsacToastAction({
     super.key,
     required this.label,
     required this.onPressed,
@@ -308,8 +545,8 @@ class SnackBarAction extends StatelessWidget {
   }
 }
 
-class Card extends StatelessWidget {
-  const Card({
+class CsacCard extends StatelessWidget {
+  const CsacCard({
     super.key,
     this.color,
     this.shadowColor,
@@ -338,7 +575,7 @@ class Card extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderRadius = shape is RoundedRectangleBorder
         ? (shape! as RoundedRectangleBorder).borderRadius
-        : BorderRadius.circular(10);
+        : BorderRadius.circular(_csacGroupedCornerRadius);
     return Padding(
       padding: margin ?? EdgeInsets.zero,
       child: DecoratedBox(
@@ -755,8 +992,8 @@ class _ButtonIconLabel extends StatelessWidget {
   }
 }
 
-class IconButton extends StatelessWidget {
-  const IconButton({
+class CsacIconButton extends StatelessWidget {
+  const CsacIconButton({
     super.key,
     required this.onPressed,
     required this.icon,
@@ -991,8 +1228,8 @@ class LinearProgressIndicator extends StatelessWidget {
   }
 }
 
-class Divider extends StatelessWidget {
-  const Divider({super.key, this.height, this.thickness, this.color});
+class CsacDivider extends StatelessWidget {
+  const CsacDivider({super.key, this.height, this.thickness, this.color});
 
   final double? height;
   final double? thickness;
@@ -1043,6 +1280,119 @@ class CsacScrollBehavior extends CupertinoScrollBehavior {
   ) {
     return child;
   }
+}
+
+class CsacListView extends ListView {
+  CsacListView({
+    super.key,
+    super.scrollDirection,
+    super.reverse,
+    super.controller,
+    super.primary,
+    ScrollPhysics? physics,
+    super.shrinkWrap,
+    super.padding,
+    super.itemExtent,
+    super.prototypeItem,
+    super.addAutomaticKeepAlives,
+    super.addRepaintBoundaries,
+    super.addSemanticIndexes,
+    super.cacheExtent,
+    super.children,
+    super.semanticChildCount,
+    super.dragStartBehavior,
+    super.keyboardDismissBehavior,
+    super.restorationId,
+    super.clipBehavior,
+  }) : super(physics: physics ?? const AlwaysScrollableScrollPhysics());
+
+  CsacListView.builder({
+    super.key,
+    super.scrollDirection,
+    super.reverse,
+    super.controller,
+    super.primary,
+    ScrollPhysics? physics,
+    super.shrinkWrap,
+    super.padding,
+    super.itemExtent,
+    super.prototypeItem,
+    required super.itemBuilder,
+    super.findChildIndexCallback,
+    super.itemCount,
+    super.addAutomaticKeepAlives,
+    super.addRepaintBoundaries,
+    super.addSemanticIndexes,
+    super.cacheExtent,
+    super.semanticChildCount,
+    super.dragStartBehavior,
+    super.keyboardDismissBehavior,
+    super.restorationId,
+    super.clipBehavior,
+  }) : super.builder(physics: physics ?? const AlwaysScrollableScrollPhysics());
+
+  CsacListView.separated({
+    super.key,
+    super.scrollDirection,
+    super.reverse,
+    super.controller,
+    super.primary,
+    ScrollPhysics? physics,
+    super.shrinkWrap,
+    super.padding,
+    required super.itemBuilder,
+    super.findChildIndexCallback,
+    required super.separatorBuilder,
+    required super.itemCount,
+    super.addAutomaticKeepAlives,
+    super.addRepaintBoundaries,
+    super.addSemanticIndexes,
+    super.cacheExtent,
+    super.dragStartBehavior,
+    super.keyboardDismissBehavior,
+    super.restorationId,
+    super.clipBehavior,
+  }) : super.separated(
+         physics: physics ?? const AlwaysScrollableScrollPhysics(),
+       );
+}
+
+class CsacSingleChildScrollView extends SingleChildScrollView {
+  const CsacSingleChildScrollView({
+    super.key,
+    super.scrollDirection,
+    super.reverse,
+    super.padding,
+    super.primary,
+    ScrollPhysics? physics,
+    super.controller,
+    super.child,
+    super.dragStartBehavior,
+    super.clipBehavior,
+    super.restorationId,
+    super.keyboardDismissBehavior,
+  }) : super(physics: physics ?? const AlwaysScrollableScrollPhysics());
+}
+
+class CsacCustomScrollView extends CustomScrollView {
+  const CsacCustomScrollView({
+    super.key,
+    super.scrollDirection,
+    super.reverse,
+    super.controller,
+    super.primary,
+    ScrollPhysics? physics,
+    super.shrinkWrap,
+    super.center,
+    super.anchor,
+    super.cacheExtent,
+    super.slivers,
+    super.semanticChildCount,
+    super.dragStartBehavior,
+    super.keyboardDismissBehavior,
+    super.restorationId,
+    super.clipBehavior,
+  }) : super(physics: physics ?? const AlwaysScrollableScrollPhysics());
 }
 
 class ButtonSegment<T> {
@@ -1248,6 +1598,7 @@ class Icons {
   static const touch_app_outlined = CupertinoIcons.hand_point_left;
   static const audio_file_outlined = CupertinoIcons.waveform;
   static const brightness_auto_outlined = CupertinoIcons.brightness;
+  static const bolt_outlined = CupertinoIcons.bolt;
   static const undo = CupertinoIcons.arrow_uturn_left;
   static const backspace_outlined = CupertinoIcons.delete_left;
   static const broken_image_outlined = CupertinoIcons.exclamationmark_triangle;
@@ -1299,8 +1650,8 @@ class AlertDialog extends StatelessWidget {
   }
 }
 
-class TextField extends StatelessWidget {
-  const TextField({
+class CsacTextField extends StatelessWidget {
+  const CsacTextField({
     super.key,
     this.controller,
     this.focusNode,
@@ -1400,7 +1751,7 @@ class TextField extends StatelessWidget {
         color: fillColor,
         borderRadius:
             outlineBorder?.borderRadius ??
-            BorderRadius.circular(noBorder ? 20 : 12),
+            BorderRadius.circular(_csacControlCornerRadius),
         border: showBorder
             ? Border.all(
                 color: usesDefaultBorderSide
@@ -1450,8 +1801,8 @@ class TextField extends StatelessWidget {
   }
 }
 
-class SwitchListTile extends StatelessWidget {
-  const SwitchListTile({
+class CsacSwitchListTile extends StatelessWidget {
+  const CsacSwitchListTile({
     super.key,
     required this.value,
     required this.onChanged,
@@ -1496,8 +1847,8 @@ class RefreshIndicator extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
-class Scaffold extends StatelessWidget {
-  const Scaffold({
+class CsacPageScaffold extends StatelessWidget {
+  const CsacPageScaffold({
     super.key,
     this.appBar,
     this.body,
@@ -1523,8 +1874,8 @@ class Scaffold extends StatelessWidget {
               bottomNavigationBar!,
             ],
           );
-    if (appBar is AppBar) {
-      final bar = appBar! as AppBar;
+    if (appBar is CsacNavigationBar) {
+      final bar = appBar! as CsacNavigationBar;
       return CupertinoPageScaffold(
         backgroundColor: backgroundColor,
         resizeToAvoidBottomInset: resizeToAvoidBottomInset ?? true,
@@ -1540,8 +1891,8 @@ class Scaffold extends StatelessWidget {
   }
 }
 
-class AppBar extends StatelessWidget implements PreferredSizeWidget {
-  const AppBar({
+class CsacNavigationBar extends StatelessWidget implements PreferredSizeWidget {
+  const CsacNavigationBar({
     super.key,
     this.leading,
     this.automaticallyImplyLeading = true,
@@ -1604,7 +1955,7 @@ class CsacPageRoute<T> extends CupertinoPageRoute<T> {
   });
 }
 
-Future<T?> showDialog<T>({
+Future<T?> showCupertinoCsacDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool barrierDismissible = true,
@@ -1628,7 +1979,7 @@ Future<T?> showDialog<T>({
   );
 }
 
-Future<T?> showModalBottomSheet<T>({
+Future<T?> showCupertinoCsacSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isScrollControlled = false,
@@ -2417,7 +2768,7 @@ Future<void> confirmLogout(
   bool popToRoot = true,
 }) async {
   var keepLoginRecord = true;
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showCupertinoCsacDialog<bool>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
@@ -2636,8 +2987,8 @@ class _ReportScreenState extends State<ReportScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Report submitted.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(context.strings.text('Report submitted.'))),
       );
       Navigator.of(context).pop();
     } catch (err) {
@@ -2654,10 +3005,10 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(title: Text(strings.text('Report'))),
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(title: Text(strings.text('Report'))),
       body: SafeArea(
-        child: ListView(
+        child: CsacListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
             ListTile(
@@ -2671,7 +3022,7 @@ class _ReportScreenState extends State<ReportScreen> {
               subtitle: Text('${widget.type} #${widget.targetId}'),
             ),
             const SizedBox(height: 12),
-            TextField(
+            CsacTextField(
               controller: reason,
               maxLines: 6,
               decoration: InputDecoration(
@@ -2682,7 +3033,7 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            SwitchListTile(
+            CsacSwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: anonymous,
               onChanged: (value) => setState(() => anonymous = value),

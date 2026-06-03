@@ -5,14 +5,14 @@ Future<void> showVersionUpdateDialog(
   VersionUpdateInfo result,
 ) async {
   final strings = context.strings;
-  await showDialog<void>(
+  await showCupertinoCsacDialog<void>(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
         title: Text(strings.text('New version available')),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
+          child: CsacSingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -84,8 +84,8 @@ Future<void> openVersionUpdateRelease(
   if (!opened && context.mounted) {
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Release link copied.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(context.strings.text('Release link copied.'))),
       );
     }
   }
@@ -106,7 +106,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   final backgroundRefreshChannel = const MethodChannel(
     'ink.jjmm.csacflutter/background_refresh',
   );
-  final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final scaffoldMessengerKey = GlobalKey<CsacToastMessengerState>();
   final navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<Conversation>? notificationTapSub;
   bool locked = false;
@@ -377,14 +377,14 @@ class _CsacMobileAppState extends State<CsacMobileApp>
           localeForLanguage(state.preferences.language),
         );
         final messenger = scaffoldMessengerKey.currentState;
-        messenger?.showSnackBar(
-          SnackBar(
+        messenger?.showToast(
+          CsacToast(
             content: Text(
               strings.format('New version available: {version}', {
                 'version': result.displayLatestVersion,
               }),
             ),
-            action: SnackBarAction(
+            action: CsacToastAction(
               label: strings.text('View'),
               onPressed: () => unawaited(showStartupUpdateDialog(result)),
             ),
@@ -823,93 +823,6 @@ class _CupertinoWindowControlButtonState
   }
 }
 
-ThemeData buildCsacTheme(
-  Brightness brightness,
-  Color seedColor,
-  CsacFontStyle fontStyle,
-) {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: seedColor,
-    brightness: brightness,
-  );
-  final fontFamily = fontFamilyForStyle(fontStyle);
-  final fontFamilyFallback = fontFamilyFallbackForStyle(fontStyle);
-  final base = ThemeData(
-    colorScheme: scheme,
-    useMaterial3: true,
-    fontFamily: fontFamily,
-    fontFamilyFallback: fontFamilyFallback,
-  );
-  return base.copyWith(
-    scaffoldBackgroundColor: scheme.surface,
-    canvasColor: scheme.surface,
-    cardColor: scheme.surfaceContainerLow,
-    cardTheme: CardThemeData(
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ),
-    appBarTheme: AppBarTheme(
-      backgroundColor: scheme.surface,
-      foregroundColor: scheme.onSurface,
-      surfaceTintColor: scheme.surfaceTint,
-      elevation: 0,
-    ),
-    bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: scheme.surface,
-      modalBackgroundColor: scheme.surface,
-      surfaceTintColor: scheme.surfaceTint,
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: scheme.surfaceContainer,
-      indicatorColor: scheme.secondaryContainer,
-      labelTextStyle: WidgetStatePropertyAll(
-        base.textTheme.labelMedium?.copyWith(color: scheme.onSurface),
-      ),
-      iconTheme: WidgetStateProperty.resolveWith((states) {
-        return IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? scheme.onSecondaryContainer
-              : scheme.onSurfaceVariant,
-        );
-      }),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: false,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.primary, width: 1.6),
-      ),
-    ),
-    chipTheme: base.chipTheme.copyWith(
-      backgroundColor: scheme.surfaceContainerHighest,
-      selectedColor: scheme.secondaryContainer,
-      labelStyle: TextStyle(color: scheme.onSurface),
-      secondaryLabelStyle: TextStyle(color: scheme.onSecondaryContainer),
-      iconTheme: IconThemeData(color: scheme.onSurfaceVariant),
-      side: BorderSide(color: scheme.outlineVariant),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: scheme.inverseSurface,
-      contentTextStyle: TextStyle(color: scheme.onInverseSurface),
-      actionTextColor: scheme.inversePrimary,
-      behavior: SnackBarBehavior.floating,
-    ),
-    dividerTheme: DividerThemeData(color: scheme.outlineVariant),
-    listTileTheme: ListTileThemeData(
-      iconColor: scheme.onSurfaceVariant,
-      textColor: scheme.onSurface,
-      subtitleTextStyle: base.textTheme.bodyMedium?.copyWith(
-        color: scheme.onSurfaceVariant,
-      ),
-    ),
-  );
-}
-
 CupertinoThemeData buildCsacCupertinoTheme(
   Brightness brightness,
   Color seedColor,
@@ -1000,7 +913,7 @@ class SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
     final primary = CupertinoTheme.of(context).primaryColor;
-    return Scaffold(
+    return CsacPageScaffold(
       backgroundColor: colors.systemBackground,
       body: Center(
         child: Column(
@@ -1172,11 +1085,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final serverUrl = widget.state.preferences.serverUrl.trim().isEmpty
         ? strings.text('Default server')
         : widget.state.preferences.serverUrl.trim();
-    return Scaffold(
+    return CsacPageScaffold(
       backgroundColor: colors.systemBackground,
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: CsacSingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
@@ -1432,9 +1345,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Account created.'))));
+      ).showToast(CsacToast(content: Text(strings.text('Account created.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
@@ -1452,12 +1365,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final primary = CupertinoTheme.of(context).primaryColor;
-    return Scaffold(
+    return CsacPageScaffold(
       backgroundColor: colors.systemBackground,
-      appBar: AppBar(title: Text(strings.text('Register account'))),
+      appBar: CsacNavigationBar(title: Text(strings.text('Register account'))),
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: CsacSingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),

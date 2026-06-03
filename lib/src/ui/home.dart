@@ -60,7 +60,7 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> refreshHomeWithHint() async {
     final strings = context.strings;
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = CsacToastMessenger.of(context);
     final beforeUnread = <String, int>{
       for (final conversation in widget.state.conversations)
         conversationKey(conversation): conversation.unreadCount,
@@ -102,7 +102,7 @@ class _MainShellState extends State<MainShell> {
       final message = strings.format('New messages: {count}', {
         'count': newCount,
       });
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      messenger.showToast(CsacToast(content: Text(message)));
       await showNewMessageNotifications(beforeUnread);
     }
     lastUnreadChats = after;
@@ -958,7 +958,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
     }
 
-    final content = CustomScrollView(
+    final content = CsacCustomScrollView(
       controller: conversationsScroll,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const AlwaysScrollableScrollPhysics(

@@ -161,18 +161,18 @@ class _ImageSendPreviewScreenState extends State<_ImageSendPreviewScreen> {
     final strings = context.strings;
     final colors = Theme.of(context).colorScheme;
     final allStrokes = [...strokes, if (activeStroke != null) activeStroke!];
-    return Scaffold(
-      appBar: AppBar(
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(
         title: Text(strings.text('Image preview')),
         actions: [
-          IconButton(
+          CsacIconButton(
             tooltip: strings.text('Undo'),
             onPressed: strokes.isEmpty
                 ? null
                 : () => setState(() => strokes.removeLast()),
             icon: const Icon(Icons.undo),
           ),
-          IconButton(
+          CsacIconButton(
             tooltip: strings.text('Reset edits'),
             onPressed: strokes.isEmpty && cropMode == _ImageCropMode.original
                 ? null
@@ -258,7 +258,7 @@ class _ImageSendPreviewScreenState extends State<_ImageSendPreviewScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SingleChildScrollView(
+                        CsacSingleChildScrollView(
                           controller: toolbarScrollController,
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.only(bottom: 8),
@@ -331,7 +331,7 @@ class _ImageSendPreviewScreenState extends State<_ImageSendPreviewScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: TextField(
+                              child: CsacTextField(
                                 controller: caption,
                                 minLines: 1,
                                 maxLines: 3,
@@ -595,7 +595,7 @@ class _ImagePreviewRoute extends StatelessWidget {
     );
     return FadeTransition(
       opacity: animation,
-      child: Scaffold(
+      child: CsacPageScaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
           child: Stack(
@@ -626,8 +626,8 @@ class _ImagePreviewRoute extends StatelessWidget {
                       tooltip: strings.text('Copy link'),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: url));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
+                        CsacToastMessenger.of(context).showToast(
+                          CsacToast(
                             content: Text(strings.text('Image link copied')),
                           ),
                         );
@@ -724,9 +724,9 @@ Future<void> downloadUrl(
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    CsacToastMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(strings.text('Link copied'))));
+    ).showToast(CsacToast(content: Text(strings.text('Link copied'))));
     return;
   }
   try {
@@ -753,8 +753,8 @@ Future<void> downloadUrl(
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    CsacToastMessenger.of(context).showToast(
+      CsacToast(
         content: Text(strings.format('Saved to {path}', {'path': path})),
       ),
     );
@@ -762,8 +762,8 @@ Future<void> downloadUrl(
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    CsacToastMessenger.of(context).showToast(
+      CsacToast(
         content: Text(
           strings.format('Download failed: {error}', {'error': err}),
         ),

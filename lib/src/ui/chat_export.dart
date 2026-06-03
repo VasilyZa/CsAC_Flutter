@@ -137,8 +137,8 @@ extension _ChatExport on _ChatScreenState {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.format('Chat exported to {path}', {
               'path': result.filePath,
@@ -151,8 +151,8 @@ extension _ChatExport on _ChatScreenState {
         return;
       }
       final message = err is StateError ? err.message : err.toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.format('Export failed: {error}', {
               'error': message,
@@ -170,7 +170,7 @@ extension _ChatExport on _ChatScreenState {
   Future<ChatExportOptions?> showChatExportOptions() async {
     var format = ChatExportFormat.html;
     var includeMedia = false;
-    return showDialog<ChatExportOptions>(
+    return showCupertinoCsacDialog<ChatExportOptions>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => CupertinoAlertDialog(

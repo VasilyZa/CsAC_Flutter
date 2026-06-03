@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'api_client.dart';
+import 'api_protocol.dart';
 import 'l10n.dart';
 import 'local_cache.dart';
 import 'models.dart';
@@ -51,12 +52,20 @@ class AppLogFile {
 class CsacAppState extends ChangeNotifier {
   CsacAppState({CsacApiClient? client, CsacLocalCache? cache})
     : client = client ?? CsacApiClient(),
-      cache = cache ?? CsacLocalCache();
+      cache = cache ?? CsacLocalCache() {
+    this.client.onHttpProtocolChanged = _handleHttpProtocolChanged;
+  }
 
   final CsacApiClient client;
   final CsacLocalCache cache;
 
-  String get connectionProtocol => client.connectionProtocol;
+  String get connectionProtocol => apiHttpProtocolLabel(activeHttpProtocol);
+
+  ApiHttpProtocol get activeHttpProtocol => client.lastHttpProtocol;
+
+  void _handleHttpProtocolChanged(ApiHttpProtocol protocol) {
+    notifyListeners();
+  }
 
   CsacUser? user;
   List<Conversation> conversations = const <Conversation>[];
@@ -300,6 +309,12 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> updateEnablePat(bool enabled) async {
     preferences = preferences.copyWith(enablePat: enabled);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> updateEnableQuickInputTriggers(bool enabled) async {
+    preferences = preferences.copyWith(enableQuickInputTriggers: enabled);
     await preferences.save();
     notifyListeners();
   }

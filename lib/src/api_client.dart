@@ -7,8 +7,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_protocol.dart';
 import 'models.dart';
-import 'platform/platform_support.dart';
+import 'platform/api_http_client.dart';
 
 class CsacApiException implements Exception {
   const CsacApiException(this.message);
@@ -29,6 +30,7 @@ class NetworkDiagnosticReport {
     required this.originUrl,
     required this.startedAt,
     required this.totalMs,
+    required this.httpProtocol,
     required this.checks,
   });
 
@@ -36,6 +38,7 @@ class NetworkDiagnosticReport {
   final String originUrl;
   final DateTime startedAt;
   final int totalMs;
+  final ApiHttpProtocol httpProtocol;
   final List<NetworkDiagnosticCheck> checks;
 
   bool get passed => checks.every((check) => check.ok);
@@ -105,9 +108,11 @@ class SessionExtensionStatus {
 }
 
 class CsacApiClient {
-  CsacApiClient({http.Client? httpClient, String baseUrl = defaultBaseUrl})
-    : _http = httpClient ?? createPlatformHttpClient(),
-      _baseUrl = normalizeServerUrl(baseUrl) {
+  CsacApiClient({
+    ProtocolAwareHttpClient? httpClient,
+    String baseUrl = defaultBaseUrl,
+  }) : _http = httpClient ?? createApiHttpClient(),
+       _baseUrl = normalizeServerUrl(baseUrl) {
     configureApiAssetBaseUrl(_baseUrl);
   }
 
@@ -115,7 +120,7 @@ class CsacApiClient {
   static const _defaultApiPath = '/rpc/UniCsAC.php';
   static const _sessionKey = 'csac.cookies';
 
-  final http.Client _http;
+  final ProtocolAwareHttpClient _http;
   String _baseUrl;
   final Map<String, String> _cookies = <String, String>{};
 
@@ -123,7 +128,11 @@ class CsacApiClient {
 
   String get originUrl => apiOriginFromBaseUrl(_baseUrl);
 
-  String get connectionProtocol => lastPlatformHttpProtocol(_http) ?? '';
+  ApiHttpProtocol get lastHttpProtocol => _http.lastProtocol;
+
+  set onHttpProtocolChanged(ApiProtocolChanged? callback) {
+    _http.onProtocolChanged = callback;
+  }
 
   Map<String, String> get sessionSnapshot => Map<String, String>.from(_cookies);
 
@@ -339,10 +348,10 @@ class CsacApiClient {
                 _binaryRequest(uri, 'image/*, */*'),
               ).timeout(const Duration(seconds: 8));
               if (response.statusCode < 200 || response.statusCode >= 400) {
-                throw CsacApiException('HTTP ${response.statusCode} $uri');
+                throw CsacApiException('HTTP ${response.statusCode}');
               }
               final type = response.headers['content-type'] ?? 'unknown';
-              return '$type, ${response.bodyBytes.length} B, $uri';
+              return '$type, ${response.bodyBytes.length} B';
             }),
     );
     total.stop();
@@ -351,6 +360,7 @@ class CsacApiClient {
       originUrl: originUrl,
       startedAt: startedAt,
       totalMs: total.elapsedMilliseconds,
+      httpProtocol: lastHttpProtocol,
       checks: checks,
     );
   }

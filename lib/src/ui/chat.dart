@@ -468,7 +468,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void handleMentionTrigger() {
-    if (widget.conversation.type != ConversationType.group ||
+    if (!widget.state.preferences.enableQuickInputTriggers ||
+        widget.conversation.type != ConversationType.group ||
         mentionPickerOpening ||
         applyingDraft) {
       return;
@@ -497,7 +498,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void handleEmojiTrigger() {
-    if (emojiPickerOpening || applyingDraft) {
+    if (!widget.state.preferences.enableQuickInputTriggers ||
+        emojiPickerOpening ||
+        applyingDraft) {
       return;
     }
     final selection = input.selection;
@@ -1149,7 +1152,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      final selected = await showModalBottomSheet<EmojiSticker>(
+      final selected = await showCupertinoCsacSheet<EmojiSticker>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
@@ -1306,7 +1309,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     setState(() => recordingVoice = true);
     try {
-      final recorded = await showDialog<_RecordedVoice>(
+      final recorded = await showCupertinoCsacDialog<_RecordedVoice>(
         context: context,
         barrierDismissible: false,
         builder: (context) => const _VoiceRecorderDialog(),
@@ -1358,7 +1361,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<int?> askVoiceDuration(String fileName) async {
     final controller = TextEditingController(text: '0');
-    final result = await showDialog<int>(
+    final result = await showCupertinoCsacDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
@@ -1366,7 +1369,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             'fileName': fileName,
           }),
         ),
-        content: TextField(
+        content: CsacTextField(
           controller: controller,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
@@ -1480,8 +1483,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.format('You patted {name}', {
               'name': message.sender,
@@ -1495,8 +1498,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.format('Pat failed: {error}', {'error': err}),
           ),
@@ -1551,7 +1554,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      final selected = await showModalBottomSheet<List<GroupMember>>(
+      final selected = await showCupertinoCsacSheet<List<GroupMember>>(
         context: context,
         showDragHandle: true,
         builder: (context) => _MentionPickerSheet(
@@ -1753,14 +1756,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 '#${message.id} ${message.sender}\n$time\n\n${chatMessagePlainText(message, context.strings)}',
           ),
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.strings.text('Message copied'))),
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(content: Text(context.strings.text('Message copied'))),
         );
         break;
       case _MessageAction.copyImage:
         Clipboard.setData(ClipboardData(text: message.imageUrl));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.strings.text('Image link copied'))),
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(content: Text(context.strings.text('Image link copied'))),
         );
         break;
       case _MessageAction.openImage:
@@ -1978,8 +1981,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    CsacToastMessenger.of(context).showToast(
+      CsacToast(
         content: Text(context.strings.text('Selected messages copied.')),
       ),
     );
@@ -1990,7 +1993,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (selected.isEmpty) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(context.strings.text('Delete selected local messages?')),
@@ -2022,8 +2025,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         messages.removeWhere((message) => ids.contains(message.id));
         selectedMessageIds.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(context.strings.text('Local messages deleted.')),
         ),
       );
@@ -2040,7 +2043,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (selected.isEmpty) {
       return;
     }
-    final target = await showModalBottomSheet<Conversation>(
+    final target = await showCupertinoCsacSheet<Conversation>(
       context: context,
       showDragHandle: true,
       builder: (context) => _ForwardConversationSheet(
@@ -2063,15 +2066,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() => selectedMessageIds.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Forwarded.'))),
-      );
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(context.strings.text('Forwarded.'))));
     } catch (err) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.format('Forward failed: {error}', {'error': err}),
           ),
@@ -2332,8 +2335,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void scrollToMessage(int messageId) {
     final keyContext = itemKeys[messageId]?.currentContext;
     if (keyContext == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.text('Referenced message is not loaded.'),
           ),
@@ -2368,12 +2371,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final unreadMessageId = firstUnreadMessageId;
     final unreadDividerIndex = firstUnreadMessageIndex;
     final backgroundPath = widget.state.preferences.chatBackgroundPath.trim();
-    return Scaffold(
+    return CsacPageScaffold(
       backgroundColor: colors.systemBackground,
-      appBar: AppBar(
+      appBar: CsacNavigationBar(
         automaticallyImplyLeading: !widget.embedded && !selectionMode,
         leading: selectionMode
-            ? IconButton(
+            ? CsacIconButton(
                 tooltip: strings.text('Cancel selection'),
                 onPressed: clearSelection,
                 icon: const Icon(CupertinoIcons.xmark),
@@ -2405,17 +2408,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
         actions: selectionMode
             ? [
-                IconButton(
+                CsacIconButton(
                   tooltip: strings.text('Copy selected'),
                   onPressed: copySelectedMessages,
                   icon: const Icon(CupertinoIcons.doc_on_doc),
                 ),
-                IconButton(
+                CsacIconButton(
                   tooltip: strings.text('Forward'),
                   onPressed: forwardSelectedMessages,
                   icon: const Icon(CupertinoIcons.arrowshape_turn_up_right),
                 ),
-                IconButton(
+                CsacIconButton(
                   tooltip: strings.text('Delete local copies'),
                   onPressed: deleteSelectedLocalMessages,
                   icon: const Icon(CupertinoIcons.trash),
@@ -2427,12 +2430,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     padding: EdgeInsets.only(right: 8),
                     child: Icon(CupertinoIcons.wifi_slash),
                   ),
-                IconButton(
+                CsacIconButton(
                   tooltip: strings.text('More'),
                   onPressed: showChatMoreActions,
                   icon: const Icon(CupertinoIcons.ellipsis_circle),
                 ),
-                IconButton(
+                CsacIconButton(
                   tooltip: strings.text('Details'),
                   onPressed: openConversationDetails,
                   icon: const Icon(CupertinoIcons.info_circle),
@@ -2568,7 +2571,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             ? const Center(child: CircularProgressIndicator())
                             : showEmpty
                             ? _EmptyPanel(message: strings.text('No messages.'))
-                            : ListView.builder(
+                            : CsacListView.builder(
                                 controller: scroll,
                                 padding: const EdgeInsets.fromLTRB(
                                   12,
@@ -2994,19 +2997,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         const SingleActivator(
                                           LogicalKeyboardKey.enter,
                                           control: true,
-                                        ): () => unawaited(send()),
+                                        ): () =>
+                                            unawaited(send()),
                                         const SingleActivator(
                                           LogicalKeyboardKey.enter,
                                           meta: true,
-                                        ): () => unawaited(send()),
+                                        ): () =>
+                                            unawaited(send()),
                                       },
-                                      child: TextField(
+                                      child: CsacTextField(
                                         controller: input,
                                         focusNode: inputFocus,
                                         minLines: 1,
                                         maxLines: 4,
                                         keyboardType: TextInputType.multiline,
-                                        textInputAction: TextInputAction.newline,
+                                        textInputAction:
+                                            TextInputAction.newline,
                                         decoration: InputDecoration(
                                           hintText: strings.text('Message'),
                                           contentPadding:
@@ -3019,9 +3025,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                               20,
                                             ),
                                             borderSide: BorderSide(
-                                              color: colors.separator.withValues(
-                                                alpha: 0.28,
-                                              ),
+                                              color: colors.separator
+                                                  .withValues(alpha: 0.28),
                                               width: 0.5,
                                             ),
                                           ),
@@ -3581,8 +3586,290 @@ String _escapeMarkdownHtml(String value) {
       .replaceAll('>', '&gt;');
 }
 
+final highlight_core.Highlight _chatCodeHighlighter = highlight_core.Highlight()
+  ..registerLanguage('bash', highlight_bash.bash)
+  ..registerLanguage('cpp', highlight_cpp.cpp)
+  ..registerLanguage('cs', highlight_cs.cs)
+  ..registerLanguage('css', highlight_css.css)
+  ..registerLanguage('dart', highlight_dart.dart)
+  ..registerLanguage('go', highlight_go.go)
+  ..registerLanguage('java', highlight_java.java)
+  ..registerLanguage('javascript', highlight_javascript.javascript)
+  ..registerLanguage('json', highlight_json.json)
+  ..registerLanguage('kotlin', highlight_kotlin.kotlin)
+  ..registerLanguage('lua', highlight_lua.lua)
+  ..registerLanguage('markdown', highlight_markdown.markdown)
+  ..registerLanguage('php', highlight_php.php)
+  ..registerLanguage('plaintext', highlight_plaintext.plaintext)
+  ..registerLanguage('powershell', highlight_powershell.powershell)
+  ..registerLanguage('python', highlight_python.python)
+  ..registerLanguage('ruby', highlight_ruby.ruby)
+  ..registerLanguage('rust', highlight_rust.rust)
+  ..registerLanguage('shell', highlight_shell.shell)
+  ..registerLanguage('sql', highlight_sql.sql)
+  ..registerLanguage('swift', highlight_swift.swift)
+  ..registerLanguage('typescript', highlight_typescript.typescript)
+  ..registerLanguage('xml', highlight_xml.xml)
+  ..registerLanguage('yaml', highlight_yaml.yaml);
+
+const _chatCodeLanguageAliases = <String, String>{
+  '': 'plaintext',
+  'text': 'plaintext',
+  'plain': 'plaintext',
+  'txt': 'plaintext',
+  'sh': 'shell',
+  'zsh': 'shell',
+  'fish': 'shell',
+  'shellsession': 'shell',
+  'console': 'shell',
+  'terminal': 'shell',
+  'ps': 'powershell',
+  'ps1': 'powershell',
+  'pwsh': 'powershell',
+  'js': 'javascript',
+  'jsx': 'javascript',
+  'mjs': 'javascript',
+  'cjs': 'javascript',
+  'ts': 'typescript',
+  'tsx': 'typescript',
+  'py': 'python',
+  'golang': 'go',
+  'c': 'cpp',
+  'c++': 'cpp',
+  'cc': 'cpp',
+  'cxx': 'cpp',
+  'h': 'cpp',
+  'hpp': 'cpp',
+  'c#': 'cs',
+  'csharp': 'cs',
+  'kt': 'kotlin',
+  'kts': 'kotlin',
+  'rs': 'rust',
+  'rb': 'ruby',
+  'md': 'markdown',
+  'mdown': 'markdown',
+  'html': 'xml',
+  'xhtml': 'xml',
+  'svg': 'xml',
+  'yml': 'yaml',
+};
+
+const _chatCodeSupportedLanguages = <String>{
+  'bash',
+  'cpp',
+  'cs',
+  'css',
+  'dart',
+  'go',
+  'java',
+  'javascript',
+  'json',
+  'kotlin',
+  'lua',
+  'markdown',
+  'php',
+  'plaintext',
+  'powershell',
+  'python',
+  'ruby',
+  'rust',
+  'shell',
+  'sql',
+  'swift',
+  'typescript',
+  'xml',
+  'yaml',
+};
+
+String _normalizeChatCodeLanguage(String raw) {
+  final tokens = raw.trim().toLowerCase().split(RegExp(r'\s+'));
+  final candidate = tokens.firstWhere(
+    (token) => token.startsWith('language-') || token.startsWith('lang-'),
+    orElse: () => tokens.isEmpty ? '' : tokens.first,
+  );
+  final cleaned = candidate
+      .replaceFirst(RegExp(r'^(language|lang)-'), '')
+      .replaceAll(RegExp(r'[^a-z0-9_+#.-]'), '');
+  final normalized = _chatCodeLanguageAliases[cleaned] ?? cleaned;
+  return _chatCodeSupportedLanguages.contains(normalized)
+      ? normalized
+      : 'plaintext';
+}
+
+String _chatCodeDisplayLanguage(String language) {
+  return language == 'plaintext' ? 'CODE' : language.toUpperCase();
+}
+
+TextSpan _highlightChatCode(
+  String code,
+  String language,
+  TextStyle baseStyle,
+  Map<String, TextStyle> tokenStyles,
+) {
+  late final List<highlight_core.Node> nodes;
+  try {
+    nodes =
+        _chatCodeHighlighter
+            .parse(code, language: _normalizeChatCodeLanguage(language))
+            .nodes ??
+        <highlight_core.Node>[highlight_core.Node(value: code)];
+  } catch (_) {
+    nodes = <highlight_core.Node>[highlight_core.Node(value: code)];
+  }
+  return TextSpan(
+    style: baseStyle,
+    children: _chatCodeNodeSpans(nodes, baseStyle, tokenStyles),
+  );
+}
+
+List<InlineSpan> _chatCodeNodeSpans(
+  List<highlight_core.Node> nodes,
+  TextStyle baseStyle,
+  Map<String, TextStyle> tokenStyles,
+) {
+  final spans = <InlineSpan>[];
+  for (final node in nodes) {
+    final style = tokenStyles[node.className] ?? baseStyle;
+    if (node.value != null) {
+      spans.add(TextSpan(text: node.value, style: style));
+    }
+    final children = node.children;
+    if (children != null && children.isNotEmpty) {
+      spans.addAll(_chatCodeNodeSpans(children, style, tokenStyles));
+    }
+  }
+  return spans;
+}
+
 class _ChatMarkdownText extends StatelessWidget {
   const _ChatMarkdownText({
+    required this.text,
+    required this.textColor,
+    required this.secondaryTextColor,
+  });
+
+  final String text;
+  final Color textColor;
+  final Color secondaryTextColor;
+
+  List<_ChatMarkdownSegment> segments() {
+    final result = <_ChatMarkdownSegment>[];
+    final lines = text.split('\n');
+    final markdownBuffer = StringBuffer();
+    var inFence = false;
+    var fenceMarker = '';
+    var fenceLanguage = '';
+    var fenceLength = 0;
+    var codeBuffer = StringBuffer();
+
+    void flushMarkdown() {
+      if (markdownBuffer.isEmpty) {
+        return;
+      }
+      result.add(_ChatMarkdownSegment.markdown(markdownBuffer.toString()));
+      markdownBuffer.clear();
+    }
+
+    void flushCode() {
+      result.add(
+        _ChatMarkdownSegment.code(
+          codeBuffer.toString().replaceFirst(RegExp(r'\n$'), ''),
+          _normalizeChatCodeLanguage(fenceLanguage),
+        ),
+      );
+      codeBuffer = StringBuffer();
+    }
+
+    for (final line in lines) {
+      final fence = RegExp(r'^([ \t]*)(`{3,}|~{3,})(.*)$').firstMatch(line);
+      if (!inFence && fence != null) {
+        flushMarkdown();
+        fenceMarker = fence.group(2)![0];
+        fenceLength = fence.group(2)!.length;
+        fenceLanguage = fence.group(3)!.trim().split(RegExp(r'\s+')).first;
+        inFence = true;
+        continue;
+      }
+      if (inFence) {
+        final closing = RegExp(
+          '^([ \\t]*)${RegExp.escape(fenceMarker)}{$fenceLength,}[ \\t]*\$',
+        ).firstMatch(line);
+        if (closing != null) {
+          flushCode();
+          inFence = false;
+          fenceMarker = '';
+          fenceLanguage = '';
+          fenceLength = 0;
+          continue;
+        }
+        codeBuffer.writeln(line);
+        continue;
+      }
+      markdownBuffer.writeln(line);
+    }
+    if (inFence) {
+      flushCode();
+    } else {
+      flushMarkdown();
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = segments();
+    if (parts.any((part) => part.isCode)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final part in parts)
+            if (part.isCode)
+              _ChatCodeBlock(
+                code: part.text,
+                language: part.language,
+                textColor: textColor,
+                secondaryTextColor: secondaryTextColor,
+              )
+            else if (part.text.trim().isNotEmpty)
+              _ChatMarkdownBody(
+                text: part.text,
+                textColor: textColor,
+                secondaryTextColor: secondaryTextColor,
+              ),
+        ],
+      );
+    }
+    return _ChatMarkdownBody(
+      text: text,
+      textColor: textColor,
+      secondaryTextColor: secondaryTextColor,
+    );
+  }
+}
+
+class _ChatMarkdownSegment {
+  const _ChatMarkdownSegment._({
+    required this.text,
+    required this.language,
+    required this.isCode,
+  });
+
+  factory _ChatMarkdownSegment.markdown(String text) {
+    return _ChatMarkdownSegment._(text: text, language: '', isCode: false);
+  }
+
+  factory _ChatMarkdownSegment.code(String text, String language) {
+    return _ChatMarkdownSegment._(text: text, language: language, isCode: true);
+  }
+
+  final String text;
+  final String language;
+  final bool isCode;
+}
+
+class _ChatMarkdownBody extends StatelessWidget {
+  const _ChatMarkdownBody({
     required this.text,
     required this.textColor,
     required this.secondaryTextColor,
@@ -3629,7 +3916,7 @@ class _ChatMarkdownText extends StatelessWidget {
         }
         unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
       },
-      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+      styleSheet: MarkdownStyleSheet(
         a: base?.copyWith(color: primary, decoration: TextDecoration.underline),
         p: base,
         strong: base?.copyWith(fontWeight: FontWeight.w800),
@@ -3657,6 +3944,207 @@ class _ChatMarkdownText extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ChatCodeBlock extends StatefulWidget {
+  const _ChatCodeBlock({
+    required this.code,
+    required this.language,
+    required this.textColor,
+    required this.secondaryTextColor,
+  });
+
+  final String code;
+  final String language;
+  final Color textColor;
+  final Color secondaryTextColor;
+
+  @override
+  State<_ChatCodeBlock> createState() => _ChatCodeBlockState();
+}
+
+class _ChatCodeBlockState extends State<_ChatCodeBlock> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final containerColor = Color.alphaBlend(
+      CupertinoTheme.of(
+        context,
+      ).primaryColor.withValues(alpha: dark ? 0.08 : 0.05),
+      colors.surfaceContainerHighest,
+    );
+    final headerColor = Color.alphaBlend(
+      CupertinoTheme.of(
+        context,
+      ).primaryColor.withValues(alpha: dark ? 0.10 : 0.07),
+      containerColor,
+    );
+    final baseCodeStyle =
+        theme.textTheme.bodySmall?.copyWith(
+          color: dark ? const Color(0xffd6deeb) : const Color(0xff1f2937),
+          fontFamily: 'monospace',
+          height: 1.42,
+        ) ??
+        TextStyle(
+          color: widget.textColor,
+          fontFamily: 'monospace',
+          fontSize: 13,
+          height: 1.42,
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: containerColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: widget.textColor.withValues(alpha: 0.10)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: headerColor,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: widget.textColor.withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+                  child: Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.chevron_left_slash_chevron_right,
+                        size: 15,
+                        color: widget.secondaryTextColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _chatCodeDisplayLanguage(widget.language),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: widget.secondaryTextColor,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(32, 32),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: widget.code));
+                          CsacToastMessenger.of(context).showToast(
+                            CsacToast(
+                              content: Text(
+                                context.strings.text('Code copied.'),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          CupertinoIcons.doc_on_doc,
+                          size: 17,
+                          color: CupertinoTheme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              CsacSingleChildScrollView(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 11),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 1),
+                  child: Text.rich(
+                    _highlightChatCode(
+                      widget.code,
+                      widget.language,
+                      baseCodeStyle,
+                      _chatCodeTokenStyles(dark),
+                    ),
+                    softWrap: false,
+                    textWidthBasis: TextWidthBasis.longestLine,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Map<String, TextStyle> _chatCodeTokenStyles(bool dark) {
+  Color c(int light, int darkValue) => Color(dark ? darkValue : light);
+  return <String, TextStyle>{
+    'keyword': TextStyle(
+      color: c(0xff7c3aed, 0xffc792ea),
+      fontWeight: FontWeight.w700,
+    ),
+    'built_in': TextStyle(color: c(0xff0369a1, 0xff82aaff)),
+    'type': TextStyle(color: c(0xff0f766e, 0xff89ddff)),
+    'literal': TextStyle(color: c(0xffb45309, 0xffffcb6b)),
+    'number': TextStyle(color: c(0xffb45309, 0xffffcb6b)),
+    'string': TextStyle(color: c(0xff15803d, 0xffc3e88d)),
+    'subst': TextStyle(color: c(0xff1f2937, 0xffd6deeb)),
+    'symbol': TextStyle(color: c(0xff0f766e, 0xff89ddff)),
+    'class': TextStyle(color: c(0xff0f766e, 0xffffcb6b)),
+    'function': TextStyle(color: c(0xff2563eb, 0xff82aaff)),
+    'title': TextStyle(color: c(0xff2563eb, 0xff82aaff)),
+    'params': TextStyle(color: c(0xff475569, 0xffd6deeb)),
+    'attr': TextStyle(color: c(0xffb45309, 0xffffcb6b)),
+    'attribute': TextStyle(color: c(0xffb45309, 0xffffcb6b)),
+    'variable': TextStyle(color: c(0xffbe123c, 0xffff5370)),
+    'comment': TextStyle(
+      color: c(0xff64748b, 0xff7f8c98),
+      fontStyle: FontStyle.italic,
+    ),
+    'quote': TextStyle(
+      color: c(0xff64748b, 0xff7f8c98),
+      fontStyle: FontStyle.italic,
+    ),
+    'meta': TextStyle(color: c(0xff475569, 0xff89ddff)),
+    'tag': TextStyle(color: c(0xff7c3aed, 0xffc792ea)),
+    'name': TextStyle(color: c(0xff2563eb, 0xff82aaff)),
+    'selector-tag': TextStyle(color: c(0xff7c3aed, 0xffc792ea)),
+    'selector-class': TextStyle(color: c(0xff2563eb, 0xff82aaff)),
+    'selector-id': TextStyle(color: c(0xffbe123c, 0xffff5370)),
+    'regexp': TextStyle(color: c(0xff15803d, 0xffc3e88d)),
+    'link': TextStyle(color: c(0xff2563eb, 0xff82aaff)),
+    'doctag': TextStyle(
+      color: c(0xff7c3aed, 0xffc792ea),
+      fontWeight: FontWeight.w700,
+    ),
+    'section': TextStyle(
+      color: c(0xff2563eb, 0xff82aaff),
+      fontWeight: FontWeight.w700,
+    ),
+    'bullet': TextStyle(color: c(0xffb45309, 0xffffcb6b)),
+    'addition': TextStyle(color: c(0xff15803d, 0xffc3e88d)),
+    'deletion': TextStyle(color: c(0xffbe123c, 0xffff5370)),
+    'emphasis': const TextStyle(fontStyle: FontStyle.italic),
+    'strong': const TextStyle(fontWeight: FontWeight.w800),
+  };
 }
 
 class _InlineStatusPill extends StatelessWidget {
@@ -3865,7 +4353,7 @@ class _UnreadDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Divider(
+            child: CsacDivider(
               height: 1,
               color: colors.primary.withValues(alpha: 0.38),
             ),
@@ -3889,7 +4377,7 @@ class _UnreadDivider extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Divider(
+            child: CsacDivider(
               height: 1,
               color: colors.primary.withValues(alpha: 0.38),
             ),
@@ -4309,7 +4797,7 @@ class _AnimatedSendButton extends StatelessWidget {
                 ]
               : null,
         ),
-        child: IconButton(
+        child: CsacIconButton(
           tooltip: context.strings.text('Send'),
           onPressed: onPressed,
           icon: AnimatedSwitcher(
@@ -4470,7 +4958,7 @@ class _EmojiStickerPickerState extends State<_EmojiStickerPicker> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: TextField(
+              child: CsacTextField(
                 controller: search,
                 onChanged: (_) => setState(() {}),
                 textInputAction: TextInputAction.search,
@@ -4479,7 +4967,7 @@ class _EmojiStickerPickerState extends State<_EmojiStickerPicker> {
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: search.text.isEmpty
                       ? null
-                      : IconButton(
+                      : CsacIconButton(
                           tooltip: strings.text('Clear'),
                           onPressed: () => setState(search.clear),
                           icon: const Icon(Icons.close),
@@ -4503,7 +4991,7 @@ class _EmojiStickerPickerState extends State<_EmojiStickerPicker> {
               )
             else
               Flexible(
-                child: CustomScrollView(
+                child: CsacCustomScrollView(
                   slivers: [
                     if (filteredPinned.isNotEmpty) ...[
                       SliverPadding(
@@ -5795,7 +6283,7 @@ class _MentionPickerSheetState extends State<_MentionPickerSheet> {
             Expanded(
               child: widget.members.isEmpty
                   ? _EmptyPanel(message: strings.text('No members.'))
-                  : ListView.builder(
+                  : CsacListView.builder(
                       itemCount: widget.members.length,
                       itemBuilder: (context, index) {
                         final member = widget.members[index];
@@ -5898,7 +6386,7 @@ class _ForwardConversationSheet extends StatelessWidget {
                   ? _EmptyPanel(
                       message: strings.text('No conversations available.'),
                     )
-                  : ListView.builder(
+                  : CsacListView.builder(
                       itemCount: conversations.length,
                       itemBuilder: (context, index) {
                         final conversation = conversations[index];
@@ -6094,7 +6582,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
   }
 
   Future<void> openMessage(ChatMessage message) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = CsacToastMessenger.of(context);
     final strings = context.strings;
     List<ChatMessage> around;
     var loadedFromNetwork = false;
@@ -6119,8 +6607,8 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
         around.any((item) => item.id < message.id) ||
         around.any((item) => item.id > message.id);
     if (!containsTarget || (!loadedFromNetwork && !hasContext)) {
-      messenger.showSnackBar(
-        SnackBar(
+      messenger.showToast(
+        CsacToast(
           content: Text(strings.text('Unable to locate this essence message.')),
         ),
       );
@@ -6151,11 +6639,11 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
           }).toList();
     final effectiveStats =
         stats ?? EssenceStats.fromMessages(messages, type: statsType);
-    return Scaffold(
-      appBar: AppBar(
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(
         title: Text(strings.text('Essence messages')),
         actions: [
-          IconButton(
+          CsacIconButton(
             tooltip: strings.text('Refresh'),
             onPressed: load,
             icon: const Icon(Icons.refresh),
@@ -6164,7 +6652,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: ListView(
+        child: CsacListView(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
           children: [
             if (loading) const LinearProgressIndicator(minHeight: 2),
@@ -6179,7 +6667,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
               onTypeChanged: changeStatsType,
             ),
             const SizedBox(height: 12),
-            TextField(
+            CsacTextField(
               controller: search,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
@@ -6187,7 +6675,7 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
                 border: const OutlineInputBorder(),
                 suffixIcon: query.isEmpty
                     ? null
-                    : IconButton(
+                    : CsacIconButton(
                         tooltip: strings.text('Clear'),
                         onPressed: search.clear,
                         icon: const Icon(Icons.clear),
@@ -6247,7 +6735,7 @@ class _EssenceStatsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = Theme.of(context).colorScheme;
-    return Card(
+    return CsacCard(
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -6612,7 +7100,7 @@ class _EssenceMessageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = displayMessageTime(message, preferences);
-    return Card(
+    return CsacCard(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 5),
       child: ListTile(

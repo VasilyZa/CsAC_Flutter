@@ -11,7 +11,7 @@ class _DesktopCommandPaletteHost extends StatefulWidget {
 
   final CsacAppState state;
   final GlobalKey<NavigatorState> navigatorKey;
-  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
+  final GlobalKey<CsacToastMessengerState> scaffoldMessengerKey;
   final bool enabled;
   final Widget child;
 
@@ -87,7 +87,7 @@ class _CommandPaletteOverlay extends StatefulWidget {
 
   final CsacAppState state;
   final GlobalKey<NavigatorState> navigatorKey;
-  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
+  final GlobalKey<CsacToastMessengerState> scaffoldMessengerKey;
 
   @override
   State<_CommandPaletteOverlay> createState() => _CommandPaletteOverlayState();
@@ -442,8 +442,8 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
         ),
       );
     } catch (err) {
-      messenger?.showSnackBar(
-        SnackBar(
+      messenger?.showToast(
+        CsacToast(
           content: Text(
             strings.format('Command failed: {error}', {'error': err}),
           ),
@@ -471,7 +471,7 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
     if (navigator == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: navigator.context,
       builder: (dialogContext) => AlertDialog(
         title: Text(context.strings.text('Clear local cache?')),
@@ -496,8 +496,8 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
       return;
     }
     await widget.state.clearLocalCache();
-    context.messenger?.showSnackBar(
-      SnackBar(content: Text(context.strings.text('Local cache cleared.'))),
+    context.messenger?.showToast(
+      CsacToast(content: Text(context.strings.text('Local cache cleared.'))),
     );
   }
 
@@ -506,8 +506,8 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
     _CommandPaletteActionContext context,
   ) async {
     await widget.state.updateThemeMode(mode);
-    context.messenger?.showSnackBar(
-      SnackBar(content: Text(context.strings.text('Theme updated.'))),
+    context.messenger?.showToast(
+      CsacToast(content: Text(context.strings.text('Theme updated.'))),
     );
   }
 
@@ -515,8 +515,8 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
     _CommandPaletteActionContext context,
   ) async {
     await widget.state.refreshHome();
-    context.messenger?.showSnackBar(
-      SnackBar(content: Text(context.strings.text('Refreshed.'))),
+    context.messenger?.showToast(
+      CsacToast(content: Text(context.strings.text('Refreshed.'))),
     );
   }
 
@@ -616,7 +616,7 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
                       Icon(Icons.terminal_rounded, color: colors.primary),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: TextField(
+                        child: CsacTextField(
                           controller: search,
                           focusNode: focusNode,
                           autofocus: true,
@@ -661,7 +661,7 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
                     ],
                   ),
                 ),
-                Divider(height: 1, color: colors.outlineVariant),
+                CsacDivider(height: 1, color: colors.outlineVariant),
                 Flexible(
                   child: matches.isEmpty
                       ? Padding(
@@ -673,7 +673,7 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
                             ),
                           ),
                         )
-                      : ListView.separated(
+                      : CsacListView.separated(
                           controller: actionsScroll,
                           shrinkWrap: true,
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -895,6 +895,6 @@ class _CommandPaletteActionContext {
   });
 
   final NavigatorState? navigator;
-  final ScaffoldMessengerState? messenger;
+  final CsacToastMessengerState? messenger;
   final CsacStrings strings;
 }

@@ -3,8 +3,6 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'platform/platform_support.dart';
-
 class VersionUpdateInfo {
   const VersionUpdateInfo({
     required this.currentVersion,
@@ -31,7 +29,7 @@ class VersionUpdateInfo {
 
 class VersionUpdateChecker {
   VersionUpdateChecker({http.Client? client})
-    : client = client ?? createPlatformHttpClient(userAgent: 'CsAC-Updater');
+    : client = client ?? http.Client();
 
   static const latestReleaseUrl =
       'https://api.github.com/repos/VasilyZa/CsAC_Flutter/releases/latest';

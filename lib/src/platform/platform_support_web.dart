@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 bool get isWebPlatform => true;
@@ -21,15 +20,6 @@ bool get isApplePlatform => false;
 bool get shouldForceHideMobileTextInput => false;
 
 void installGlobalBadCertificateOverride() {}
-
-http.Client createPlatformHttpClient({
-  String userAgent = 'CsAC-Mobile',
-  bool preferCronet = true,
-}) {
-  return http.Client();
-}
-
-String? lastPlatformHttpProtocol(http.Client client) => null;
 
 void hidePlatformTextInput() {
   FocusManager.instance.primaryFocus?.unfocus();

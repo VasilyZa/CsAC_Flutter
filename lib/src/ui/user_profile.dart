@@ -149,7 +149,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }) {
     return NotificationListener<ScrollEndNotification>(
       onNotification: handleProfileScrollEnd,
-      child: CustomScrollView(
+      child: CsacCustomScrollView(
         controller: profileScroll,
         physics: physics,
         slivers: slivers,
@@ -200,14 +200,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.text(success))));
+      ).showToast(CsacToast(content: Text(context.strings.text(success))));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               context.strings.format('Action failed: {error}', {'error': err}),
             ),
@@ -224,11 +224,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> addFriend(UserProfile target) async {
     final controller = TextEditingController(text: '请求添加你为好友');
     final strings = context.strings;
-    final message = await showDialog<String>(
+    final message = await showCupertinoCsacDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.format('Add {name}', {'name': target.displayName})),
-        content: TextField(
+        content: CsacTextField(
           controller: controller,
           maxLines: 3,
           decoration: InputDecoration(
@@ -261,11 +261,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> editRemark(UserProfile target) async {
     final controller = TextEditingController(text: target.remark);
     final strings = context.strings;
-    final remark = await showDialog<String>(
+    final remark = await showCupertinoCsacDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.text('Edit remark')),
-        content: TextField(
+        content: CsacTextField(
           controller: controller,
           decoration: InputDecoration(
             labelText: strings.text('Remark'),
@@ -296,7 +296,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<bool> confirm(String title, String message, String action) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
@@ -405,7 +405,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (group == null || member == null) {
       return;
     }
-    final result = await showDialog<_MemberTitleChange>(
+    final result = await showCupertinoCsacDialog<_MemberTitleChange>(
       context: context,
       builder: (context) =>
           _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
@@ -414,8 +414,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return;
     }
     if (result.title.runes.length > 16) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.text('Member title must be at most 16 characters.'),
           ),
@@ -424,8 +424,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return;
     }
     if (result.level < 1 || (!widget.state.debugMode && result.level > 100)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             context.strings.text('Level must be between 1 and 100.'),
           ),
@@ -446,8 +446,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void copyValue(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    CsacToastMessenger.of(context).showToast(
+      CsacToast(
         content: Text(
           context.strings.format('{label} copied.', {'label': label}),
         ),
@@ -526,7 +526,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       leading: Icon(icon),
       title: Text(title),
       subtitle: SelectableText(value),
-      trailing: IconButton(
+      trailing: CsacIconButton(
         tooltip: context.strings.text('Copy'),
         onPressed: () => copyValue(title, value),
         icon: const Icon(Icons.copy),
@@ -556,7 +556,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final loaded = profile;
     final headerProfile = loaded ?? placeholderProfile;
     final member = widget.member;
-    return Scaffold(
+    return CsacPageScaffold(
       body: loading
           ? buildProfileScrollView(
               slivers: [
@@ -619,7 +619,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                     sliver: SliverList.list(
                       children: [
-                        Card(
+                        CsacCard(
                           elevation: 0,
                           child: Column(
                             children: [
@@ -677,7 +677,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                         if (!isSelf) ...[
                           const SizedBox(height: 12),
-                          Card(
+                          CsacCard(
                             elevation: 0,
                             child: Column(
                               children: [
@@ -687,14 +687,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     title: strings.text('Open private chat'),
                                     onTap: () => openPrivateChat(loaded),
                                   ),
-                                if (loaded.isFriend) const Divider(height: 1),
+                                if (loaded.isFriend)
+                                  const CsacDivider(height: 1),
                                 if (loaded.isFriend)
                                   actionTile(
                                     icon: Icons.edit_note,
                                     title: strings.text('Edit remark'),
                                     onTap: () => editRemark(loaded),
                                   ),
-                                if (loaded.isFriend) const Divider(height: 1),
+                                if (loaded.isFriend)
+                                  const CsacDivider(height: 1),
                                 if (!loaded.isFriend && loaded.canAddFriend)
                                   actionTile(
                                     icon: Icons.person_add_alt,
@@ -707,7 +709,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     title: strings.text('Cannot add friend'),
                                     onTap: null,
                                   ),
-                                if (!loaded.isFriend) const Divider(height: 1),
+                                if (!loaded.isFriend)
+                                  const CsacDivider(height: 1),
                                 if (!loaded.isFriend && !loaded.canAddFriend)
                                   actionTile(
                                     icon: Icons.restore,
@@ -715,7 +718,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     onTap: () => recoverFriend(loaded),
                                   ),
                                 if (!loaded.isFriend && !loaded.canAddFriend)
-                                  const Divider(height: 1),
+                                  const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.person_remove_outlined,
                                   title: strings.text('Delete friend'),
@@ -724,7 +727,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       ? () => deleteFriend(loaded)
                                       : null,
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.block,
                                   title: strings.text('Block friend'),
@@ -733,7 +736,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       ? () => blockFriend(loaded)
                                       : null,
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.flag_outlined,
                                   title: strings.text('Report user'),
@@ -752,7 +755,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          Card(
+                          CsacCard(
                             elevation: 0,
                             child: Column(
                               children: [
@@ -761,31 +764,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   title: strings.text('Set member title'),
                                   onTap: editMemberTitle,
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.volume_off_outlined,
                                   title: strings.text('Mute 10 minutes'),
                                   onTap: () => memberAction('mute10'),
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.volume_up_outlined,
                                   title: strings.text('Unmute'),
                                   onTap: () => memberAction('unmute'),
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.admin_panel_settings_outlined,
                                   title: strings.text('Set admin'),
                                   onTap: () => memberAction('admin'),
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.remove_moderator_outlined,
                                   title: strings.text('Remove admin'),
                                   onTap: () => memberAction('removeAdmin'),
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.person_remove_outlined,
                                   title: strings.text('Kick member'),
@@ -804,7 +807,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          Card(
+                          CsacCard(
                             elevation: 0,
                             child: Column(
                               children: [
@@ -814,7 +817,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   color: colors.error,
                                   onTap: () => banUser(loaded),
                                 ),
-                                const Divider(height: 1),
+                                const CsacDivider(height: 1),
                                 actionTile(
                                   icon: Icons.restore_from_trash_outlined,
                                   title: strings.text('Unban user'),
@@ -837,7 +840,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           const SizedBox(height: 8),
                           for (final group in createdGroups)
-                            Card(
+                            CsacCard(
                               elevation: 0,
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               child: _RoundedInkClip(
@@ -873,7 +876,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           const SizedBox(height: 8),
                           for (final group in commonGroups)
-                            Card(
+                            CsacCard(
                               elevation: 0,
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               child: ListTile(
@@ -919,32 +922,94 @@ class _UserProfileHeaderSliver extends StatelessWidget {
     final loaded = profile;
     final hasProfile = loaded != null;
     final expandedHeight = hasProfile ? 286.0 : 112.0;
-    return SliverAppBar(
-      pinned: true,
-      stretch: !_MotionPreference.reduceOf(context),
-      expandedHeight: expandedHeight,
-      backgroundColor: hasProfile ? colors.primary : colors.surface,
-      foregroundColor: hasProfile ? Colors.white : colors.onSurface,
-      title: hasProfile ? const SizedBox.shrink() : Text(title),
-      titleSpacing: hasProfile ? 0 : null,
-      actions: [
-        IconButton(
+    if (!hasProfile) {
+      return CupertinoSliverNavigationBar(
+        stretch: !_MotionPreference.reduceOf(context),
+        backgroundColor: colors.surface,
+        largeTitle: Text(title),
+        trailing: CsacIconButton(
           tooltip: strings.text('Refresh'),
           onPressed: loading || onRefresh == null
               ? null
               : () => unawaited(onRefresh!()),
           icon: const Icon(Icons.refresh),
+          color: colors.onSurface,
+        ),
+        border: null,
+      );
+    }
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _UserProfileHeaderDelegate(
+        title: title,
+        profile: loaded,
+        avatarHeroTag: avatarHeroTag,
+        expandedHeight: expandedHeight,
+        trailing: CsacIconButton(
+          tooltip: strings.text('Refresh'),
+          onPressed: loading || onRefresh == null
+              ? null
+              : () => unawaited(onRefresh!()),
+          icon: const Icon(Icons.refresh),
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class _UserProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _UserProfileHeaderDelegate({
+    required this.title,
+    required this.profile,
+    required this.avatarHeroTag,
+    required this.expandedHeight,
+    required this.trailing,
+  });
+
+  final String title;
+  final UserProfile profile;
+  final Object? avatarHeroTag;
+  final double expandedHeight;
+  final Widget trailing;
+
+  @override
+  double get minExtent => kToolbarHeight;
+
+  @override
+  double get maxExtent => expandedHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _UserProfileHeaderSpace(
+          title: title,
+          profile: profile,
+          avatarHeroTag: avatarHeroTag,
+          expandedHeight: expandedHeight,
+        ),
+        Positioned(
+          top: MediaQuery.paddingOf(context).top,
+          right: 8,
+          child: trailing,
         ),
       ],
-      flexibleSpace: hasProfile
-          ? _UserProfileHeaderSpace(
-              title: title,
-              profile: loaded,
-              avatarHeroTag: avatarHeroTag,
-              expandedHeight: expandedHeight,
-            )
-          : null,
     );
+  }
+
+  @override
+  bool shouldRebuild(_UserProfileHeaderDelegate oldDelegate) {
+    return title != oldDelegate.title ||
+        profile != oldDelegate.profile ||
+        avatarHeroTag != oldDelegate.avatarHeroTag ||
+        expandedHeight != oldDelegate.expandedHeight ||
+        trailing != oldDelegate.trailing;
   }
 }
 

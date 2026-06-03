@@ -113,8 +113,8 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Open failed.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(context.strings.text('Open failed.'))),
       );
     }
   }
@@ -191,8 +191,8 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
       case 'copy':
         await Clipboard.setData(ClipboardData(text: item.url));
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.strings.text('Link copied.'))),
+          CsacToastMessenger.of(context).showToast(
+            CsacToast(content: Text(context.strings.text('Link copied.'))),
           );
         }
         break;
@@ -205,11 +205,11 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return Scaffold(
-      appBar: AppBar(
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(
         title: Text(strings.text('Media and files')),
         actions: [
-          IconButton(
+          CsacIconButton(
             tooltip: strings.text('Refresh'),
             onPressed: syncing ? null : () => load(sync: true),
             icon: syncing
@@ -227,7 +227,7 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: TextField(
+              child: CsacTextField(
                 controller: search,
                 onChanged: (_) => scheduleLoad(),
                 decoration: InputDecoration(
@@ -235,7 +235,7 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: search.text.trim().isEmpty
                       ? null
-                      : IconButton(
+                      : CsacIconButton(
                           tooltip: strings.text('Clear'),
                           onPressed: () {
                             search.clear();
@@ -249,7 +249,7 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
             ),
             SizedBox(
               height: 46,
-              child: ListView(
+              child: CsacListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 scrollDirection: Axis.horizontal,
                 children: [
@@ -296,7 +296,7 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
                       builder: (context, constraints) {
                         final grid = constraints.maxWidth >= 720;
                         if (!grid) {
-                          return ListView.builder(
+                          return CsacListView.builder(
                             padding: const EdgeInsets.fromLTRB(12, 6, 12, 18),
                             itemCount: items.length,
                             itemBuilder: (context, index) => _MotionListItem(
@@ -383,7 +383,7 @@ class _MediaListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = displayMessageTime(item.message, preferences);
-    return Card(
+    return CsacCard(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 5),
       child: _RoundedInkClip(
@@ -409,7 +409,7 @@ class _MediaListTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           onTap: onOpen,
-          trailing: IconButton(
+          trailing: CsacIconButton(
             tooltip: context.strings.text('More'),
             onPressed: onMore,
             icon: const Icon(Icons.more_vert),
@@ -491,7 +491,7 @@ class _MediaGridTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
+                  CsacIconButton(
                     tooltip: context.strings.text('More'),
                     onPressed: onMore,
                     icon: const Icon(CupertinoIcons.ellipsis_circle),

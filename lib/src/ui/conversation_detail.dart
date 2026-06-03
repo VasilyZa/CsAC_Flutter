@@ -145,13 +145,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> addFriend(UserProfile profile) async {
     final controller = TextEditingController(text: '请求添加你为好友');
     final strings = context.strings;
-    final message = await showDialog<String>(
+    final message = await showCupertinoCsacDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
           strings.format('Add {name}', {'name': profile.displayName}),
         ),
-        content: TextField(
+        content: CsacTextField(
           controller: controller,
           maxLines: 3,
           decoration: InputDecoration(
@@ -180,13 +180,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Friend request sent.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Friend request sent.'))),
       );
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Request failed: {error}', {'error': err}),
             ),
@@ -200,7 +200,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final code = TextEditingController(text: profile.code);
     final answer = TextEditingController();
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.format('Join {name}', {'name': profile.name})),
@@ -214,7 +214,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
+            CsacTextField(
               controller: code,
               decoration: InputDecoration(
                 labelText: strings.text('Invite code'),
@@ -222,7 +222,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            CsacTextField(
               controller: answer,
               maxLines: 2,
               decoration: InputDecoration(
@@ -260,14 +260,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Join request sent.'))),
-      );
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Join request sent.'))));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Join failed: {error}', {'error': err}),
             ),
@@ -280,11 +280,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> editRemark(UserProfile profile) async {
     final controller = TextEditingController(text: profile.remark);
     final strings = context.strings;
-    final remark = await showDialog<String>(
+    final remark = await showCupertinoCsacDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.text('Edit remark')),
-        content: TextField(
+        content: CsacTextField(
           controller: controller,
           decoration: InputDecoration(
             labelText: strings.text('Remark'),
@@ -312,14 +312,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Remark updated.'))));
+      ).showToast(CsacToast(content: Text(strings.text('Remark updated.'))));
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Update failed: {error}', {'error': err}),
             ),
@@ -331,7 +331,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> deleteFriend(UserProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
@@ -360,14 +360,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Friend deleted.'))));
+      ).showToast(CsacToast(content: Text(strings.text('Friend deleted.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Delete failed: {error}', {'error': err}),
             ),
@@ -379,7 +379,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> blockFriend(UserProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
@@ -406,14 +406,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Friend blocked.'))));
+      ).showToast(CsacToast(content: Text(strings.text('Friend blocked.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Block failed: {error}', {'error': err}),
             ),
@@ -425,7 +425,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> leaveGroup(GroupProfile profile) async {
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.format('Leave {name}?', {'name': profile.name})),
@@ -452,14 +452,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      CsacToastMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(strings.text('Left group.'))));
+      ).showToast(CsacToast(content: Text(strings.text('Left group.'))));
       Navigator.of(context).pop();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Leave failed: {error}', {'error': err}),
             ),
@@ -496,15 +496,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         return;
       }
       final strings = context.strings;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Member action completed.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Member action completed.'))),
       );
       await load();
     } catch (err) {
       if (mounted) {
         final strings = context.strings;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Action failed: {error}', {'error': err}),
             ),
@@ -515,7 +515,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Future<void> inviteMember(GroupProfile profile) async {
-    final targetUid = await showDialog<int>(
+    final targetUid = await showCupertinoCsacDialog<int>(
       context: context,
       builder: (context) => const _InviteMemberDialog(),
     );
@@ -527,14 +527,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.text('Invitation sent.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(context.strings.text('Invitation sent.'))),
       );
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               context.strings.format('Action failed: {error}', {'error': err}),
             ),
@@ -549,7 +549,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (profile == null) {
       return;
     }
-    final result = await showDialog<_MemberTitleChange>(
+    final result = await showCupertinoCsacDialog<_MemberTitleChange>(
       context: context,
       builder: (context) =>
           _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
@@ -559,8 +559,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     }
     final strings = context.strings;
     if (result.title.runes.length > 16) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(
             strings.text('Member title must be at most 16 characters.'),
           ),
@@ -569,8 +569,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       return;
     }
     if (result.level < 1 || (!widget.state.debugMode && result.level > 100)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
           content: Text(strings.text('Level must be between 1 and 100.')),
         ),
       );
@@ -586,14 +586,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.text('Member title updated.'))),
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Member title updated.'))),
       );
       await load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
             content: Text(
               strings.format('Action failed: {error}', {'error': err}),
             ),
@@ -670,8 +670,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   void copyText(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    CsacToastMessenger.of(context).showToast(
+      CsacToast(
         content: Text(
           context.strings.format('{label} copied.', {'label': label}),
         ),
@@ -758,7 +758,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final memberQuery = memberSearch.text.trim();
     return RefreshIndicator(
       onRefresh: load,
-      child: ListView(
+      child: CsacListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
         children: [
           Container(
@@ -817,7 +817,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 leading: const Icon(CupertinoIcons.number),
                 title: strings.text('Room ID'),
                 subtitle: '${profile.id}',
-                trailing: IconButton(
+                trailing: CsacIconButton(
                   tooltip: strings.text('Copy room ID'),
                   onPressed: () =>
                       copyText(strings.text('Room ID'), '${profile.id}'),
@@ -839,7 +839,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   leading: const Icon(CupertinoIcons.link),
                   title: strings.text('Invite code'),
                   subtitle: profile.inviteCode,
-                  trailing: IconButton(
+                  trailing: CsacIconButton(
                     tooltip: strings.text('Copy invite code'),
                     onPressed: () => copyText(
                       strings.text('Invite code'),
@@ -922,7 +922,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          TextField(
+          CsacTextField(
             controller: memberSearch,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
@@ -932,7 +932,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               prefixIcon: const Icon(CupertinoIcons.search),
               suffixIcon: memberQuery.isEmpty
                   ? null
-                  : IconButton(
+                  : CsacIconButton(
                       tooltip: strings.text('Clear'),
                       onPressed: memberSearch.clear,
                       icon: const Icon(CupertinoIcons.xmark_circle_fill),
@@ -947,7 +947,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             _EmptyPanel(message: strings.text('No matching members.'))
           else
             for (final member in visibleMembers)
-              Card(
+              CsacCard(
                 elevation: 0,
                 margin: const EdgeInsets.symmetric(vertical: 4),
                 child: _RoundedInkClip(
@@ -980,20 +980,20 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
+                              CsacIconButton(
                                 tooltip: strings.text('Open private chat'),
                                 onPressed: () =>
                                     openPrivateChatForMember(member),
                                 icon: const Icon(Icons.chat_bubble_outline),
                               ),
-                              IconButton(
+                              CsacIconButton(
                                 tooltip: strings.text('Manage'),
                                 onPressed: () => showMemberActions(member),
                                 icon: const Icon(Icons.more_vert),
                               ),
                             ],
                           )
-                        : IconButton(
+                        : CsacIconButton(
                             tooltip: strings.text('Open private chat'),
                             onPressed: () => openPrivateChatForMember(member),
                             icon: const Icon(Icons.chat_bubble_outline),
@@ -1018,12 +1018,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final title = widget.conversation.type == ConversationType.group
         ? context.strings.text('Group details')
         : context.strings.text('User details');
-    return Scaffold(
+    return CsacPageScaffold(
       backgroundColor: CsacColors.of(context).systemBackground,
-      appBar: AppBar(
+      appBar: CsacNavigationBar(
         title: Text(title),
         actions: [
-          IconButton(
+          CsacIconButton(
             tooltip: context.strings.text('Refresh'),
             onPressed: loading ? null : load,
             icon: const Icon(CupertinoIcons.arrow_clockwise),
@@ -1079,7 +1079,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     final validUid = (int.tryParse(uid.text.trim()) ?? 0) > 0;
     return AlertDialog(
       title: Text(strings.text('Invite member')),
-      content: TextField(
+      content: CsacTextField(
         controller: uid,
         autofocus: true,
         keyboardType: TextInputType.number,
@@ -1170,7 +1170,7 @@ class _MemberTitleDialogState extends State<_MemberTitleDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            CsacTextField(
               controller: title,
               maxLength: 16,
               textInputAction: TextInputAction.next,
@@ -1180,7 +1180,7 @@ class _MemberTitleDialogState extends State<_MemberTitleDialog> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            CsacTextField(
               controller: level,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
@@ -1331,9 +1331,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   void showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    CsacToastMessenger.of(context).showToast(CsacToast(content: Text(message)));
   }
 
   Future<void> runAction(
@@ -1369,7 +1367,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final description = TextEditingController(text: group.description);
     final notice = TextEditingController(text: group.notice);
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(strings.text('Edit group info')),
@@ -1378,7 +1376,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              CsacTextField(
                 controller: roomName,
                 decoration: InputDecoration(
                   labelText: strings.text('Room name'),
@@ -1386,7 +1384,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              CsacTextField(
                 controller: description,
                 maxLines: 2,
                 decoration: InputDecoration(
@@ -1395,7 +1393,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              CsacTextField(
                 controller: notice,
                 maxLines: 3,
                 decoration: InputDecoration(
@@ -1471,7 +1469,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     var showPublic = group.showPublic;
     var allowInvite = group.allowInvite;
     final strings = context.strings;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -1481,7 +1479,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                CsacTextField(
                   controller: joinType,
                   decoration: InputDecoration(
                     labelText: strings.text('Join type'),
@@ -1489,7 +1487,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                CsacTextField(
                   controller: code,
                   decoration: InputDecoration(
                     labelText: strings.text('Fixed code'),
@@ -1497,7 +1495,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                CsacTextField(
                   controller: question,
                   maxLines: 2,
                   decoration: InputDecoration(
@@ -1506,7 +1504,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                CsacTextField(
                   controller: answer,
                   maxLines: 2,
                   decoration: InputDecoration(
@@ -1515,14 +1513,14 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                SwitchListTile(
+                CsacSwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(strings.text('Show publicly')),
                   value: showPublic,
                   onChanged: (value) =>
                       setDialogState(() => showPublic = value),
                 ),
-                SwitchListTile(
+                CsacSwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(strings.text('Allow member invites')),
                   value: allowInvite,
@@ -1571,7 +1569,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> inviteMember() async {
-    final targetUid = await showDialog<int>(
+    final targetUid = await showCupertinoCsacDialog<int>(
       context: context,
       builder: (context) => const _InviteMemberDialog(),
     );
@@ -1632,7 +1630,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<void> editMemberTitle(GroupMember member) async {
-    final result = await showDialog<_MemberTitleChange>(
+    final result = await showCupertinoCsacDialog<_MemberTitleChange>(
       context: context,
       builder: (context) =>
           _MemberTitleDialog(member: member, debugMode: widget.state.debugMode),
@@ -1852,7 +1850,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     String title,
     List<GroupMember> candidates,
   ) {
-    return showModalBottomSheet<GroupMember>(
+    return showCupertinoCsacSheet<GroupMember>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -1861,7 +1859,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Text(context.strings.text('No selectable members.')),
               )
-            : ListView(
+            : CsacListView(
                 shrinkWrap: true,
                 children: [
                   Padding(
@@ -1895,7 +1893,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Future<bool> confirm(String title, String message, String action) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
@@ -1954,11 +1952,11 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final colors = Theme.of(context).colorScheme;
     final visibleMembers = filteredMembers();
     final memberQuery = memberSearch.text.trim();
-    return Scaffold(
-      appBar: AppBar(
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(
         title: Text(strings.text('Group management')),
         actions: [
-          IconButton(
+          CsacIconButton(
             tooltip: strings.text('Refresh'),
             onPressed: loading ? null : load,
             icon: const Icon(Icons.refresh),
@@ -1974,10 +1972,10 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
             ? _EmptyPanel(message: strings.text('No management permission.'))
             : RefreshIndicator(
                 onRefresh: load,
-                child: ListView(
+                child: CsacListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   children: [
-                    Card(
+                    CsacCard(
                       elevation: 0,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -2025,7 +2023,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     const SizedBox(height: 16),
                     sectionTitle(strings.text('Group settings')),
                     const SizedBox(height: 8),
-                    Card(
+                    CsacCard(
                       elevation: 0,
                       child: _RoundedInkClip(
                         child: Column(
@@ -2036,7 +2034,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               subtitle: group.description,
                               onTap: editInfo,
                             ),
-                            const Divider(height: 1),
+                            const CsacDivider(height: 1),
                             actionTile(
                               icon: Icons.add_photo_alternate_outlined,
                               title: strings.text('Change group avatar'),
@@ -2045,14 +2043,14 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               ),
                               onTap: changeGroupAvatar,
                             ),
-                            const Divider(height: 1),
+                            const CsacDivider(height: 1),
                             actionTile(
                               icon: Icons.tune,
                               title: strings.text('Join settings'),
                               subtitle: group.joinType,
                               onTap: editSettings,
                             ),
-                            const Divider(height: 1),
+                            const CsacDivider(height: 1),
                             actionTile(
                               icon: Icons.person_add_alt_1_outlined,
                               title: strings.text('Invite member'),
@@ -2061,7 +2059,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                                   : strings.text('Only admins can invite'),
                               onTap: inviteMember,
                             ),
-                            const Divider(height: 1),
+                            const CsacDivider(height: 1),
                             actionTile(
                               icon: Icons.refresh,
                               title: strings.text('Reset invite code'),
@@ -2084,7 +2082,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       )
                     else
                       for (final application in applications)
-                        Card(
+                        CsacCard(
                           elevation: 0,
                           margin: const EdgeInsets.symmetric(vertical: 5),
                           child: Padding(
@@ -2183,7 +2181,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     const SizedBox(height: 20),
                     sectionTitle(strings.text('Members'), '${members.length}'),
                     const SizedBox(height: 8),
-                    TextField(
+                    CsacTextField(
                       controller: memberSearch,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
@@ -2193,7 +2191,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: memberQuery.isEmpty
                             ? null
-                            : IconButton(
+                            : CsacIconButton(
                                 tooltip: strings.text('Clear'),
                                 onPressed: memberSearch.clear,
                                 icon: const Icon(Icons.close),
@@ -2206,7 +2204,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       _EmptyPanel(message: strings.text('No matching members.'))
                     else
                       for (final member in visibleMembers)
-                        Card(
+                        CsacCard(
                           elevation: 0,
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           child: _RoundedInkClip(
@@ -2238,13 +2236,13 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton(
+                                  CsacIconButton(
                                     tooltip: strings.text('Open private chat'),
                                     onPressed: () =>
                                         openPrivateChatForMember(member),
                                     icon: const Icon(Icons.chat_bubble_outline),
                                   ),
-                                  IconButton(
+                                  CsacIconButton(
                                     tooltip: strings.text('Manage'),
                                     onPressed: acting
                                         ? null
@@ -2260,7 +2258,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       const SizedBox(height: 20),
                       sectionTitle(strings.text('Owner actions')),
                       const SizedBox(height: 8),
-                      Card(
+                      CsacCard(
                         elevation: 0,
                         child: _RoundedInkClip(
                           child: Column(
@@ -2270,7 +2268,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                                 title: strings.text('Transfer group owner'),
                                 onTap: transferGroup,
                               ),
-                              const Divider(height: 1),
+                              const CsacDivider(height: 1),
                               actionTile(
                                 icon: Icons.delete_forever_outlined,
                                 title: strings.text('Disband group'),
@@ -2286,7 +2284,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       const SizedBox(height: 20),
                       sectionTitle(strings.text('Debug management actions')),
                       const SizedBox(height: 8),
-                      Card(
+                      CsacCard(
                         elevation: 0,
                         child: _RoundedInkClip(
                           child: Column(
@@ -2297,7 +2295,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                                 color: colors.error,
                                 onTap: banRoom,
                               ),
-                              const Divider(height: 1),
+                              const CsacDivider(height: 1),
                               actionTile(
                                 icon: Icons.restore_from_trash_outlined,
                                 title: strings.text('Unban group'),

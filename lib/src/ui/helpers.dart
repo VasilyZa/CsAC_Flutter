@@ -30,7 +30,7 @@ Color cupertinoChatBubbleTextColor(BuildContext context, Color bubbleColor) {
     bubbleColor,
     CsacColors.of(context).systemBackground,
   );
-  return ThemeData.estimateBrightnessForColor(solidColor) == Brightness.dark
+  return CsacThemeData.estimateBrightnessForColor(solidColor) == Brightness.dark
       ? CupertinoColors.white
       : CupertinoColors.black;
 }
@@ -270,6 +270,221 @@ class CsacColors {
       isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF9F9F9);
 }
 
+class Colors {
+  const Colors._();
+
+  static const transparent = Color(0x00000000);
+  static const white = CupertinoColors.white;
+  static const black = CupertinoColors.black;
+  static const black12 = Color(0x1F000000);
+  static const black26 = Color(0x42000000);
+  static const black38 = Color(0x61000000);
+  static const black45 = Color(0x73000000);
+  static const black54 = Color(0x8A000000);
+  static const black87 = Color(0xDD000000);
+  static const white10 = Color(0x1AFFFFFF);
+  static const white12 = Color(0x1FFFFFFF);
+  static const white24 = Color(0x3DFFFFFF);
+  static const white30 = Color(0x4DFFFFFF);
+  static const white54 = Color(0x8AFFFFFF);
+  static const white60 = Color(0x99FFFFFF);
+  static const white70 = Color(0xB3FFFFFF);
+  static const blue = CupertinoColors.systemBlue;
+  static const green = CupertinoColors.systemGreen;
+  static const orange = CupertinoColors.systemOrange;
+  static const red = CupertinoColors.systemRed;
+  static const grey = CupertinoColors.systemGrey;
+  static const grey700 = Color(0xFF48484A);
+  static const redAccent = Color(0xFFFF453A);
+}
+
+class CsacTheme {
+  const CsacTheme({required this.colorScheme, required this.textTheme});
+
+  factory CsacTheme.of(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return CsacTheme(
+      colorScheme: CsacColorScheme.from(colors),
+      textTheme: CsacTextTheme.from(context, colors),
+    );
+  }
+
+  final CsacColorScheme colorScheme;
+  final CsacTextTheme textTheme;
+}
+
+class Theme {
+  const Theme._();
+
+  static CsacTheme of(BuildContext context) => CsacTheme.of(context);
+}
+
+class CsacThemeData {
+  const CsacThemeData._();
+
+  static Brightness estimateBrightnessForColor(Color color) {
+    final relativeLuminance = color.computeLuminance();
+    return ((relativeLuminance + 0.05) * (relativeLuminance + 0.05) > 0.15)
+        ? Brightness.light
+        : Brightness.dark;
+  }
+}
+
+typedef ThemeData = CsacThemeData;
+
+class CsacColorScheme {
+  const CsacColorScheme({
+    required this.primary,
+    required this.onPrimary,
+    required this.primaryContainer,
+    required this.onPrimaryContainer,
+    required this.secondary,
+    required this.onSecondary,
+    required this.secondaryContainer,
+    required this.onSecondaryContainer,
+    required this.tertiary,
+    required this.tertiaryContainer,
+    required this.onTertiaryContainer,
+    required this.surface,
+    required this.onSurface,
+    required this.surfaceContainer,
+    required this.surfaceContainerHigh,
+    required this.surfaceContainerLow,
+    required this.surfaceContainerHighest,
+    required this.onSurfaceVariant,
+    required this.outline,
+    required this.outlineVariant,
+    required this.error,
+    required this.onError,
+    required this.errorContainer,
+    required this.onErrorContainer,
+    required this.inverseSurface,
+    required this.onInverseSurface,
+    required this.inversePrimary,
+    required this.surfaceTint,
+    required this.scrim,
+    required this.shadow,
+  });
+
+  factory CsacColorScheme.from(CsacColors colors) {
+    final primary = colors.primaryColor;
+    return CsacColorScheme(
+      primary: primary,
+      onPrimary: CupertinoColors.white,
+      primaryContainer: primary.withValues(alpha: colors.isDark ? 0.26 : 0.14),
+      onPrimaryContainer: primary,
+      secondary: CupertinoColors.systemIndigo,
+      onSecondary: CupertinoColors.white,
+      secondaryContainer: CupertinoColors.systemIndigo.withValues(alpha: 0.16),
+      onSecondaryContainer: colors.label,
+      tertiary: CupertinoColors.systemTeal,
+      tertiaryContainer: CupertinoColors.systemTeal.withValues(alpha: 0.16),
+      onTertiaryContainer: colors.label,
+      surface: colors.systemBackground,
+      onSurface: colors.label,
+      surfaceContainer: colors.elevatedBackground,
+      surfaceContainerHigh: colors.tertiaryBackground,
+      surfaceContainerLow: colors.cardBackground,
+      surfaceContainerHighest: colors.tertiaryBackground,
+      onSurfaceVariant: colors.secondaryLabel,
+      outline: colors.separator,
+      outlineVariant: colors.separator.withValues(alpha: 0.7),
+      error: colors.destructive,
+      onError: CupertinoColors.white,
+      errorContainer: colors.destructive.withValues(alpha: 0.14),
+      onErrorContainer: colors.destructive,
+      inverseSurface: colors.isDark
+          ? CupertinoColors.white
+          : CupertinoColors.black,
+      onInverseSurface: colors.isDark
+          ? CupertinoColors.black
+          : CupertinoColors.white,
+      inversePrimary: primary,
+      surfaceTint: primary,
+      scrim: CupertinoColors.black.withValues(alpha: 0.45),
+      shadow: CupertinoColors.black,
+    );
+  }
+
+  final Color primary;
+  final Color onPrimary;
+  final Color primaryContainer;
+  final Color onPrimaryContainer;
+  final Color secondary;
+  final Color onSecondary;
+  final Color secondaryContainer;
+  final Color onSecondaryContainer;
+  final Color tertiary;
+  final Color tertiaryContainer;
+  final Color onTertiaryContainer;
+  final Color surface;
+  final Color onSurface;
+  final Color surfaceContainer;
+  final Color surfaceContainerHigh;
+  final Color surfaceContainerLow;
+  final Color surfaceContainerHighest;
+  final Color onSurfaceVariant;
+  final Color outline;
+  final Color outlineVariant;
+  final Color error;
+  final Color onError;
+  final Color errorContainer;
+  final Color onErrorContainer;
+  final Color inverseSurface;
+  final Color onInverseSurface;
+  final Color inversePrimary;
+  final Color surfaceTint;
+  final Color scrim;
+  final Color shadow;
+}
+
+class CsacTextTheme {
+  const CsacTextTheme({
+    required this.displaySmall,
+    required this.headlineSmall,
+    required this.titleLarge,
+    required this.titleMedium,
+    required this.titleSmall,
+    required this.bodyLarge,
+    required this.bodyMedium,
+    required this.bodySmall,
+    required this.labelLarge,
+    required this.labelMedium,
+    required this.labelSmall,
+  });
+
+  factory CsacTextTheme.from(BuildContext context, CsacColors colors) {
+    final base = CupertinoTheme.of(
+      context,
+    ).textTheme.textStyle.copyWith(color: colors.label);
+    return CsacTextTheme(
+      displaySmall: base.copyWith(fontSize: 34, fontWeight: FontWeight.w700),
+      headlineSmall: base.copyWith(fontSize: 24, fontWeight: FontWeight.w700),
+      titleLarge: base.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
+      titleMedium: base.copyWith(fontSize: 17, fontWeight: FontWeight.w600),
+      titleSmall: base.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+      bodyLarge: base.copyWith(fontSize: 17, fontWeight: FontWeight.w400),
+      bodyMedium: base.copyWith(fontSize: 15, fontWeight: FontWeight.w400),
+      bodySmall: base.copyWith(fontSize: 13, color: colors.secondaryLabel),
+      labelLarge: base.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+      labelMedium: base.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+      labelSmall: base.copyWith(fontSize: 12, fontWeight: FontWeight.w600),
+    );
+  }
+
+  final TextStyle? displaySmall;
+  final TextStyle? headlineSmall;
+  final TextStyle? titleLarge;
+  final TextStyle? titleMedium;
+  final TextStyle? titleSmall;
+  final TextStyle? bodyLarge;
+  final TextStyle? bodyMedium;
+  final TextStyle? bodySmall;
+  final TextStyle? labelLarge;
+  final TextStyle? labelMedium;
+  final TextStyle? labelSmall;
+}
+
 class _AppIconImage extends StatelessWidget {
   const _AppIconImage({this.size = 40, this.borderRadius});
 
@@ -480,7 +695,7 @@ class _CupertinoSearchField extends StatelessWidget {
       cursorColor: colors.primaryColor,
       decoration: BoxDecoration(
         color: colors.tertiaryFill,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_csacControlCornerRadius),
       ),
     );
   }

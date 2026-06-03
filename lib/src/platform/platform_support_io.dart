@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -34,40 +32,6 @@ void installGlobalBadCertificateOverride() {
   HttpOverrides.global = _AcceptAllCertificatesHttpOverrides(previous);
 }
 
-http.Client createPlatformHttpClient({
-  String userAgent = 'CsAC-Mobile',
-  bool preferCronet = true,
-}) {
-  if (Platform.isAndroid && preferCronet) {
-    return AndroidOkHttpClient(userAgent: userAgent);
-  }
-  return http.Client();
-}
-
-String? lastPlatformHttpProtocol(http.Client client) {
-  if (client is AndroidOkHttpClient) {
-    return client.lastProtocol;
-  }
-  if (isDesktopPlatform) {
-    return 'HTTP/1.1';
-  }
-  return null;
-}
-
-String? _normalizeHttpProtocol(String? value) {
-  final text = value?.trim().toLowerCase() ?? '';
-  if (text.isEmpty) {
-    return null;
-  }
-  if (text == 'h2' || text == 'http_2' || text == 'http/2') {
-    return 'HTTP/2';
-  }
-  if (text == 'http/1.1' || text == 'http_1_1') {
-    return 'HTTP/1.1';
-  }
-  return value;
-}
-
 class _AcceptAllCertificatesHttpOverrides extends HttpOverrides {
   _AcceptAllCertificatesHttpOverrides(this.previous);
 
@@ -79,66 +43,6 @@ class _AcceptAllCertificatesHttpOverrides extends HttpOverrides {
         previous?.createHttpClient(context) ?? super.createHttpClient(context);
     client.badCertificateCallback = (_, _, _) => true;
     return client;
-  }
-}
-
-class AndroidOkHttpClient extends http.BaseClient {
-  AndroidOkHttpClient({required this.userAgent});
-
-  static const _channel = MethodChannel('csac/android_http');
-
-  final String userAgent;
-  bool _closed = false;
-  String? _lastProtocol;
-
-  String? get lastProtocol => _lastProtocol;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (_closed) {
-      throw http.ClientException('HTTP client is closed.', request.url);
-    }
-    final body = await request.finalize().toBytes();
-    final headers = Map<String, String>.from(request.headers);
-    headers.putIfAbsent('User-Agent', () => userAgent);
-    final result = await _channel
-        .invokeMapMethod<String, Object?>('send', <String, Object?>{
-          'method': request.method,
-          'url': request.url.toString(),
-          'headers': headers,
-          'body': body,
-        });
-    if (result == null) {
-      throw http.ClientException(
-        'Android HTTP returned no response.',
-        request.url,
-      );
-    }
-    final statusCode = (result['statusCode'] as num?)?.toInt() ?? 0;
-    final responseHeaders = (result['headers'] as Map<Object?, Object?>? ?? {})
-        .map((key, value) => MapEntry('$key'.toLowerCase(), '$value'));
-    final responseBody = result['body'];
-    _lastProtocol = _normalizeProtocol(result['protocol']?.toString());
-    final bytes = responseBody is Uint8List
-        ? responseBody
-        : utf8.encode(responseBody?.toString() ?? '');
-    return http.StreamedResponse(
-      Stream<List<int>>.value(bytes),
-      statusCode,
-      contentLength: bytes.length,
-      request: request,
-      headers: responseHeaders,
-      reasonPhrase: result['reasonPhrase']?.toString(),
-    );
-  }
-
-  @override
-  void close() {
-    _closed = true;
-  }
-
-  String? _normalizeProtocol(String? value) {
-    return _normalizeHttpProtocol(value);
   }
 }
 

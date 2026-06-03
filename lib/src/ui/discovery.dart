@@ -119,7 +119,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
         loading: sending,
         onPressed: sending ? null : submit,
       ),
-      child: CustomScrollView(
+      child: CsacCustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
@@ -387,7 +387,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         loading: sending,
         onPressed: sending ? null : submit,
       ),
-      child: CustomScrollView(
+      child: CsacCustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
@@ -562,7 +562,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         loading: creating,
         onPressed: creating ? null : submit,
       ),
-      child: CustomScrollView(
+      child: CsacCustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
@@ -728,7 +728,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
                   ui.PointerDeviceKind.unknown,
                 },
               ),
-              child: ListView(
+              child: CsacListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 physics: const BouncingScrollPhysics(
@@ -791,7 +791,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
                     icon: CupertinoIcons.search,
                     message: emptyMessage,
                   )
-                : ListView(
+                : CsacListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.only(bottom: 18),

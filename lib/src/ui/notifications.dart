@@ -67,7 +67,7 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
                     ui.PointerDeviceKind.unknown,
                   },
                 ),
-                child: ListView(
+                child: CsacListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   physics: const BouncingScrollPhysics(
@@ -562,7 +562,7 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final unreadCount = bundle.mentionCount + bundle.replyCount;
-    return CustomScrollView(
+    return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
@@ -784,7 +784,7 @@ class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    return CustomScrollView(
+    return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
@@ -945,7 +945,7 @@ class _NoticesPageState extends State<NoticesPage> {
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(notice.title),
-        content: SingleChildScrollView(
+        content: CsacSingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -996,8 +996,8 @@ class _NoticesPageState extends State<NoticesPage> {
                 ),
               );
               Navigator.of(dialogContext).pop();
-              ScaffoldMessenger.of(pageContext).showSnackBar(
-                SnackBar(content: Text(strings.text('Notice copied'))),
+              CsacToastMessenger.of(pageContext).showToast(
+                CsacToast(content: Text(strings.text('Notice copied'))),
               );
             },
             child: Text(strings.text('Copy')),
@@ -1017,7 +1017,7 @@ class _NoticesPageState extends State<NoticesPage> {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final unreadCount = notices.where((notice) => !notice.isRead).length;
-    return CustomScrollView(
+    return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
@@ -1161,7 +1161,7 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return CustomScrollView(
+    return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
@@ -1367,7 +1367,7 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    return CustomScrollView(
+    return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
