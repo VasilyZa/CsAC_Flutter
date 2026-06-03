@@ -2989,33 +2989,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
-                                    child: TextField(
-                                      controller: input,
-                                      focusNode: inputFocus,
-                                      minLines: 1,
-                                      maxLines: 4,
-                                      textInputAction: TextInputAction.send,
-                                      onSubmitted: (_) => send(),
-                                      decoration: InputDecoration(
-                                        hintText: strings.text('Message'),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 13,
-                                              vertical: 9,
+                                    child: CallbackShortcuts(
+                                      bindings: {
+                                        const SingleActivator(
+                                          LogicalKeyboardKey.enter,
+                                          control: true,
+                                        ): () => unawaited(send()),
+                                        const SingleActivator(
+                                          LogicalKeyboardKey.enter,
+                                          meta: true,
+                                        ): () => unawaited(send()),
+                                      },
+                                      child: TextField(
+                                        controller: input,
+                                        focusNode: inputFocus,
+                                        minLines: 1,
+                                        maxLines: 4,
+                                        keyboardType: TextInputType.multiline,
+                                        textInputAction: TextInputAction.newline,
+                                        decoration: InputDecoration(
+                                          hintText: strings.text('Message'),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 13,
+                                                vertical: 9,
+                                              ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              20,
                                             ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: colors.separator.withValues(
-                                              alpha: 0.28,
+                                            borderSide: BorderSide(
+                                              color: colors.separator.withValues(
+                                                alpha: 0.28,
+                                              ),
+                                              width: 0.5,
                                             ),
-                                            width: 0.5,
                                           ),
+                                          filled: true,
+                                          fillColor: colors.cardBackground,
                                         ),
-                                        filled: true,
-                                        fillColor: colors.cardBackground,
                                       ),
                                     ),
                                   ),
