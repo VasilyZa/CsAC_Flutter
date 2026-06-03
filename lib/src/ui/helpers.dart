@@ -432,11 +432,13 @@ class _CupertinoSearchField extends StatelessWidget {
     required this.controller,
     required this.placeholder,
     this.onChanged,
+    this.autofocus = false,
   });
 
   final TextEditingController controller;
   final String placeholder;
   final ValueChanged<String>? onChanged;
+  final bool autofocus;
 
   void clear() {
     controller.clear();
@@ -450,6 +452,7 @@ class _CupertinoSearchField extends StatelessWidget {
       controller: controller,
       placeholder: placeholder,
       onChanged: onChanged,
+      autofocus: autofocus,
       textInputAction: TextInputAction.search,
       prefix: Padding(
         padding: const EdgeInsets.only(left: 10, right: 6),

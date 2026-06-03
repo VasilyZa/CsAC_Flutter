@@ -56,47 +56,65 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
         child: Column(
           children: [
             SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                children: [
-                  _NoticeTab(
-                    icon: CupertinoIcons.bell,
-                    label: strings.text('Notices'),
-                    badge: counts.notices,
-                    selected: _selectedIndex == 0,
-                    onTap: () => setState(() => _selectedIndex = 0),
+              height: 52,
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    ui.PointerDeviceKind.touch,
+                    ui.PointerDeviceKind.mouse,
+                    ui.PointerDeviceKind.stylus,
+                    ui.PointerDeviceKind.invertedStylus,
+                    ui.PointerDeviceKind.unknown,
+                  },
+                ),
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
-                  _NoticeTab(
-                    icon: CupertinoIcons.at,
-                    label: strings.text('Mentions'),
-                    badge: counts.mentions + counts.replies,
-                    selected: _selectedIndex == 1,
-                    onTap: () => setState(() => _selectedIndex = 1),
-                  ),
-                  _NoticeTab(
-                    icon: CupertinoIcons.person_badge_minus,
-                    label: strings.text('Friend changes'),
-                    badge: counts.friendChanges,
-                    selected: _selectedIndex == 2,
-                    onTap: () => setState(() => _selectedIndex = 2),
-                  ),
-                  _NoticeTab(
-                    icon: CupertinoIcons.person_badge_plus,
-                    label: strings.text('Friends'),
-                    badge: counts.friendRequests,
-                    selected: _selectedIndex == 3,
-                    onTap: () => setState(() => _selectedIndex = 3),
-                  ),
-                  _NoticeTab(
-                    icon: CupertinoIcons.group,
-                    label: strings.text('Groups'),
-                    badge: counts.groupApplications,
-                    selected: _selectedIndex == 4,
-                    onTap: () => setState(() => _selectedIndex = 4),
-                  ),
-                ],
+                  children: [
+                    _NoticeSegment(
+                      icon: CupertinoIcons.bell,
+                      label: strings.text('Notices'),
+                      badge: counts.notices,
+                      selected: _selectedIndex == 0,
+                      onTap: () => setState(() => _selectedIndex = 0),
+                    ),
+                    const SizedBox(width: 8),
+                    _NoticeSegment(
+                      icon: CupertinoIcons.at,
+                      label: strings.text('Mentions'),
+                      badge: counts.mentions + counts.replies,
+                      selected: _selectedIndex == 1,
+                      onTap: () => setState(() => _selectedIndex = 1),
+                    ),
+                    const SizedBox(width: 8),
+                    _NoticeSegment(
+                      icon: CupertinoIcons.person_badge_minus,
+                      label: strings.text('Friend changes'),
+                      badge: counts.friendChanges,
+                      selected: _selectedIndex == 2,
+                      onTap: () => setState(() => _selectedIndex = 2),
+                    ),
+                    const SizedBox(width: 8),
+                    _NoticeSegment(
+                      icon: CupertinoIcons.person_badge_plus,
+                      label: strings.text('Friends'),
+                      badge: counts.friendRequests,
+                      selected: _selectedIndex == 3,
+                      onTap: () => setState(() => _selectedIndex = 3),
+                    ),
+                    const SizedBox(width: 8),
+                    _NoticeSegment(
+                      icon: CupertinoIcons.group,
+                      label: strings.text('Groups'),
+                      badge: counts.groupApplications,
+                      selected: _selectedIndex == 4,
+                      onTap: () => setState(() => _selectedIndex = 4),
+                    ),
+                  ],
+                ),
               ),
             ),
             Container(height: 0.5, color: colors.separator),
@@ -119,8 +137,8 @@ class _NoticeCenterScreenState extends State<NoticeCenterScreen> {
   }
 }
 
-class _NoticeTab extends StatelessWidget {
-  const _NoticeTab({
+class _NoticeSegment extends StatelessWidget {
+  const _NoticeSegment({
     required this.icon,
     required this.label,
     required this.badge,
@@ -138,56 +156,48 @@ class _NoticeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
     final primary = CupertinoTheme.of(context).primaryColor;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        minimumSize: Size.zero,
-        onPressed: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeInOut,
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: BoxDecoration(
+    return _CsacPressable(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 160.ms,
+        constraints: const BoxConstraints(minHeight: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? primary.withValues(alpha: colors.isDark ? 0.22 : 0.13)
+              : colors.cardBackground,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
             color: selected
-                ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.12)
-                : colors.tertiaryFill,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? primary.withValues(alpha: colors.isDark ? 0.30 : 0.22)
-                  : colors.separator.withValues(alpha: 0.14),
-              width: 0.5,
+                ? primary.withValues(alpha: 0.24)
+                : colors.separator.withValues(alpha: 0.24),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? primary : colors.secondaryLabel,
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: selected ? primary : colors.secondaryLabel,
+            const SizedBox(width: 5),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? primary : colors.label,
               ),
+            ),
+            if (badge > 0) ...[
               const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: selected ? primary : colors.secondaryLabel,
-                ),
-              ),
-              if (badge > 0) ...[
-                const SizedBox(width: 5),
-                _NoticeBadge(
-                  count: badge,
-                  color: selected ? primary : CupertinoColors.systemRed,
-                  muted: selected,
-                ),
-              ],
+              _NoticeBadge(count: badge, color: CupertinoColors.systemRed),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -195,22 +205,17 @@ class _NoticeTab extends StatelessWidget {
 }
 
 class _NoticeBadge extends StatelessWidget {
-  const _NoticeBadge({
-    required this.count,
-    required this.color,
-    this.muted = false,
-  });
+  const _NoticeBadge({required this.count, required this.color});
 
   final int count;
   final Color color;
-  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: muted ? color.withValues(alpha: 0.16) : color,
+        color: color,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -218,8 +223,213 @@ class _NoticeBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: muted ? color : CupertinoColors.white,
+          color: CupertinoColors.white,
         ),
+      ),
+    );
+  }
+}
+
+class _NoticePageHeader extends StatelessWidget {
+  const _NoticePageHeader({
+    required this.title,
+    this.actionLabel,
+    this.actionIcon,
+    this.onAction,
+  });
+
+  final String title;
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: colors.label,
+              ),
+            ),
+          ),
+          if (actionLabel != null && actionIcon != null)
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              borderRadius: BorderRadius.circular(999),
+              color: colors.tertiaryFill,
+              disabledColor: colors.tertiaryFill.withValues(alpha: 0.55),
+              onPressed: onAction,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(actionIcon, size: 14, color: colors.primaryColor),
+                  const SizedBox(width: 5),
+                  Text(
+                    actionLabel!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoticeListSection extends StatelessWidget {
+  const _NoticeListSection({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoListSection.insetGrouped(
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+      backgroundColor: const Color(0x00000000),
+      children: children,
+    );
+  }
+}
+
+class _NoticeLeadingIcon extends StatelessWidget {
+  const _NoticeLeadingIcon({
+    required this.icon,
+    this.accent,
+    this.unread = false,
+  });
+
+  final IconData icon;
+  final Color? accent;
+  final bool unread;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final tint = accent ?? colors.secondaryLabel;
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: unread ? 0.15 : 0.10),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, size: 20, color: tint),
+    );
+  }
+}
+
+class _NoticeChevron extends StatelessWidget {
+  const _NoticeChevron();
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(
+      CupertinoIcons.chevron_right,
+      size: 14,
+      color: CsacColors.of(context).tertiaryLabel,
+    );
+  }
+}
+
+class _NoticeMarkReadButton extends StatelessWidget {
+  const _NoticeMarkReadButton({required this.onPressed, required this.acting});
+
+  final VoidCallback? onPressed;
+  final bool acting;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    if (onPressed == null) {
+      return const _NoticeChevron();
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size.square(30),
+      borderRadius: BorderRadius.circular(15),
+      onPressed: acting ? null : onPressed,
+      child: acting
+          ? CupertinoActivityIndicator(radius: 8, color: colors.primaryColor)
+          : Icon(
+              CupertinoIcons.checkmark_circle,
+              size: 22,
+              color: colors.primaryColor,
+            ),
+    );
+  }
+}
+
+class _NoticeActionPill extends StatelessWidget {
+  const _NoticeActionPill({
+    required this.label,
+    required this.onPressed,
+    this.primary = false,
+    this.loading = false,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool primary;
+  final bool loading;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final accent = primary
+        ? colors.primaryColor
+        : CupertinoColors.destructiveRed.resolveFrom(context);
+    final foreground = primary ? CupertinoColors.white : accent;
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: loading ? null : onPressed,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 34),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        decoration: BoxDecoration(
+          color: primary
+              ? accent.withValues(alpha: loading ? 0.55 : 1)
+              : accent.withValues(alpha: colors.isDark ? 0.16 : 0.10),
+          borderRadius: BorderRadius.circular(17),
+        ),
+        child: loading
+            ? CupertinoActivityIndicator(radius: 8, color: foreground)
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 14, color: foreground),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: foreground,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -351,93 +561,47 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = CsacColors.of(context);
     final unreadCount = bundle.mentionCount + bundle.replyCount;
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Row(
+        SliverList.list(
+          children: [
+            _NoticePageHeader(
+              title: strings.format('{count} unread mentions or replies', {
+                'count': unreadCount,
+              }),
+              actionLabel: strings.text('Mark all read'),
+              actionIcon: CupertinoIcons.checkmark_seal,
+              onAction: acting || unreadCount <= 0 ? null : markAllRead,
+            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CupertinoActivityIndicator()),
+              ),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (!loading && bundle.items.isEmpty)
+              if (unreadCount > 0)
+                _MentionSummaryCard(bundle: bundle)
+              else
+                _EmptyPanel(message: strings.text('No mentions or replies.')),
+            if (!loading && bundle.items.isNotEmpty)
+              _NoticeListSection(
                 children: [
-                  Expanded(
-                    child: Text(
-                      strings.format('{count} unread mentions or replies', {
-                        'count': unreadCount,
-                      }),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: colors.label,
-                      ),
+                  for (final notice in bundle.items)
+                    _MentionNoticeTile(
+                      notice: notice,
+                      acting: acting,
+                      onTap: () => openMention(notice),
+                      onMarkRead: notice.isRead
+                          ? null
+                          : () => markOneRead(notice),
                     ),
-                  ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: _CupertinoListPressable(
-                      onTap: acting || unreadCount <= 0 ? null : markAllRead,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.cardBackground,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colors.separator.withValues(alpha: 0.18),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              CupertinoIcons.checkmark_seal,
-                              size: 14,
-                              color: colors.secondaryLabel,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              strings.text('Mark all read'),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: colors.label,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CupertinoActivityIndicator()),
-                ),
-              if (error != null) _InlineError(message: error!, onRetry: load),
-              if (!loading && bundle.items.isEmpty) ...[
-                if (unreadCount > 0)
-                  _MentionSummaryCard(bundle: bundle)
-                else
-                  _EmptyPanel(message: strings.text('No mentions or replies.')),
-              ] else
-                for (final notice in bundle.items)
-                  _MentionNoticeTile(
-                    notice: notice,
-                    acting: acting,
-                    onTap: () => openMention(notice),
-                    onMarkRead: notice.isRead
-                        ? null
-                        : () => markOneRead(notice),
-                  ),
-            ]),
-          ),
+            const SizedBox(height: 24),
+          ],
         ),
       ],
     );
@@ -453,42 +617,54 @@ class _MentionSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.separator.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+    return _NoticeListSection(
+      children: [
+        CupertinoListTile(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          leading: _NoticeLeadingIcon(
+            icon: CupertinoIcons.at,
+            accent: colors.primaryColor,
+            unread: true,
+          ),
+          title: Text(
             strings.text('Mention list unavailable'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
+              color: colors.label,
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: colors.label,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            [
-              strings.format('@ me: {count}', {'count': bundle.mentionCount}),
-              strings.format('Replies: {count}', {'count': bundle.replyCount}),
-            ].join(' | '),
-            style: TextStyle(color: colors.secondaryLabel),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  strings.format('@ me: {count}', {
+                    'count': bundle.mentionCount,
+                  }),
+                  strings.format('Replies: {count}', {
+                    'count': bundle.replyCount,
+                  }),
+                ].join(' | '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                strings.text(
+                  'The server returned counts only, so there is no message position to open yet.',
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            strings.text(
-              'The server returned counts only, so there is no message position to open yet.',
-            ),
-            style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -511,86 +687,49 @@ class _MentionNoticeTile extends StatelessWidget {
     final strings = context.strings;
     final colors = CsacColors.of(context);
     final text = compactMessage(chatMessagePlainText(notice.message, strings));
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
+    return CupertinoListTile(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      leading: _NoticeLeadingIcon(
+        icon: notice.isReply ? CupertinoIcons.reply : CupertinoIcons.at,
+        accent: notice.isRead ? colors.secondaryLabel : colors.primaryColor,
+        unread: !notice.isRead,
       ),
-      child: _CupertinoListPressable(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Icon(
-                notice.isReply ? CupertinoIcons.reply : CupertinoIcons.at,
-                size: 24,
-                color: colors.secondaryLabel,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.text(notice.displayTitle),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: notice.isRead
-                            ? FontWeight.w500
-                            : FontWeight.w700,
-                        color: colors.label,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        notice.conversation.name,
-                        if (notice.message.sender.isNotEmpty)
-                          notice.message.sender,
-                        if (notice.message.time.isNotEmpty) notice.message.time,
-                      ].join(' | '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colors.secondaryLabel,
-                      ),
-                    ),
-                    if (text.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        text,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 14, color: colors.label),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (onMarkRead == null)
-                Icon(
-                  CupertinoIcons.chevron_right,
-                  size: 16,
-                  color: colors.tertiaryLabel,
-                )
-              else
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(28, 28),
-                  onPressed: acting ? null : onMarkRead,
-                  child: const Icon(CupertinoIcons.checkmark_circle, size: 22),
-                ),
-            ],
-          ),
+      title: Text(
+        strings.text(notice.displayTitle),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: notice.isRead ? FontWeight.w500 : FontWeight.w700,
+          color: colors.label,
         ),
       ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            [
+              notice.conversation.name,
+              if (notice.message.sender.isNotEmpty) notice.message.sender,
+              if (notice.message.time.isNotEmpty) notice.message.time,
+            ].join(' | '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+          ),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: colors.label),
+            ),
+          ],
+        ],
+      ),
+      trailing: _NoticeMarkReadButton(onPressed: onMarkRead, acting: acting),
+      onTap: onTap,
     );
   }
 }
@@ -648,41 +787,56 @@ class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CupertinoActivityIndicator()),
-                ),
-              if (error != null) _InlineError(message: error!, onRetry: load),
-              if (!loading && notices.isEmpty)
-                _EmptyPanel(message: strings.text('No friend changes.'))
-              else
-                for (final notice in notices)
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 5),
-                    decoration: BoxDecoration(
-                      color: colors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: _CupertinoListTile(
-                      leading: const Icon(
-                        CupertinoIcons.person_badge_minus,
-                        size: 24,
+        SliverList.list(
+          children: [
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CupertinoActivityIndicator()),
+              ),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (!loading && notices.isEmpty)
+              _EmptyPanel(message: strings.text('No friend changes.')),
+            if (!loading && notices.isNotEmpty)
+              _NoticeListSection(
+                children: [
+                  for (final notice in notices)
+                    CupertinoListTile(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                      title: notice.nickname,
-                      subtitle: [
-                        if (notice.time.isNotEmpty) notice.time,
-                        if (notice.content.isNotEmpty) notice.content,
-                        if (notice.uid > 0) 'UID ${notice.uid}',
-                      ].join(' | '),
+                      leading: _NoticeLeadingIcon(
+                        icon: CupertinoIcons.person_badge_minus,
+                        accent: colors.secondaryLabel,
+                      ),
+                      title: Text(
+                        notice.nickname,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.label,
+                          fontSize: 16,
+                          fontWeight: notice.isRead
+                              ? FontWeight.w500
+                              : FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(
+                        [
+                          if (notice.time.isNotEmpty) notice.time,
+                          if (notice.content.isNotEmpty) notice.content,
+                          if (notice.uid > 0) 'UID ${notice.uid}',
+                        ].join(' | '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.secondaryLabel),
+                      ),
                     ),
-                  ),
-            ]),
-          ),
+                ],
+              ),
+            const SizedBox(height: 24),
+          ],
         ),
       ],
     );
@@ -862,163 +1016,80 @@ class _NoticesPageState extends State<NoticesPage> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
+    final unreadCount = notices.where((notice) => !notice.isRead).length;
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Row(
+        SliverList.list(
+          children: [
+            _NoticePageHeader(
+              title: strings.format('{count} unread', {'count': unreadCount}),
+              actionLabel: strings.text('Mark all read'),
+              actionIcon: CupertinoIcons.checkmark_seal,
+              onAction: acting || unreadCount <= 0 ? null : markAllRead,
+            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CupertinoActivityIndicator()),
+              ),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (!loading && notices.isEmpty)
+              _EmptyPanel(message: strings.text('No notices.')),
+            if (!loading && notices.isNotEmpty)
+              _NoticeListSection(
                 children: [
-                  Expanded(
-                    child: Text(
-                      strings.format('{count} unread', {
-                        'count': notices
-                            .where((notice) => !notice.isRead)
-                            .length,
-                      }),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: colors.label,
+                  for (final notice in notices)
+                    CupertinoListTile(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                    ),
-                  ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: _CupertinoListPressable(
-                      onTap: acting || notices.isEmpty ? null : markAllRead,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.cardBackground,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colors.separator.withValues(alpha: 0.18),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              CupertinoIcons.checkmark_seal,
-                              size: 14,
-                              color: colors.secondaryLabel,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              strings.text('Mark all read'),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: colors.label,
-                              ),
-                            ),
-                          ],
+                      leading: _NoticeLeadingIcon(
+                        icon: notice.isRead
+                            ? CupertinoIcons.envelope_open
+                            : CupertinoIcons.envelope_badge,
+                        accent: notice.isRead
+                            ? colors.secondaryLabel
+                            : colors.primaryColor,
+                        unread: !notice.isRead,
+                      ),
+                      title: Text(
+                        notice.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: notice.isRead
+                              ? FontWeight.w500
+                              : FontWeight.w700,
+                          color: colors.label,
                         ),
                       ),
+                      subtitle: Text(
+                        [
+                          if (notice.time.isNotEmpty) notice.time,
+                          notice.content.replaceAll('\n', ' '),
+                        ].join(' | '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: colors.secondaryLabel,
+                        ),
+                      ),
+                      trailing: _NoticeMarkReadButton(
+                        onPressed: notice.isRead
+                            ? null
+                            : () => markOneRead(notice),
+                        acting: acting,
+                      ),
+                      onTap: () => openNotice(notice),
                     ),
-                  ),
                 ],
               ),
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CupertinoActivityIndicator()),
-                ),
-              if (error != null) _InlineError(message: error!, onRetry: load),
-              if (!loading && notices.isEmpty)
-                _EmptyPanel(message: strings.text('No notices.'))
-              else
-                for (final notice in notices)
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 5),
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: colors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: _CupertinoListPressable(
-                      onTap: () => openNotice(notice),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              notice.isRead
-                                  ? CupertinoIcons.envelope_open
-                                  : CupertinoIcons.envelope_badge,
-                              size: 24,
-                              color: notice.isRead
-                                  ? colors.secondaryLabel
-                                  : colors.primaryColor,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    notice.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: notice.isRead
-                                          ? FontWeight.w500
-                                          : FontWeight.w700,
-                                      color: colors.label,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    [
-                                      if (notice.time.isNotEmpty) notice.time,
-                                      notice.content.replaceAll('\n', ' '),
-                                    ].join(' | '),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: colors.secondaryLabel,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (notice.isRead)
-                              Icon(
-                                CupertinoIcons.chevron_right,
-                                size: 16,
-                                color: colors.tertiaryLabel,
-                              )
-                            else
-                              CupertinoButton(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(28, 28),
-                                onPressed: acting
-                                    ? null
-                                    : () => markOneRead(notice),
-                                child: const Icon(
-                                  CupertinoIcons.checkmark_circle,
-                                  size: 22,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-            ]),
-          ),
+            const SizedBox(height: 24),
+          ],
         ),
       ],
     );
@@ -1093,34 +1164,39 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CupertinoActivityIndicator()),
-                ),
-              if (error != null) _InlineError(message: error!, onRetry: load),
-              if (!loading && requests.isEmpty)
-                _EmptyPanel(message: strings.text('No friend requests.'))
-              else
-                for (final request in requests)
-                  _FriendRequestTile(
-                    request: request,
-                    acting: actingId == request.id,
-                    onOpenUser: () =>
-                        openUserProfile(context, widget.state, request.fromUid),
-                    onAgree: request.pending
-                        ? () => handle(request, 'agree')
-                        : null,
-                    onRefuse: request.pending
-                        ? () => handle(request, 'refuse')
-                        : null,
-                  ),
-            ]),
-          ),
+        SliverList.list(
+          children: [
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CupertinoActivityIndicator()),
+              ),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (!loading && requests.isEmpty)
+              _EmptyPanel(message: strings.text('No friend requests.')),
+            if (!loading && requests.isNotEmpty)
+              _NoticeListSection(
+                children: [
+                  for (final request in requests)
+                    _FriendRequestTile(
+                      request: request,
+                      acting: actingId == request.id,
+                      onOpenUser: () => openUserProfile(
+                        context,
+                        widget.state,
+                        request.fromUid,
+                      ),
+                      onAgree: request.pending
+                          ? () => handle(request, 'agree')
+                          : null,
+                      onRefuse: request.pending
+                          ? () => handle(request, 'refuse')
+                          : null,
+                    ),
+                ],
+              ),
+            const SizedBox(height: 24),
+          ],
         ),
       ],
     );
@@ -1146,161 +1222,80 @@ class _FriendRequestTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: _CupertinoListPressable(
-                onTap: onOpenUser,
-                child: Row(
-                  children: [
-                    _Avatar(
-                      url: request.avatar,
-                      fallback: CupertinoIcons.person_solid,
-                      name: request.nickname,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.nickname,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: colors.label,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            [
-                              if (request.username.isNotEmpty)
-                                '@${request.username}',
-                              'UID ${request.fromUid}',
-                              if (request.createTime.isNotEmpty)
-                                request.createTime,
-                            ].join(' | '),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colors.secondaryLabel,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatusChip(pending: request.pending),
-                    const SizedBox(width: 4),
-                    Icon(
-                      CupertinoIcons.chevron_right,
-                      size: 16,
-                      color: colors.tertiaryLabel,
-                    ),
-                  ],
-                ),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CupertinoListTile(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
+          leading: _Avatar(
+            url: request.avatar,
+            fallback: CupertinoIcons.person_solid,
+            name: request.nickname,
+            radius: 20,
+          ),
+          title: Text(
+            request.nickname,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colors.label,
             ),
-            if (request.content.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                request.content,
-                style: TextStyle(fontSize: 14, color: colors.label),
-              ),
+          ),
+          subtitle: Text(
+            [
+              if (request.username.isNotEmpty) '@${request.username}',
+              'UID ${request.fromUid}',
+              if (request.createTime.isNotEmpty) request.createTime,
+            ].join(' | '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StatusChip(pending: request.pending),
+              const SizedBox(width: 4),
+              const _NoticeChevron(),
             ],
-            if (request.pending) ...[
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: acting ? null : onRefuse,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: CupertinoColors.destructiveRed.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        strings.text('Refuse'),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: CupertinoColors.destructiveRed,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: acting ? null : onAgree,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: acting
-                            ? CupertinoTheme.of(
-                                context,
-                              ).primaryColor.withValues(alpha: 0.5)
-                            : CupertinoTheme.of(context).primaryColor,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: acting
-                          ? const CupertinoActivityIndicator(
-                              radius: 8,
-                              color: CupertinoColors.white,
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  CupertinoIcons.checkmark_alt,
-                                  size: 14,
-                                  color: CupertinoColors.white,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  strings.text('Agree'),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: CupertinoColors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+          ),
+          onTap: onOpenUser,
         ),
-      ),
+        if (request.content.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Text(
+              request.content,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: colors.label),
+            ),
+          ),
+        if (request.pending)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _NoticeActionPill(
+                  label: strings.text('Refuse'),
+                  onPressed: onRefuse,
+                  loading: false,
+                ),
+                const SizedBox(width: 8),
+                _NoticeActionPill(
+                  label: strings.text('Agree'),
+                  icon: CupertinoIcons.checkmark_alt,
+                  primary: true,
+                  onPressed: onAgree,
+                  loading: acting,
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1375,51 +1370,53 @@ class _GroupApplicationsPageState extends State<GroupApplicationsPage> {
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CupertinoActivityIndicator()),
-                ),
-              if (error != null) _InlineError(message: error!, onRetry: load),
-              if (!loading && applications.isEmpty)
-                _EmptyPanel(message: strings.text('No group applications.'))
-              else
-                for (final application in applications)
-                  _GroupApplicationTile(
-                    application: application,
-                    acting: actingId == application.id,
-                    onOpenUser: () async {
-                      GroupProfile? group;
-                      if (application.roomId > 0) {
-                        try {
-                          group = await widget.state.loadGroupProfile(
-                            application.roomId,
-                          );
-                        } catch (_) {}
-                      }
-                      if (!context.mounted) {
-                        return;
-                      }
-                      await openUserProfile(
-                        context,
-                        widget.state,
-                        application.uid,
-                        group: group,
-                      );
-                    },
-                    onPass: application.pending
-                        ? () => handle(application, 'pass')
-                        : null,
-                    onRefuse: application.pending
-                        ? () => handle(application, 'refuse')
-                        : null,
-                  ),
-            ]),
-          ),
+        SliverList.list(
+          children: [
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CupertinoActivityIndicator()),
+              ),
+            if (error != null) _InlineError(message: error!, onRetry: load),
+            if (!loading && applications.isEmpty)
+              _EmptyPanel(message: strings.text('No group applications.')),
+            if (!loading && applications.isNotEmpty)
+              _NoticeListSection(
+                children: [
+                  for (final application in applications)
+                    _GroupApplicationTile(
+                      application: application,
+                      acting: actingId == application.id,
+                      onOpenUser: () async {
+                        GroupProfile? group;
+                        if (application.roomId > 0) {
+                          try {
+                            group = await widget.state.loadGroupProfile(
+                              application.roomId,
+                            );
+                          } catch (_) {}
+                        }
+                        if (!context.mounted) {
+                          return;
+                        }
+                        await openUserProfile(
+                          context,
+                          widget.state,
+                          application.uid,
+                          group: group,
+                        );
+                      },
+                      onPass: application.pending
+                          ? () => handle(application, 'pass')
+                          : null,
+                      onRefuse: application.pending
+                          ? () => handle(application, 'refuse')
+                          : null,
+                    ),
+                ],
+              ),
+            const SizedBox(height: 24),
+          ],
         ),
       ],
     );
@@ -1448,165 +1445,81 @@ class _GroupApplicationTile extends StatelessWidget {
         : application.content;
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: _CupertinoListPressable(
-                onTap: onOpenUser,
-                child: Row(
-                  children: [
-                    _Avatar(
-                      url: application.avatar,
-                      fallback: CupertinoIcons.person_solid,
-                      name: application.nickname,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            application.nickname,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: colors.label,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            [
-                              if (application.username.isNotEmpty)
-                                '@${application.username}',
-                              'UID ${application.uid}',
-                              if (application.roomName.isNotEmpty)
-                                strings.format('Group: {name}', {
-                                  'name': application.roomName,
-                                }),
-                              if (application.createTime.isNotEmpty)
-                                application.createTime,
-                            ].join(' | '),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colors.secondaryLabel,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatusChip(pending: application.pending),
-                    const SizedBox(width: 4),
-                    Icon(
-                      CupertinoIcons.chevron_right,
-                      size: 16,
-                      color: colors.tertiaryLabel,
-                    ),
-                  ],
-                ),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CupertinoListTile(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
+          leading: _Avatar(
+            url: application.avatar,
+            fallback: CupertinoIcons.person_solid,
+            name: application.nickname,
+            radius: 20,
+          ),
+          title: Text(
+            application.nickname,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colors.label,
             ),
-            if (message.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                message,
-                style: TextStyle(fontSize: 14, color: colors.label),
-              ),
+          ),
+          subtitle: Text(
+            [
+              if (application.username.isNotEmpty) '@${application.username}',
+              'UID ${application.uid}',
+              if (application.roomName.isNotEmpty)
+                strings.format('Group: {name}', {'name': application.roomName}),
+              if (application.createTime.isNotEmpty) application.createTime,
+            ].join(' | '),
+            style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StatusChip(pending: application.pending),
+              const SizedBox(width: 4),
+              const _NoticeChevron(),
             ],
-            if (application.pending) ...[
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: acting ? null : onRefuse,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: CupertinoColors.destructiveRed.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        strings.text('Refuse'),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: CupertinoColors.destructiveRed,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: acting ? null : onPass,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: acting
-                            ? CupertinoTheme.of(
-                                context,
-                              ).primaryColor.withValues(alpha: 0.5)
-                            : CupertinoTheme.of(context).primaryColor,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: acting
-                          ? const CupertinoActivityIndicator(
-                              radius: 8,
-                              color: CupertinoColors.white,
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  CupertinoIcons.checkmark_alt,
-                                  size: 14,
-                                  color: CupertinoColors.white,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  strings.text('Pass'),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: CupertinoColors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+          ),
+          onTap: onOpenUser,
         ),
-      ),
+        if (message.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Text(
+              message,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: colors.label),
+            ),
+          ),
+        if (application.pending)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _NoticeActionPill(
+                  label: strings.text('Refuse'),
+                  onPressed: onRefuse,
+                ),
+                const SizedBox(width: 8),
+                _NoticeActionPill(
+                  label: strings.text('Pass'),
+                  icon: CupertinoIcons.checkmark_alt,
+                  primary: true,
+                  onPressed: onPass,
+                  loading: acting,
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

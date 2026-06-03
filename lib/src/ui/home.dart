@@ -899,158 +899,331 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final colors = CsacColors.of(context);
     final query = search.text.trim().toLowerCase();
     final conversations = visibleConversations(query);
+    final pinnedConversations = conversations
+        .where((conversation) => localPref(conversation).pinned)
+        .toList();
+    final regularConversations = conversations
+        .where((conversation) => !localPref(conversation).pinned)
+        .toList();
     final bottomPadding = widget.embedded ? 24.0 : 24.0;
-    final content = RefreshIndicator(
-      onRefresh: refresh,
-      child: ListView(
-        controller: conversationsScroll,
-        padding: EdgeInsets.fromLTRB(12, 8, 12, bottomPadding),
+    Future<void> openConversation(Conversation conversation) async {
+      if (widget.onConversationSelected != null) {
+        widget.onConversationSelected!(conversation);
+        unawaited(loadDrafts());
+        return;
+      }
+      setState(
+        () => heroLockedConversations = List<Conversation>.of(
+          widget.state.conversations,
+        ),
+      );
+      final route = CsacPageRoute<void>(
+        builder: (_) =>
+            ChatScreen(state: widget.state, conversation: conversation),
+      );
+      await Navigator.of(context).push(route);
+      await route.completed;
+      if (mounted) {
+        setState(() => heroLockedConversations = null);
+        unawaited(refresh());
+      }
+    }
+
+    Widget conversationTile(Conversation conversation) {
+      final index = conversations.indexOf(conversation);
+      return _MotionListItem(
+        index: index < 0 ? 0 : index,
+        child: _ConversationTile(
+          conversation: conversation,
+          draft: drafts[draftKey(conversation)],
+          preference: localPref(conversation),
+          subtitleMode: widget.state.preferences.conversationSubtitleMode,
+          selected:
+              widget.selectedConversation?.type == conversation.type &&
+              widget.selectedConversation?.id == conversation.id,
+          onLongPress: () => showConversationActions(conversation),
+          onTap: () => unawaited(openConversation(conversation)),
+        ),
+      );
+    }
+
+    Widget conversationSection(String title, List<Conversation> items) {
+      return CupertinoListSection.insetGrouped(
+        margin: const EdgeInsets.fromLTRB(12, 2, 12, 12),
+        header: Text(title.toUpperCase()),
+        backgroundColor: const Color(0x00000000),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        strings.text('Chats'),
-                        style: TextStyle(
-                          color: colors.label,
-                          fontSize: 34,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.7,
-                        ),
-                      ),
-                      if (user != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '${user.nickname} / UID ${user.uid}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: colors.secondaryLabel,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (widget.state.offlineMode)
-                  Chip(
-                    avatar: const Icon(CupertinoIcons.wifi_slash, size: 18),
-                    label: Text(strings.text('Offline')),
-                  ),
-                CupertinoButton(
-                  padding: const EdgeInsets.all(6),
-                  minimumSize: const Size(36, 36),
-                  onPressed: () => openHomeAction('addFriend'),
-                  child: Icon(
-                    CupertinoIcons.person_add,
-                    color: colors.primaryColor,
-                  ),
-                ),
-                CupertinoButton(
-                  padding: const EdgeInsets.all(6),
-                  minimumSize: const Size(36, 36),
-                  onPressed: () => openHomeAction('joinGroup'),
-                  child: Icon(
-                    CupertinoIcons.person_2,
-                    color: colors.primaryColor,
-                  ),
-                ),
-                CupertinoButton(
-                  padding: const EdgeInsets.all(6),
-                  minimumSize: const Size(36, 36),
-                  onPressed: () => openHomeAction('createGroup'),
-                  child: Icon(
-                    CupertinoIcons.plus_bubble,
-                    color: colors.primaryColor,
-                  ),
-                ),
-              ],
-            ),
+          for (final conversation in items) conversationTile(conversation),
+        ],
+      );
+    }
+
+    final content = CustomScrollView(
+      controller: conversationsScroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: refresh),
+        SliverToBoxAdapter(
+          child: _ConversationListHeader(
+            user: user,
+            offline: widget.state.offlineMode,
+            refreshing: refreshing,
+            onAddFriend: () => openHomeAction('addFriend'),
+            onJoinGroup: () => openHomeAction('joinGroup'),
+            onCreateGroup: () => openHomeAction('createGroup'),
+            onMore: showHomeActions,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: _CupertinoSearchField(
               controller: search,
               placeholder: strings.text('Search conversations'),
               onChanged: (_) => setState(() {}),
             ),
           ),
-          if (widget.state.conversations.isEmpty)
-            _EmptyPanel(message: strings.text('No conversations yet.'))
-          else if (conversations.isEmpty)
-            _EmptyPanel(
-              message: strings.text(
-                query.isEmpty
-                    ? 'No active conversations.'
-                    : 'No matching conversations.',
+        ),
+        if (widget.state.conversations.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: _EmptyPanel(
+                message: strings.text('No conversations yet.'),
               ),
-            )
-          else
-            for (final entry in conversations.indexed)
-              _MotionListItem(
-                index: entry.$1,
-                child: _ConversationTile(
-                  conversation: entry.$2,
-                  draft: drafts[draftKey(entry.$2)],
-                  preference: localPref(entry.$2),
-                  subtitleMode:
-                      widget.state.preferences.conversationSubtitleMode,
-                  selected:
-                      widget.selectedConversation?.type == entry.$2.type &&
-                      widget.selectedConversation?.id == entry.$2.id,
-                  onLongPress: () => showConversationActions(entry.$2),
-                  onTap: () async {
-                    if (widget.onConversationSelected != null) {
-                      widget.onConversationSelected!(entry.$2);
-                      unawaited(loadDrafts());
-                      return;
-                    }
-                    setState(
-                      () => heroLockedConversations = List<Conversation>.of(
-                        widget.state.conversations,
-                      ),
-                    );
-                    final route = CsacPageRoute<void>(
-                      builder: (_) => ChatScreen(
-                        state: widget.state,
-                        conversation: entry.$2,
-                      ),
-                    );
-                    await Navigator.of(context).push(route);
-                    await route.completed;
-                    if (mounted) {
-                      setState(() => heroLockedConversations = null);
-                      unawaited(refresh());
-                    }
-                  },
+            ),
+          )
+        else if (conversations.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: _EmptyPanel(
+                message: strings.text(
+                  query.isEmpty
+                      ? 'No active conversations.'
+                      : 'No matching conversations.',
                 ),
               ),
+            ),
+          )
+        else ...[
+          if (pinnedConversations.isNotEmpty)
+            SliverToBoxAdapter(
+              child: conversationSection(
+                strings.text('Pinned'),
+                pinnedConversations,
+              ),
+            ),
+          if (regularConversations.isNotEmpty)
+            SliverToBoxAdapter(
+              child: conversationSection(
+                strings.text('Chats'),
+                regularConversations,
+              ),
+            ),
+        ],
+        SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+      ],
+    );
+    return CupertinoPageScaffold(
+      backgroundColor: colors.systemBackground,
+      child: SafeArea(top: true, bottom: false, child: content),
+    );
+  }
+}
+
+class _ConversationListHeader extends StatelessWidget {
+  const _ConversationListHeader({
+    required this.user,
+    required this.offline,
+    required this.refreshing,
+    required this.onAddFriend,
+    required this.onJoinGroup,
+    required this.onCreateGroup,
+    required this.onMore,
+  });
+
+  final CsacUser? user;
+  final bool offline;
+  final bool refreshing;
+  final VoidCallback onAddFriend;
+  final VoidCallback onJoinGroup;
+  final VoidCallback onCreateGroup;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    final user = this.user;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings.text('Chats'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.label,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                  ),
+                ),
+                if (user != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    '${user.nickname} / UID ${user.uid}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.secondaryLabel,
+                      fontSize: 13,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (offline) ...[
+            _ConversationOfflinePill(label: strings.text('Offline')),
+            const SizedBox(width: 8),
+          ],
+          _ConversationHeaderButton(
+            icon: CupertinoIcons.person_add,
+            label: strings.text('Add friend'),
+            onPressed: onAddFriend,
+          ),
+          const SizedBox(width: 6),
+          _ConversationHeaderButton(
+            icon: CupertinoIcons.person_2,
+            label: strings.text('Join group'),
+            onPressed: onJoinGroup,
+          ),
+          const SizedBox(width: 6),
+          _ConversationHeaderButton(
+            icon: CupertinoIcons.plus_bubble,
+            label: strings.text('Create group'),
+            onPressed: onCreateGroup,
+          ),
+          const SizedBox(width: 6),
+          _ConversationHeaderButton(
+            icon: CupertinoIcons.ellipsis,
+            label: strings.text('More'),
+            onPressed: onMore,
+            loading: refreshing,
+          ),
         ],
       ),
     );
-    return Scaffold(
-      appBar: widget.embedded
-          ? null
-          : AppBar(
-              title: Text(strings.text('CsAC Mobile')),
-              actions: [
-                IconButton(
-                  tooltip: strings.text('More'),
-                  onPressed: showHomeActions,
-                  icon: const Icon(CupertinoIcons.ellipsis_circle),
-                ),
-              ],
-            ),
-      body: SafeArea(top: widget.embedded, child: content),
+  }
+}
+
+class _ConversationHeaderButton extends StatelessWidget {
+  const _ConversationHeaderButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.loading = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Semantics(
+      button: true,
+      label: label,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size.square(34),
+        borderRadius: BorderRadius.circular(17),
+        color: colors.tertiaryFill,
+        onPressed: loading ? null : onPressed,
+        child: loading
+            ? CupertinoActivityIndicator(
+                radius: 8.5,
+                color: colors.primaryColor,
+              )
+            : Icon(icon, size: 18, color: colors.primaryColor),
+      ),
     );
   }
+}
+
+class _ConversationOfflinePill extends StatelessWidget {
+  const _ConversationOfflinePill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final accent = CupertinoColors.systemOrange.resolveFrom(context);
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 86),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: colors.isDark ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.wifi_slash, size: 13, color: accent),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _conversationPreviewTime(Conversation conversation) {
+  final timestamp = conversation.lastMessageAt;
+  if (timestamp <= 0) {
+    return '';
+  }
+  final value = DateTime.fromMillisecondsSinceEpoch(timestamp).toLocal();
+  final now = DateTime.now();
+  String two(int number) => number.toString().padLeft(2, '0');
+  final sameDay =
+      value.year == now.year &&
+      value.month == now.month &&
+      value.day == now.day;
+  if (sameDay) {
+    return '${two(value.hour)}:${two(value.minute)}';
+  }
+  if (value.year == now.year) {
+    return '${two(value.month)}/${two(value.day)}';
+  }
+  return '${value.year}/${two(value.month)}/${two(value.day)}';
 }
 
 class _ConversationTile extends StatelessWidget {
@@ -1097,83 +1270,60 @@ class _ConversationTile extends StatelessWidget {
             'text': compactDraftText(draft.previewText, max: 72),
           })
         : preferredSubtitle;
-    final backgroundColor = selected
+    final tileColor = selected
         ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
         : colors.cardBackground;
-    final borderColor = selected
-        ? primary.withValues(alpha: colors.isDark ? 0.34 : 0.24)
-        : colors.separator.withValues(alpha: 0.24);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(_csacControlCornerRadius),
-        border: Border.all(color: borderColor, width: 0.5),
-      ),
-      child: _CupertinoListPressable(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        onSecondaryTap: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+    return _CupertinoListPressable(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTap: onLongPress,
+      child: CupertinoListTile(
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
+        leadingSize: 50,
+        leadingToTitle: 12,
+        backgroundColor: tileColor,
+        leading: _ConversationAvatarHero(
+          conversation: conversation,
+          radius: 25,
+        ),
+        title: DefaultTextStyle.merge(
+          style: TextStyle(
+            color: selected ? primary : colors.label,
+            fontSize: 16.5,
+            fontWeight: FontWeight.w600,
+            height: 1.16,
+          ),
           child: Row(
             children: [
-              _ConversationAvatarHero(conversation: conversation, radius: 22),
-              const SizedBox(width: 12),
+              if (preference.pinned) ...[
+                Icon(CupertinoIcons.pin_fill, size: 13, color: primary),
+                const SizedBox(width: 4),
+              ],
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DefaultTextStyle.merge(
-                      style: TextStyle(
-                        color: selected ? primary : colors.label,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        height: 1.18,
-                      ),
-                      child: Row(
-                        children: [
-                          if (preference.pinned) ...[
-                            Icon(
-                              CupertinoIcons.pin_fill,
-                              size: 13,
-                              color: primary,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          Expanded(
-                            child: _ConversationTitleHero(
-                              conversation: conversation,
-                              enabled: !selected,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitleText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: hasDraft ? primary : colors.secondaryLabel,
-                        fontSize: 13,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+                child: _ConversationTitleHero(
+                  conversation: conversation,
+                  enabled: !selected,
                 ),
-              ),
-              const SizedBox(width: 10),
-              _ConversationTileTrailing(
-                unreadCount: conversation.unreadCount,
-                muted: preference.muted,
-                archived: preference.archived,
               ),
             ],
           ),
+        ),
+        subtitle: Text(
+          subtitleText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: hasDraft ? primary : colors.secondaryLabel,
+            fontSize: 13,
+            fontWeight: hasDraft ? FontWeight.w600 : FontWeight.w400,
+            height: 1.22,
+          ),
+        ),
+        trailing: _ConversationTileTrailing(
+          previewTime: _conversationPreviewTime(conversation),
+          unreadCount: conversation.unreadCount,
+          muted: preference.muted,
+          archived: preference.archived,
         ),
       ),
     );
@@ -1182,11 +1332,13 @@ class _ConversationTile extends StatelessWidget {
 
 class _ConversationTileTrailing extends StatelessWidget {
   const _ConversationTileTrailing({
+    required this.previewTime,
     required this.unreadCount,
     required this.muted,
     required this.archived,
   });
 
+  final String previewTime;
   final int unreadCount;
   final bool muted;
   final bool archived;
@@ -1194,47 +1346,64 @@ class _ConversationTileTrailing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
-    if (unreadCount > 0) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (muted) ...[
-            Icon(
-              CupertinoIcons.bell_slash,
-              size: 17,
-              color: colors.tertiaryLabel,
-            ),
-            const SizedBox(width: 8),
-          ],
-          _ConversationUnreadBadge(count: unreadCount, muted: muted),
-        ],
+    final indicators = <Widget>[];
+    if (muted) {
+      indicators.add(
+        Icon(CupertinoIcons.bell_slash, size: 16, color: colors.tertiaryLabel),
       );
     }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (muted) ...[
-          Icon(
-            CupertinoIcons.bell_slash,
-            size: 17,
-            color: colors.tertiaryLabel,
+    if (archived) {
+      indicators.add(
+        Icon(CupertinoIcons.archivebox, size: 16, color: colors.tertiaryLabel),
+      );
+    }
+    if (unreadCount > 0) {
+      indicators.add(
+        _ConversationUnreadBadge(count: unreadCount, muted: muted),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 44),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (previewTime.isNotEmpty)
+                Text(
+                  previewTime,
+                  style: TextStyle(
+                    color: colors.tertiaryLabel,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 1,
+                  ),
+                ),
+              if (previewTime.isNotEmpty) const SizedBox(width: 4),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 13,
+                color: colors.tertiaryLabel,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
+          if (indicators.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final entry in indicators.indexed) ...[
+                  if (entry.$1 > 0) const SizedBox(width: 7),
+                  entry.$2,
+                ],
+              ],
+            ),
+          ],
         ],
-        if (archived) ...[
-          Icon(
-            CupertinoIcons.archivebox,
-            size: 17,
-            color: colors.tertiaryLabel,
-          ),
-          const SizedBox(width: 8),
-        ],
-        Icon(
-          CupertinoIcons.chevron_right,
-          size: 14,
-          color: colors.tertiaryLabel,
-        ),
-      ],
+      ),
     );
   }
 }
