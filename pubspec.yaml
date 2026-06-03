@@ -42,7 +42,7 @@ dependencies:
   pointycastle: ^3.9.1
   path: ^1.9.1
   path_provider: ^2.1.5
-  record: ^6.2.1
+  record: ^7.0.0
   shared_preferences: ^2.5.3
   sqlite3: ^2.9.4
   sqlite3_flutter_libs: ^0.5.40

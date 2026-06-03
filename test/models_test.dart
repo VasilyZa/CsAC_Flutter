@@ -89,7 +89,7 @@ void main() {
 
     expect(
       normalizeApiUrl('upload/img/avatar.png'),
-      'https://103.40.14.14:14660/upload/img/avatar.png',
+      'https://csac.chat/upload/img/avatar.png',
     );
   });
 
@@ -100,7 +100,7 @@ void main() {
       normalizeApiUrl(
         'https://cschat.ccccocccc.cc/upload/img/avatar.png?size=small',
       ),
-      'https://103.40.14.14:14660/upload/img/avatar.png?size=small',
+      'https://csac.chat/upload/img/avatar.png?size=small',
     );
     expect(
       normalizeApiUrl('https://example.com/upload/img/avatar.png'),
@@ -112,7 +112,7 @@ void main() {
   test('host-only current media URL is ignored', () {
     configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
 
-    expect(normalizeApiUrl('https://103.40.14.14:14660'), '');
+    expect(normalizeApiUrl('https://csac.chat'), '');
   });
 
   test('current host absolute media URL keeps server path', () {
@@ -120,30 +120,27 @@ void main() {
 
     expect(
       normalizeApiUrl(
-        'https://103.40.14.14:14660/avatar_51_37c2d7d5c446_1780237650.jpg',
+        'https://csac.chat/avatar_51_37c2d7d5c446_1780237650.jpg',
       ),
-      'https://103.40.14.14:14660/avatar_51_37c2d7d5c446_1780237650.jpg',
+      'https://csac.chat/avatar_51_37c2d7d5c446_1780237650.jpg',
     );
   });
 
   test('relative media paths resolve under server root unchanged', () {
     configureApiAssetBaseUrl(CsacApiClient.defaultBaseUrl);
 
-    expect(
-      normalizeApiUrl('default.png'),
-      'https://103.40.14.14:14660/default.png',
-    );
+    expect(normalizeApiUrl('default.png'), 'https://csac.chat/default.png');
     expect(
       normalizeApiUrl('avatar_51_37c2d7d5c446_1780237650.jpg'),
-      'https://103.40.14.14:14660/avatar_51_37c2d7d5c446_1780237650.jpg',
+      'https://csac.chat/avatar_51_37c2d7d5c446_1780237650.jpg',
     );
     expect(
       normalizeApiUrl('room_avatar_5_d3b63305e09c_1780244273.jpg'),
-      'https://103.40.14.14:14660/room_avatar_5_d3b63305e09c_1780244273.jpg',
+      'https://csac.chat/room_avatar_5_d3b63305e09c_1780244273.jpg',
     );
     expect(
       normalizeApiUrl('img_1_17_0ae40b2090a8_1780196137.jpg'),
-      'https://103.40.14.14:14660/img_1_17_0ae40b2090a8_1780196137.jpg',
+      'https://csac.chat/img_1_17_0ae40b2090a8_1780196137.jpg',
     );
   });
 

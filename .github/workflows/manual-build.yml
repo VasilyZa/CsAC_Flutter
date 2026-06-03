@@ -146,9 +146,11 @@ jobs:
             gstreamer1.0-plugins-bad \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-ugly \
+            libasound2-dev \
             libfuse2 \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
+            libpulse-dev \
             libayatana-appindicator3-dev \
             libgtk-3-dev \
             liblzma-dev \
