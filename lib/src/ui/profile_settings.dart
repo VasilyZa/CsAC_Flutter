@@ -3863,6 +3863,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  String get mobileEnterKeyBehaviorLabel {
+    final strings = context.strings;
+    switch (widget.state.preferences.mobileEnterKeyBehavior) {
+      case MobileEnterKeyBehavior.send:
+        return strings.text('Send message');
+      case MobileEnterKeyBehavior.newline:
+        return strings.text('Insert new line');
+    }
+  }
+
   String get chatBubbleCornerStyleLabel {
     return chatBubbleCornerStyleLabelFor(
       context,
@@ -4663,6 +4673,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> chooseMobileEnterKeyBehavior() async {
+    final strings = context.strings;
+    final selected = await showCupertinoOptionSheet<MobileEnterKeyBehavior>(
+      context: context,
+      selected: widget.state.preferences.mobileEnterKeyBehavior,
+      title: strings.text('Mobile Enter key'),
+      options: [
+        CupertinoOption(
+          value: MobileEnterKeyBehavior.send,
+          title: strings.text('Send message'),
+          subtitle: strings.text('Enter sends messages on mobile keyboards'),
+        ),
+        CupertinoOption(
+          value: MobileEnterKeyBehavior.newline,
+          title: strings.text('Insert new line'),
+          subtitle: strings.text(
+            'Enter inserts line breaks on mobile keyboards',
+          ),
+        ),
+      ],
+    );
+    if (selected != null) {
+      await widget.state.updateMobileEnterKeyBehavior(selected);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
   Future<void> chooseChatBubbleCornerStyle() async {
     final selected = await showCupertinoOptionSheet<ChatBubbleCornerStyle>(
       context: context,
@@ -4997,6 +5036,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Double tap avatar pat',
                 'Pat',
                 'Quick input triggers',
+                'Mobile Enter key',
+                'Enter key',
+                'Send message',
+                'Insert new line',
                 '@',
                 '#',
                 'Group member level',
@@ -5484,6 +5527,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .enableQuickInputTriggers,
                               onChanged:
                                   widget.state.updateEnableQuickInputTriggers,
+                            ),
+                            const CsacDivider(height: 1),
+                            ListTile(
+                              leading: const Icon(CupertinoIcons.keyboard),
+                              title: Text(strings.text('Mobile Enter key')),
+                              subtitle: Text(mobileEnterKeyBehaviorLabel),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: chooseMobileEnterKeyBehavior,
                             ),
                             const CsacDivider(height: 1),
                             CsacSwitchListTile(

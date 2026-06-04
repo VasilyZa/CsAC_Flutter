@@ -12,6 +12,8 @@ bool get isWebPlatform => false;
 bool get isDesktopPlatform =>
     Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+bool get isMobilePlatform => Platform.isIOS || Platform.isAndroid;
+
 bool get supportsVersionUpdateChecks => true;
 
 bool get supportsLocalFiles => true;
@@ -31,6 +33,8 @@ void installGlobalBadCertificateOverride() {
   }
   HttpOverrides.global = _AcceptAllCertificatesHttpOverrides(previous);
 }
+
+void configureInsecureHttpsOverrides() => installGlobalBadCertificateOverride();
 
 class _AcceptAllCertificatesHttpOverrides extends HttpOverrides {
   _AcceptAllCertificatesHttpOverrides(this.previous);

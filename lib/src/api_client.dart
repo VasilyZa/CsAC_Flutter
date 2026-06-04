@@ -24,6 +24,10 @@ class CsacAuthException extends CsacApiException {
   const CsacAuthException(super.message);
 }
 
+class CsacEmailVerificationRequiredException extends CsacApiException {
+  const CsacEmailVerificationRequiredException(super.message);
+}
+
 class NetworkDiagnosticReport {
   const NetworkDiagnosticReport({
     required this.serverUrl,
@@ -130,6 +134,8 @@ class CsacApiClient {
 
   ApiHttpProtocol get lastHttpProtocol => _http.lastProtocol;
 
+  bool needsEmailVerification = false;
+
   set onHttpProtocolChanged(ApiProtocolChanged? callback) {
     _http.onProtocolChanged = callback;
   }
@@ -222,8 +228,11 @@ class CsacApiClient {
     if (user is! Map<String, dynamic>) {
       throw const CsacApiException('Login succeeded but no user was returned.');
     }
+    needsEmailVerification = asBool(data['needs_email_verification']);
     await saveSession();
-    await refreshPlatform(platform: clientPlatform);
+    if (!needsEmailVerification) {
+      await refreshPlatform(platform: clientPlatform);
+    }
     return CsacUser.fromJson(user);
   }
 
@@ -244,6 +253,8 @@ class CsacApiClient {
   Future<CsacUser> register({
     required String username,
     required String nickname,
+    required String email,
+    required String emailCode,
     required String password,
     required String confirmPassword,
     Uint8List? avatarBytes,
@@ -252,6 +263,8 @@ class CsacApiClient {
     final fields = <String, String>{
       'username': username.trim(),
       'nickname': nickname.trim(),
+      'email': email.trim(),
+      'email_code': emailCode.trim(),
       'pwd': password,
       'confirm_pwd': confirmPassword,
     };
@@ -271,7 +284,31 @@ class CsacApiClient {
       );
     }
     await saveSession();
+    needsEmailVerification = false;
     return CsacUser.fromJson(user);
+  }
+
+  Future<void> sendRegisterEmailCode({required String email}) async {
+    await postForm('auth/send_register_code', <String, String>{
+      'email': email.trim(),
+    });
+  }
+
+  Future<void> sendEmailBindCode({required String email}) async {
+    await postForm('auth/send_email_bind_code', <String, String>{
+      'email': email.trim(),
+    });
+  }
+
+  Future<void> verifyEmailBindCode({
+    required String email,
+    required String emailCode,
+  }) async {
+    await postForm('auth/verify_email_bind_code', <String, String>{
+      'email': email.trim(),
+      'email_code': emailCode.trim(),
+    });
+    needsEmailVerification = false;
   }
 
   Future<void> logout() async {
@@ -1341,6 +1378,12 @@ class CsacApiClient {
       throw CsacAuthException(_message(decoded, 'Not logged in.'));
     }
     if (response.statusCode == 403) {
+      if (asBool(decoded['needs_email_verification'])) {
+        needsEmailVerification = true;
+        throw CsacEmailVerificationRequiredException(
+          _message(decoded, 'Email verification required.'),
+        );
+      }
       throw CsacApiException(_message(decoded, 'Access forbidden.'));
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {

@@ -47,6 +47,7 @@ android/key.properties
 
 # Backend source (not for public repo)
 后端core/
+服务器后端/smtp.local.php
 
 # Local upstream/source snapshots
 上游/

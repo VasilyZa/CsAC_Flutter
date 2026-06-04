@@ -76,7 +76,7 @@ part 'src/ui/helpers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  installGlobalBadCertificateOverride();
+  configureInsecureHttpsOverrides();
   await configureDesktopWindowChrome();
   await configureWindowsTray();
   runApp(const CsacMobileApp());

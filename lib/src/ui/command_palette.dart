@@ -1,5 +1,32 @@
 part of '../../main.dart';
 
+Future<void> openCommandPaletteOverlay({
+  required BuildContext context,
+  required CsacAppState state,
+  required GlobalKey<NavigatorState> navigatorKey,
+  required GlobalKey<CsacToastMessengerState> scaffoldMessengerKey,
+}) async {
+  final navigator = navigatorKey.currentState;
+  final overlayContext = navigator?.overlay?.context;
+  if (navigator == null || overlayContext == null) {
+    return;
+  }
+  await showGeneralDialog<void>(
+    context: overlayContext,
+    barrierDismissible: true,
+    barrierLabel: context.strings.text('Dismiss'),
+    barrierColor: Colors.transparent,
+    transitionDuration: Duration.zero,
+    pageBuilder: (dialogContext, _, _) {
+      return _CommandPaletteOverlay(
+        state: state,
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: scaffoldMessengerKey,
+      );
+    },
+  );
+}
+
 class _DesktopCommandPaletteHost extends StatefulWidget {
   const _DesktopCommandPaletteHost({
     required this.state,
@@ -28,26 +55,13 @@ class _DesktopCommandPaletteHostState
     if (!widget.enabled || openingPalette) {
       return;
     }
-    final navigator = widget.navigatorKey.currentState;
-    final overlayContext = navigator?.overlay?.context;
-    if (navigator == null || overlayContext == null) {
-      return;
-    }
     setState(() => openingPalette = true);
     try {
-      await showGeneralDialog<void>(
-        context: overlayContext,
-        barrierDismissible: true,
-        barrierLabel: context.strings.text('Dismiss'),
-        barrierColor: Colors.transparent,
-        transitionDuration: Duration.zero,
-        pageBuilder: (dialogContext, _, _) {
-          return _CommandPaletteOverlay(
-            state: widget.state,
-            navigatorKey: widget.navigatorKey,
-            scaffoldMessengerKey: widget.scaffoldMessengerKey,
-          );
-        },
+      await openCommandPaletteOverlay(
+        context: context,
+        state: widget.state,
+        navigatorKey: widget.navigatorKey,
+        scaffoldMessengerKey: widget.scaffoldMessengerKey,
       );
     } finally {
       if (mounted) {

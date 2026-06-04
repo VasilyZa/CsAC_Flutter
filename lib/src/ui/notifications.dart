@@ -540,6 +540,55 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
     }
   }
 
+  Future<void> clearOne(MentionNotice notice) async {
+    setState(() => acting = true);
+    try {
+      await widget.state.clearMentionNotice(notice);
+      if (!mounted) {
+        return;
+      }
+      final clearedKey = MentionNoticeStore.clearedKey(notice);
+      setState(() {
+        final items = [
+          for (final item in bundle.items)
+            if (MentionNoticeStore.clearedKey(item) != clearedKey) item,
+        ];
+        final unread = items.where((item) => !item.isRead);
+        bundle = bundle.copyWith(
+          items: items,
+          mentionCount: unread.where((item) => !item.isReply).length,
+          replyCount: unread.where((item) => item.isReply).length,
+        );
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => acting = false);
+      }
+    }
+  }
+
+  Future<void> clearSummary() async {
+    setState(() => acting = true);
+    try {
+      await widget.state.clearMentionSummary();
+      if (mounted) {
+        setState(() => bundle = const MentionNoticeBundle(items: []));
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => acting = false);
+      }
+    }
+  }
+
   Future<void> openMention(MentionNotice notice) async {
     if (!notice.isRead) {
       await markOneRead(notice);
@@ -583,7 +632,7 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
             if (error != null) _InlineError(message: error!, onRetry: load),
             if (!loading && bundle.items.isEmpty)
               if (unreadCount > 0)
-                _MentionSummaryCard(bundle: bundle)
+                _MentionSummaryCard(bundle: bundle, onClear: clearSummary)
               else
                 _EmptyPanel(message: strings.text('No mentions or replies.')),
             if (!loading && bundle.items.isNotEmpty)
@@ -597,6 +646,7 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
                       onMarkRead: notice.isRead
                           ? null
                           : () => markOneRead(notice),
+                      onClear: () => clearOne(notice),
                     ),
                 ],
               ),
@@ -609,9 +659,10 @@ class _MentionNoticesPageState extends State<MentionNoticesPage> {
 }
 
 class _MentionSummaryCard extends StatelessWidget {
-  const _MentionSummaryCard({required this.bundle});
+  const _MentionSummaryCard({required this.bundle, required this.onClear});
 
   final MentionNoticeBundle bundle;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -663,6 +714,17 @@ class _MentionSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          trailing: CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(30),
+            borderRadius: BorderRadius.circular(15),
+            onPressed: onClear,
+            child: Icon(
+              CupertinoIcons.clear_circled,
+              size: 22,
+              color: CupertinoColors.destructiveRed.resolveFrom(context),
+            ),
+          ),
         ),
       ],
     );
@@ -675,12 +737,14 @@ class _MentionNoticeTile extends StatelessWidget {
     required this.acting,
     required this.onTap,
     this.onMarkRead,
+    required this.onClear,
   });
 
   final MentionNotice notice;
   final bool acting;
   final VoidCallback onTap;
   final VoidCallback? onMarkRead;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -728,7 +792,23 @@ class _MentionNoticeTile extends StatelessWidget {
           ],
         ],
       ),
-      trailing: _NoticeMarkReadButton(onPressed: onMarkRead, acting: acting),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _NoticeMarkReadButton(onPressed: onMarkRead, acting: acting),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(30),
+            borderRadius: BorderRadius.circular(15),
+            onPressed: acting ? null : onClear,
+            child: Icon(
+              CupertinoIcons.clear_circled,
+              size: 22,
+              color: CupertinoColors.destructiveRed.resolveFrom(context),
+            ),
+          ),
+        ],
+      ),
       onTap: onTap,
     );
   }

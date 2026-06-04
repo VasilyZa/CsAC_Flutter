@@ -1028,11 +1028,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> sendRepeatPlusOne(ChatMessage message) async {
     final text = repeatPlusOneText(message);
-    if (text.isEmpty) {
+    final emoji = repeatPlusOneEmoji(message);
+    if (text.isEmpty && emoji == null) {
       return;
     }
     HapticFeedback.selectionClick();
-    final pending = _PendingSend(localId: nextPendingId--, text: text);
+    final pending = _PendingSend(
+      localId: nextPendingId--,
+      text: text,
+      emoji: emoji,
+    );
     setState(() {
       pendingSends.add(pending);
       error = null;
@@ -1058,15 +1063,46 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return text;
   }
 
+  EmojiSticker? repeatPlusOneEmoji(ChatMessage message) {
+    if (message.isRecalled ||
+        (message.emojiAddress.isEmpty && message.messageType != 5)) {
+      return null;
+    }
+    final address = message.emojiAddress.trim();
+    if (address.isEmpty) {
+      return null;
+    }
+    final abbr = message.emojiAbbr.trim().isEmpty
+        ? message.body.replaceFirst('[emoji]', '').trim()
+        : message.emojiAbbr.trim();
+    return EmojiSticker(
+      fullName: abbr.isEmpty ? 'emoji' : abbr,
+      address: address,
+      abbr: abbr,
+    );
+  }
+
+  String repeatPlusOneKey(ChatMessage message) {
+    final text = repeatPlusOneText(message);
+    if (text.isNotEmpty) {
+      return 'text:$text';
+    }
+    final emoji = repeatPlusOneEmoji(message);
+    if (emoji != null) {
+      return 'emoji:${emoji.address}:${emoji.abbr}';
+    }
+    return '';
+  }
+
   bool shouldShowRepeatPlusOne(int index) {
     if (index <= 0 || index != messages.length - 1) {
       return false;
     }
-    final current = repeatPlusOneText(messages[index]);
+    final current = repeatPlusOneKey(messages[index]);
     if (current.isEmpty) {
       return false;
     }
-    final previous = repeatPlusOneText(messages[index - 1]);
+    final previous = repeatPlusOneKey(messages[index - 1]);
     if (current != previous) {
       return false;
     }
@@ -1671,6 +1707,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     HapticFeedback.mediumImpact();
     setState(() => pressedMessageId = message.id);
     final strings = context.strings;
+    final plainText = chatMessagePlainText(message, strings).trim();
     final canRecall = message.canRecall || mine;
     final canEssence = widget.conversation.type == ConversationType.group;
     final action =
@@ -1695,6 +1732,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Navigator.of(context).pop(_MessageAction.copyText),
                 child: Text(strings.text('Copy text')),
               ),
+              if (plainText.isNotEmpty)
+                CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_MessageAction.selectText),
+                  child: Text(strings.text('Select message text')),
+                ),
               if (message.imageUrl.isNotEmpty)
                 CupertinoActionSheetAction(
                   onPressed: () =>
@@ -1760,6 +1803,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           CsacToast(content: Text(context.strings.text('Message copied'))),
         );
         break;
+      case _MessageAction.selectText:
+        await showSelectableMessageText(message);
+        break;
       case _MessageAction.copyImage:
         Clipboard.setData(ClipboardData(text: message.imageUrl));
         CsacToastMessenger.of(context).showToast(
@@ -1782,6 +1828,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         await toggleEssence(message);
         break;
     }
+  }
+
+  Future<void> showSelectableMessageText(ChatMessage message) async {
+    final strings = context.strings;
+    final text = chatMessagePlainText(message, strings).trim();
+    if (text.isEmpty) {
+      return;
+    }
+    await showCupertinoCsacDialog<void>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(strings.text('Select message text')),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: CsacSingleChildScrollView(
+              child: SelectableText(text, textAlign: TextAlign.left),
+            ),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.text('Close')),
+          ),
+        ],
+      ),
+    );
   }
 
   void openConversationDetails() {
@@ -3012,7 +3087,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         maxLines: 4,
                                         keyboardType: TextInputType.multiline,
                                         textInputAction:
-                                            TextInputAction.newline,
+                                            isMobilePlatform &&
+                                                widget
+                                                        .state
+                                                        .preferences
+                                                        .mobileEnterKeyBehavior ==
+                                                    MobileEnterKeyBehavior.send
+                                            ? TextInputAction.send
+                                            : TextInputAction.newline,
+                                        onSubmitted: (_) {
+                                          if (isMobilePlatform &&
+                                              widget
+                                                      .state
+                                                      .preferences
+                                                      .mobileEnterKeyBehavior ==
+                                                  MobileEnterKeyBehavior.send) {
+                                            unawaited(send());
+                                          }
+                                        },
                                         decoration: InputDecoration(
                                           hintText: strings.text('Message'),
                                           contentPadding:
@@ -6167,6 +6259,7 @@ class _GroupAnnouncementBar extends StatelessWidget {
 enum _MessageAction {
   select,
   copyText,
+  selectText,
   copyImage,
   openImage,
   downloadImage,

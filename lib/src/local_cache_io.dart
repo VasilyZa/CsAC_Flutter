@@ -85,7 +85,7 @@ class CsacLocalCache {
       username: row['username'] as String,
       avatar: row['avatar'] as String,
       onlineStatus: row['online_status'] as String,
-      platform: row['platform'] as String,
+      platform: asString(row['platform']).ifEmpty('none'),
       patAction: row['pat_action'] as String,
     );
   }

@@ -1,9 +1,16 @@
 part of '../../main.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.state});
+  const MainShell({
+    super.key,
+    required this.state,
+    this.navigatorKey,
+    this.scaffoldMessengerKey,
+  });
 
   final CsacAppState state;
+  final GlobalKey<NavigatorState>? navigatorKey;
+  final GlobalKey<CsacToastMessengerState>? scaffoldMessengerKey;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -194,6 +201,8 @@ class _MainShellState extends State<MainShell> {
     final pages = <Widget>[
       ConversationScreen(
         state: widget.state,
+        navigatorKey: widget.navigatorKey,
+        scaffoldMessengerKey: widget.scaffoldMessengerKey,
         embedded: true,
         selectedConversation: selectedConversation,
         onConversationSelected: wide
@@ -613,12 +622,16 @@ class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
     super.key,
     required this.state,
+    this.navigatorKey,
+    this.scaffoldMessengerKey,
     this.embedded = false,
     this.selectedConversation,
     this.onConversationSelected,
   });
 
   final CsacAppState state;
+  final GlobalKey<NavigatorState>? navigatorKey;
+  final GlobalKey<CsacToastMessengerState>? scaffoldMessengerKey;
   final bool embedded;
   final Conversation? selectedConversation;
   final ValueChanged<Conversation>? onConversationSelected;
@@ -626,6 +639,8 @@ class ConversationScreen extends StatefulWidget {
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
+
+enum _ConversationGroupFilter { all, important, friends, groups, archived }
 
 class _ConversationScreenState extends State<ConversationScreen> {
   final search = TextEditingController();
@@ -635,6 +650,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       const <String, ConversationLocalPreference>{};
   List<Conversation>? heroLockedConversations;
   bool refreshing = false;
+  _ConversationGroupFilter groupFilter = _ConversationGroupFilter.all;
 
   @override
   void initState() {
@@ -684,7 +700,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> loadConversationPrefs() async {
     final loaded = await ConversationPreferenceStore.loadAll();
     if (mounted) {
-      setState(() => conversationPrefs = loaded);
+      setState(() {
+        conversationPrefs = loaded;
+        if (groupFilter == _ConversationGroupFilter.archived &&
+            !loaded.values.any((value) => value.archived)) {
+          groupFilter = _ConversationGroupFilter.all;
+        }
+      });
     }
   }
 
@@ -711,9 +733,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     .toLowerCase();
             return target.contains(query);
           }).toList();
-    final visible = searched.where((conversation) {
-      return !localPref(conversation).archived;
-    }).toList();
+    final visible = searched.where(conversationInCurrentGroup).toList();
     visible.sort((a, b) {
       final aPref = localPref(a);
       final bPref = localPref(b);
@@ -723,6 +743,59 @@ class _ConversationScreenState extends State<ConversationScreen> {
       return searched.indexOf(a).compareTo(searched.indexOf(b));
     });
     return visible;
+  }
+
+  bool conversationInCurrentGroup(Conversation conversation) {
+    final pref = localPref(conversation);
+    switch (groupFilter) {
+      case _ConversationGroupFilter.all:
+        return !pref.archived;
+      case _ConversationGroupFilter.important:
+        return !pref.archived && pref.pinned;
+      case _ConversationGroupFilter.friends:
+        return !pref.archived && conversation.type == ConversationType.private;
+      case _ConversationGroupFilter.groups:
+        return !pref.archived && conversation.type == ConversationType.group;
+      case _ConversationGroupFilter.archived:
+        return pref.archived;
+    }
+  }
+
+  int groupCount(_ConversationGroupFilter filter) {
+    return widget.state.conversations.where((conversation) {
+      final pref = localPref(conversation);
+      switch (filter) {
+        case _ConversationGroupFilter.all:
+          return !pref.archived;
+        case _ConversationGroupFilter.important:
+          return !pref.archived && pref.pinned;
+        case _ConversationGroupFilter.friends:
+          return !pref.archived &&
+              conversation.type == ConversationType.private;
+        case _ConversationGroupFilter.groups:
+          return !pref.archived && conversation.type == ConversationType.group;
+        case _ConversationGroupFilter.archived:
+          return pref.archived;
+      }
+    }).length;
+  }
+
+  String emptyMessageForGroup(String query) {
+    if (query.isNotEmpty) {
+      return 'No matching conversations.';
+    }
+    switch (groupFilter) {
+      case _ConversationGroupFilter.all:
+        return 'No active conversations.';
+      case _ConversationGroupFilter.important:
+        return 'No important conversations.';
+      case _ConversationGroupFilter.friends:
+        return 'No friend conversations.';
+      case _ConversationGroupFilter.groups:
+        return 'No group conversations.';
+      case _ConversationGroupFilter.archived:
+        return 'No archived conversations.';
+    }
   }
 
   Future<void> updateLocalPreference(
@@ -837,6 +910,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ),
         );
         break;
+      case 'commands':
+        final navigatorKey = widget.navigatorKey;
+        final scaffoldMessengerKey = widget.scaffoldMessengerKey;
+        if (navigatorKey != null && scaffoldMessengerKey != null) {
+          await openCommandPaletteOverlay(
+            context: context,
+            state: widget.state,
+            navigatorKey: navigatorKey,
+            scaffoldMessengerKey: scaffoldMessengerKey,
+          );
+        }
+        break;
       case 'logout':
         await confirmLogout(context, widget.state, popToRoot: false);
         break;
@@ -844,6 +929,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (mounted &&
         action != 'refresh' &&
         action != 'searchMessages' &&
+        action != 'commands' &&
         action != 'logout') {
       await refresh();
     }
@@ -875,6 +961,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onPressed: () => Navigator.of(context).pop('searchMessages'),
             child: Text(strings.text('Search messages')),
           ),
+          if (widget.navigatorKey != null &&
+              widget.scaffoldMessengerKey != null)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop('commands'),
+              child: Text(strings.text('Commands')),
+            ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(context).pop('logout'),
@@ -906,6 +998,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         .where((conversation) => !localPref(conversation).pinned)
         .toList();
     final bottomPadding = widget.embedded ? 24.0 : 24.0;
+    final groupFilters = <_ConversationGroupFilter>[
+      _ConversationGroupFilter.all,
+      _ConversationGroupFilter.important,
+      _ConversationGroupFilter.friends,
+      _ConversationGroupFilter.groups,
+      _ConversationGroupFilter.archived,
+    ];
     Future<void> openConversation(Conversation conversation) async {
       if (widget.onConversationSelected != null) {
         widget.onConversationSelected!(conversation);
@@ -987,6 +1086,39 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ),
           ),
         ),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 46,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  ui.PointerDeviceKind.touch,
+                  ui.PointerDeviceKind.mouse,
+                  ui.PointerDeviceKind.trackpad,
+                  ui.PointerDeviceKind.stylus,
+                  ui.PointerDeviceKind.unknown,
+                },
+              ),
+              child: CsacListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                itemCount: groupFilters.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final filter = groupFilters[index];
+                  return _ConversationFilterPill(
+                    icon: _conversationGroupIcon(filter),
+                    label: strings.format(_conversationGroupLabel(filter), {
+                      'count': groupCount(filter),
+                    }),
+                    selected: groupFilter == filter,
+                    onTap: () => setState(() => groupFilter = filter),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
         if (widget.state.conversations.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
@@ -1001,27 +1133,32 @@ class _ConversationScreenState extends State<ConversationScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
               child: _EmptyPanel(
-                message: strings.text(
-                  query.isEmpty
-                      ? 'No active conversations.'
-                      : 'No matching conversations.',
-                ),
+                message: strings.text(emptyMessageForGroup(query)),
               ),
             ),
           )
         else ...[
-          if (pinnedConversations.isNotEmpty)
+          if (groupFilter == _ConversationGroupFilter.all &&
+              pinnedConversations.isNotEmpty)
             SliverToBoxAdapter(
               child: conversationSection(
                 strings.text('Pinned'),
                 pinnedConversations,
               ),
             ),
-          if (regularConversations.isNotEmpty)
+          if (groupFilter == _ConversationGroupFilter.all &&
+              regularConversations.isNotEmpty)
             SliverToBoxAdapter(
               child: conversationSection(
                 strings.text('Chats'),
                 regularConversations,
+              ),
+            ),
+          if (groupFilter != _ConversationGroupFilter.all)
+            SliverToBoxAdapter(
+              child: conversationSection(
+                strings.text(_conversationGroupSectionLabel(groupFilter)),
+                conversations,
               ),
             ),
         ],
@@ -1200,6 +1337,109 @@ class _ConversationOfflinePill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+String _conversationGroupLabel(_ConversationGroupFilter filter) {
+  switch (filter) {
+    case _ConversationGroupFilter.all:
+      return 'All conversations ({count})';
+    case _ConversationGroupFilter.important:
+      return 'Important ({count})';
+    case _ConversationGroupFilter.friends:
+      return 'Friends ({count})';
+    case _ConversationGroupFilter.groups:
+      return 'Groups ({count})';
+    case _ConversationGroupFilter.archived:
+      return 'Archived ({count})';
+  }
+}
+
+String _conversationGroupSectionLabel(_ConversationGroupFilter filter) {
+  switch (filter) {
+    case _ConversationGroupFilter.all:
+      return 'Chats';
+    case _ConversationGroupFilter.important:
+      return 'Important';
+    case _ConversationGroupFilter.friends:
+      return 'Friends';
+    case _ConversationGroupFilter.groups:
+      return 'Groups';
+    case _ConversationGroupFilter.archived:
+      return 'Archived';
+  }
+}
+
+IconData _conversationGroupIcon(_ConversationGroupFilter filter) {
+  switch (filter) {
+    case _ConversationGroupFilter.all:
+      return CupertinoIcons.tray;
+    case _ConversationGroupFilter.important:
+      return CupertinoIcons.pin;
+    case _ConversationGroupFilter.friends:
+      return CupertinoIcons.person;
+    case _ConversationGroupFilter.groups:
+      return CupertinoIcons.group;
+    case _ConversationGroupFilter.archived:
+      return CupertinoIcons.archivebox;
+  }
+}
+
+class _ConversationFilterPill extends StatelessWidget {
+  const _ConversationFilterPill({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CsacPressable(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 160.ms,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? primary.withValues(alpha: colors.isDark ? 0.22 : 0.13)
+              : colors.cardBackground,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? primary.withValues(alpha: 0.24)
+                : colors.separator.withValues(alpha: 0.24),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? primary : colors.secondaryLabel,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? primary : colors.label,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

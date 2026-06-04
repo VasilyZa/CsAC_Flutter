@@ -7,6 +7,8 @@ bool get isWebPlatform => true;
 
 bool get isDesktopPlatform => false;
 
+bool get isMobilePlatform => false;
+
 bool get supportsVersionUpdateChecks => false;
 
 bool get supportsLocalFiles => false;
@@ -20,6 +22,8 @@ bool get isApplePlatform => false;
 bool get shouldForceHideMobileTextInput => false;
 
 void installGlobalBadCertificateOverride() {}
+
+void configureInsecureHttpsOverrides() => installGlobalBadCertificateOverride();
 
 void hidePlatformTextInput() {
   FocusManager.instance.primaryFocus?.unfocus();

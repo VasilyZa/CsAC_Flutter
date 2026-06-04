@@ -514,9 +514,16 @@ class _CsacMobileAppState extends State<CsacMobileApp>
                           key: const ValueKey<String>('login'),
                           state: state,
                         )
+                      : state.needsEmailVerification
+                      ? EmailVerificationRequiredScreen(
+                          key: const ValueKey<String>('email-verification'),
+                          state: state,
+                        )
                       : MainShell(
                           key: const ValueKey<String>('main'),
                           state: state,
+                          navigatorKey: navigatorKey,
+                          scaffoldMessengerKey: scaffoldMessengerKey,
                         ),
                 ),
                 if (locked && state.user != null)
@@ -1272,20 +1279,71 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final username = TextEditingController();
   final nickname = TextEditingController();
+  final email = TextEditingController();
+  final emailCode = TextEditingController();
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
   XFile? avatar;
   Uint8List? avatarBytes;
   bool submitting = false;
+  bool sendingCode = false;
+  int resendSeconds = 0;
+  Timer? resendTimer;
   String? error;
 
   @override
   void dispose() {
     username.dispose();
     nickname.dispose();
+    email.dispose();
+    emailCode.dispose();
     password.dispose();
     confirmPassword.dispose();
+    resendTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> sendEmailCode() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please enter your email.'));
+      return;
+    }
+    setState(() {
+      sendingCode = true;
+      error = null;
+    });
+    try {
+      await widget.state.sendRegisterEmailCode(email.text);
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Code sent.'))));
+      setState(() => resendSeconds = 60);
+      resendTimer?.cancel();
+      resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (resendSeconds <= 1) {
+          timer.cancel();
+          setState(() => resendSeconds = 0);
+        } else {
+          setState(() => resendSeconds -= 1);
+        }
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => sendingCode = false);
+      }
+    }
   }
 
   Future<void> chooseAvatar() async {
@@ -1313,6 +1371,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final strings = context.strings;
     if (username.text.trim().isEmpty ||
         nickname.text.trim().isEmpty ||
+        email.text.trim().isEmpty ||
+        emailCode.text.trim().isEmpty ||
         password.text.isEmpty ||
         confirmPassword.text.isEmpty) {
       setState(() => error = strings.text('Please fill all fields.'));
@@ -1337,6 +1397,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await widget.state.register(
         username: username.text,
         nickname: nickname.text,
+        email: email.text,
+        emailCode: emailCode.text,
         password: password.text,
         confirmPassword: confirmPassword.text,
         avatarBytes: avatarBytes,
@@ -1456,6 +1518,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textInputAction: TextInputAction.next,
                       ),
                       _CupertinoFormField(
+                        controller: email,
+                        placeholder: strings.text('Email'),
+                        icon: CupertinoIcons.mail,
+                        enabled: !submitting,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: emailCode,
+                        placeholder: strings.text('Email verification code'),
+                        icon: CupertinoIcons.number,
+                        enabled: !submitting,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
                         controller: password,
                         placeholder: strings.text('Password'),
                         icon: CupertinoIcons.lock,
@@ -1473,6 +1551,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onSubmitted: (_) => submit(),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  _AuthPrimaryButton(
+                    label: resendSeconds > 0
+                        ? strings.format('Resend in {seconds}s', {
+                            'seconds': resendSeconds,
+                          })
+                        : strings.text('Send code'),
+                    loading: sendingCode,
+                    onTap: resendSeconds > 0 ? null : sendEmailCode,
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 12),
@@ -1504,6 +1592,214 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   CupertinoButton(
                     onPressed: submitting ? null : () => Navigator.pop(context),
                     child: Text(strings.text('Back to login')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class EmailVerificationRequiredScreen extends StatefulWidget {
+  const EmailVerificationRequiredScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<EmailVerificationRequiredScreen> createState() =>
+      _EmailVerificationRequiredScreenState();
+}
+
+class _EmailVerificationRequiredScreenState
+    extends State<EmailVerificationRequiredScreen> {
+  final email = TextEditingController();
+  final emailCode = TextEditingController();
+  bool sendingCode = false;
+  bool verifying = false;
+  int resendSeconds = 0;
+  Timer? resendTimer;
+  String? error;
+
+  @override
+  void dispose() {
+    email.dispose();
+    emailCode.dispose();
+    resendTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> sendEmailCode() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please enter your email.'));
+      return;
+    }
+    setState(() {
+      sendingCode = true;
+      error = null;
+    });
+    try {
+      await widget.state.sendEmailBindCode(email.text);
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Code sent.'))));
+      setState(() => resendSeconds = 60);
+      resendTimer?.cancel();
+      resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (resendSeconds <= 1) {
+          timer.cancel();
+          setState(() => resendSeconds = 0);
+        } else {
+          setState(() => resendSeconds -= 1);
+        }
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => sendingCode = false);
+      }
+    }
+  }
+
+  Future<void> verify() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty || emailCode.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please fill all fields.'));
+      return;
+    }
+    setState(() {
+      verifying = true;
+      error = null;
+    });
+    try {
+      await widget.state.verifyEmailBindCode(
+        email: email.text,
+        emailCode: emailCode.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Email verified.'))));
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => verifying = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return CsacPageScaffold(
+      backgroundColor: colors.systemBackground,
+      appBar: CsacNavigationBar(
+        title: Text(strings.text('Email verification')),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: CsacSingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    CupertinoIcons.mail_solid,
+                    size: 52,
+                    color: CupertinoTheme.of(context).primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    strings.text('Verify your email to continue'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.label,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    strings.text(
+                      'Existing accounts must verify an email before using CsAC.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.secondaryLabel),
+                  ),
+                  const SizedBox(height: 24),
+                  _CupertinoGroupedCard(
+                    margin: EdgeInsets.zero,
+                    children: [
+                      _CupertinoFormField(
+                        controller: email,
+                        placeholder: strings.text('Email'),
+                        icon: CupertinoIcons.mail,
+                        enabled: !verifying,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: emailCode,
+                        placeholder: strings.text('Email verification code'),
+                        icon: CupertinoIcons.number,
+                        enabled: !verifying,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => verify(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _AuthPrimaryButton(
+                    label: resendSeconds > 0
+                        ? strings.format('Resend in {seconds}s', {
+                            'seconds': resendSeconds,
+                          })
+                        : strings.text('Send code'),
+                    loading: sendingCode,
+                    onTap: resendSeconds > 0 ? null : sendEmailCode,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.destructive),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _AuthPrimaryButton(
+                    label: strings.text('Verify email'),
+                    loading: verifying,
+                    onTap: verify,
+                  ),
+                  const SizedBox(height: 12),
+                  CupertinoButton(
+                    onPressed: verifying
+                        ? null
+                        : () => widget.state.logout(keepLoginRecord: false),
+                    child: Text(strings.text('Sign out')),
                   ),
                 ],
               ),
@@ -1563,6 +1859,7 @@ class _CupertinoFormField extends StatelessWidget {
     required this.icon,
     this.obscureText = false,
     this.enabled = true,
+    this.keyboardType,
     this.textInputAction,
     this.onSubmitted,
   });
@@ -1572,6 +1869,7 @@ class _CupertinoFormField extends StatelessWidget {
   final IconData icon;
   final bool obscureText;
   final bool enabled;
+  final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
 
@@ -1583,6 +1881,7 @@ class _CupertinoFormField extends StatelessWidget {
       enabled: enabled,
       placeholder: placeholder,
       obscureText: obscureText,
+      keyboardType: keyboardType,
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
       prefix: Padding(
@@ -1606,7 +1905,7 @@ class _AuthPrimaryButton extends StatelessWidget {
 
   final String label;
   final bool loading;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

@@ -78,6 +78,7 @@ class CsacAppState extends ChangeNotifier {
   bool loading = false;
   bool offlineMode = false;
   bool sessionExpired = false;
+  bool needsEmailVerification = false;
   bool appInForeground = true;
   String restoreStatus = const CsacStrings(
     Locale('zh', 'CN'),
@@ -106,6 +107,7 @@ class CsacAppState extends ChangeNotifier {
       await cache.saveUser(user!);
       offlineMode = false;
       sessionExpired = false;
+      needsEmailVerification = false;
       await loadCachedConversations();
       await syncConversations();
       await refreshNotificationCounts();
@@ -122,6 +124,13 @@ class CsacAppState extends ChangeNotifier {
           : CsacStrings(
               localeForLanguage(preferences.language),
             ).text('Session expired. Cached history is available offline.');
+    } on CsacEmailVerificationRequiredException {
+      user = await cache.loadUser();
+      conversations = _sortConversations(await cache.loadConversations());
+      offlineMode = false;
+      sessionExpired = false;
+      needsEmailVerification = true;
+      error = null;
     } catch (_) {
       user = await cache.loadUser();
       conversations = _sortConversations(await cache.loadConversations());
@@ -157,11 +166,14 @@ class CsacAppState extends ChangeNotifier {
       );
       offlineMode = false;
       sessionExpired = false;
+      needsEmailVerification = client.needsEmailVerification;
       error = null;
-      await syncConversations();
-      await refreshNotificationCounts();
-      unawaited(loadEmojiStickers(forceRefresh: true));
-      await refreshDebugMode();
+      if (!needsEmailVerification) {
+        await syncConversations();
+        await refreshNotificationCounts();
+        unawaited(loadEmojiStickers(forceRefresh: true));
+        await refreshDebugMode();
+      }
     } catch (err) {
       error = err.toString();
       rethrow;
@@ -174,6 +186,8 @@ class CsacAppState extends ChangeNotifier {
   Future<void> register({
     required String username,
     required String nickname,
+    required String email,
+    required String emailCode,
     required String password,
     required String confirmPassword,
     Uint8List? avatarBytes,
@@ -186,6 +200,8 @@ class CsacAppState extends ChangeNotifier {
       user = await client.register(
         username: username,
         nickname: nickname,
+        email: email,
+        emailCode: emailCode,
         password: password,
         confirmPassword: confirmPassword,
         avatarBytes: avatarBytes,
@@ -200,6 +216,7 @@ class CsacAppState extends ChangeNotifier {
       );
       offlineMode = false;
       sessionExpired = false;
+      needsEmailVerification = false;
       error = null;
       await syncConversations();
       await refreshNotificationCounts();
@@ -212,6 +229,28 @@ class CsacAppState extends ChangeNotifier {
       loading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> sendRegisterEmailCode(String email) async {
+    await client.sendRegisterEmailCode(email: email);
+  }
+
+  Future<void> sendEmailBindCode(String email) async {
+    await client.sendEmailBindCode(email: email);
+  }
+
+  Future<void> verifyEmailBindCode({
+    required String email,
+    required String emailCode,
+  }) async {
+    await client.verifyEmailBindCode(email: email, emailCode: emailCode);
+    needsEmailVerification = false;
+    error = null;
+    notifyListeners();
+    await syncConversations();
+    await refreshNotificationCounts();
+    unawaited(loadEmojiStickers(forceRefresh: true));
+    await refreshDebugMode();
   }
 
   Future<void> updateThemeMode(ThemeMode mode) async {
@@ -315,6 +354,14 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> updateEnableQuickInputTriggers(bool enabled) async {
     preferences = preferences.copyWith(enableQuickInputTriggers: enabled);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> updateMobileEnterKeyBehavior(
+    MobileEnterKeyBehavior behavior,
+  ) async {
+    preferences = preferences.copyWith(mobileEnterKeyBehavior: behavior);
     await preferences.save();
     notifyListeners();
   }
@@ -463,6 +510,7 @@ class CsacAppState extends ChangeNotifier {
         previousServerUrl: previousServerUrl,
         removeLoginRecord: true,
       );
+      needsEmailVerification = false;
     }
   }
 
