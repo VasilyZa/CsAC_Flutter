@@ -5268,6 +5268,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'System notifications',
                 'Local notifications',
                 'New message alerts',
+                'Experimental WebSocket',
+                'HTTP/1.1 WebSocket',
+                'Realtime',
                 'Low performance mode',
                 'Cache',
                 'Cached conversations and message history',
@@ -5986,6 +5989,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 connectionProtocolLabel,
                                 style: TextStyle(color: colors.secondaryLabel),
                               ),
+                            ),
+                            const CsacDivider(height: 1),
+                            CsacSwitchListTile(
+                              secondary: const Icon(Icons.bolt_outlined),
+                              title: Text(
+                                strings.text('Experimental WebSocket'),
+                              ),
+                              subtitle: Text(
+                                strings.format(
+                                  'HTTP/1.1 WebSocket realtime updates. Status: {status}',
+                                  {
+                                    'status': strings.text(
+                                      widget.state.realtimeStatusLabel,
+                                    ),
+                                  },
+                                ),
+                              ),
+                              value: widget
+                                  .state
+                                  .preferences
+                                  .enableExperimentalWebSocket,
+                              onChanged:
+                                  widget.state.updateExperimentalWebSocket,
                             ),
                             const CsacDivider(height: 1),
                             CsacSwitchListTile(

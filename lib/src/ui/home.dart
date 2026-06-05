@@ -1038,10 +1038,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
 
     Widget conversationSection(String title, List<Conversation> items) {
-      return CupertinoListSection.insetGrouped(
-        margin: const EdgeInsets.fromLTRB(12, 2, 12, 12),
-        header: Text(title.toUpperCase()),
-        backgroundColor: const Color(0x00000000),
+      return _ChatListSection(
+        header: title,
         children: [
           for (final conversation in items) conversationTile(conversation),
         ],
@@ -1504,59 +1502,36 @@ class _ConversationTile extends StatelessWidget {
     final tileColor = selected
         ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
         : colors.cardBackground;
-    return _CupertinoListPressable(
+    return _ChatListTile(
+      selected: selected,
+      title: Row(
+        children: [
+          if (preference.pinned) ...[
+            Icon(CupertinoIcons.pin_fill, size: 13, color: primary),
+            const SizedBox(width: 4),
+          ],
+          Expanded(
+            child: _ConversationTitleHero(
+              conversation: conversation,
+              enabled: !selected,
+            ),
+          ),
+        ],
+      ),
+      subtitle: Text(subtitleText),
+      subtitleColor: hasDraft ? primary : colors.secondaryLabel,
+      subtitleFontWeight: hasDraft ? FontWeight.w600 : FontWeight.w400,
+      backgroundColor: tileColor,
+      leading: _ConversationAvatarHero(conversation: conversation, radius: 25),
+      trailing: _ConversationTileTrailing(
+        previewTime: _conversationPreviewTime(conversation),
+        unreadCount: conversation.unreadCount,
+        muted: preference.muted,
+        archived: preference.archived,
+      ),
       onTap: onTap,
       onLongPress: onLongPress,
       onSecondaryTap: onLongPress,
-      child: CupertinoListTile(
-        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
-        leadingSize: 50,
-        leadingToTitle: 12,
-        backgroundColor: tileColor,
-        leading: _ConversationAvatarHero(
-          conversation: conversation,
-          radius: 25,
-        ),
-        title: DefaultTextStyle.merge(
-          style: TextStyle(
-            color: selected ? primary : colors.label,
-            fontSize: 16.5,
-            fontWeight: FontWeight.w600,
-            height: 1.16,
-          ),
-          child: Row(
-            children: [
-              if (preference.pinned) ...[
-                Icon(CupertinoIcons.pin_fill, size: 13, color: primary),
-                const SizedBox(width: 4),
-              ],
-              Expanded(
-                child: _ConversationTitleHero(
-                  conversation: conversation,
-                  enabled: !selected,
-                ),
-              ),
-            ],
-          ),
-        ),
-        subtitle: Text(
-          subtitleText,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: hasDraft ? primary : colors.secondaryLabel,
-            fontSize: 13,
-            fontWeight: hasDraft ? FontWeight.w600 : FontWeight.w400,
-            height: 1.22,
-          ),
-        ),
-        trailing: _ConversationTileTrailing(
-          previewTime: _conversationPreviewTime(conversation),
-          unreadCount: conversation.unreadCount,
-          muted: preference.muted,
-          archived: preference.archived,
-        ),
-      ),
     );
   }
 }

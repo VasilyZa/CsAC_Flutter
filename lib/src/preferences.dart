@@ -60,6 +60,7 @@ class CsacPreferences {
     this.appLockBiometricEnabled = false,
     this.autoCheckVersionUpdates = true,
     this.localSystemNotificationsEnabled = true,
+    this.enableExperimentalWebSocket = false,
   });
 
   static const _themeKey = 'csac.theme_mode';
@@ -91,6 +92,7 @@ class CsacPreferences {
   static const _appLockBiometricEnabledKey = 'csac.app_lock.biometric_enabled';
   static const _autoCheckVersionUpdatesKey = 'csac.updates.auto_check_version';
   static const _localSystemNotificationsKey = 'csac.notifications.local_system';
+  static const _experimentalWebSocketKey = 'csac.realtime.experimental_ws';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -119,6 +121,7 @@ class CsacPreferences {
   final bool appLockBiometricEnabled;
   final bool autoCheckVersionUpdates;
   final bool localSystemNotificationsEnabled;
+  final bool enableExperimentalWebSocket;
 
   bool get hasAppLockPin =>
       appLockPinSalt.trim().isNotEmpty && appLockPinHash.trim().isNotEmpty;
@@ -160,6 +163,7 @@ class CsacPreferences {
     bool? appLockBiometricEnabled,
     bool? autoCheckVersionUpdates,
     bool? localSystemNotificationsEnabled,
+    bool? enableExperimentalWebSocket,
   }) {
     return CsacPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -199,6 +203,8 @@ class CsacPreferences {
       localSystemNotificationsEnabled:
           localSystemNotificationsEnabled ??
           this.localSystemNotificationsEnabled,
+      enableExperimentalWebSocket:
+          enableExperimentalWebSocket ?? this.enableExperimentalWebSocket,
     );
   }
 
@@ -256,6 +262,8 @@ class CsacPreferences {
           prefs.getBool(_autoCheckVersionUpdatesKey) ?? true,
       localSystemNotificationsEnabled:
           prefs.getBool(_localSystemNotificationsKey) ?? true,
+      enableExperimentalWebSocket:
+          prefs.getBool(_experimentalWebSocketKey) ?? false,
     );
   }
 
@@ -321,6 +329,7 @@ class CsacPreferences {
       _localSystemNotificationsKey,
       localSystemNotificationsEnabled,
     );
+    await prefs.setBool(_experimentalWebSocketKey, enableExperimentalWebSocket);
   }
 
   static ThemeMode _themeModeFromName(String? value) {

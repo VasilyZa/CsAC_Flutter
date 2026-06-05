@@ -44,7 +44,7 @@ class CsacLocalNotificationService {
     );
     const windows = WindowsInitializationSettings(
       appName: 'CsAC',
-      appUserModelId: 'ink.jjmm.csacflutter.csac',
+      appUserModelId: 'com.xiaobai.csac',
       guid: 'a6201f5f-6117-493c-b0a0-1cc73276e2a7',
     );
     const settings = InitializationSettings(

@@ -946,61 +946,67 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           else if (visibleMembers.isEmpty)
             _EmptyPanel(message: strings.text('No matching members.'))
           else
-            for (final member in visibleMembers)
-              CsacCard(
-                elevation: 0,
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: _RoundedInkClip(
-                  child: ListTile(
-                    leading: _Avatar(
-                      url: member.avatar,
-                      fallback: Icons.person_rounded,
-                      name: member.name,
-                      heroTag: userAvatarHeroTag(
-                        member.uid,
-                        'conversation-detail-${profile.id}',
+            _ChatListSection(
+              margin: EdgeInsets.zero,
+              children: [
+                for (final entry in visibleMembers.indexed)
+                  _MotionListItem(
+                    index: entry.$1,
+                    child: _ChatListTile(
+                      leading: _Avatar(
+                        url: entry.$2.avatar,
+                        fallback: CupertinoIcons.person_fill,
+                        radius: 25,
+                        name: entry.$2.name,
+                        heroTag: userAvatarHeroTag(
+                          entry.$2.uid,
+                          'conversation-detail-${profile.id}',
+                        ),
                       ),
-                    ),
-                    title: Text(member.name),
-                    subtitle: member.subtitle.isEmpty
-                        ? Text('UID ${member.uid}')
-                        : Text(member.subtitle),
-                    onTap: () => openUserProfile(
-                      context,
-                      widget.state,
-                      member.uid,
-                      group: profile,
-                      member: member,
-                      avatarHeroTag: userAvatarHeroTag(
-                        member.uid,
-                        'conversation-detail-${profile.id}',
+                      title: Text(entry.$2.name),
+                      subtitle: Text(
+                        entry.$2.subtitle.isEmpty
+                            ? 'UID ${entry.$2.uid}'
+                            : entry.$2.subtitle,
                       ),
+                      onTap: () => openUserProfile(
+                        context,
+                        widget.state,
+                        entry.$2.uid,
+                        group: profile,
+                        member: entry.$2,
+                        avatarHeroTag: userAvatarHeroTag(
+                          entry.$2.uid,
+                          'conversation-detail-${profile.id}',
+                        ),
+                      ),
+                      trailing: canManageGroup
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CsacIconButton(
+                                  tooltip: strings.text('Open private chat'),
+                                  onPressed: () =>
+                                      openPrivateChatForMember(entry.$2),
+                                  icon: const Icon(CupertinoIcons.chat_bubble),
+                                ),
+                                CsacIconButton(
+                                  tooltip: strings.text('Manage'),
+                                  onPressed: () => showMemberActions(entry.$2),
+                                  icon: const Icon(CupertinoIcons.ellipsis),
+                                ),
+                              ],
+                            )
+                          : CsacIconButton(
+                              tooltip: strings.text('Open private chat'),
+                              onPressed: () =>
+                                  openPrivateChatForMember(entry.$2),
+                              icon: const Icon(CupertinoIcons.chat_bubble),
+                            ),
                     ),
-                    trailing: canManageGroup
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CsacIconButton(
-                                tooltip: strings.text('Open private chat'),
-                                onPressed: () =>
-                                    openPrivateChatForMember(member),
-                                icon: const Icon(Icons.chat_bubble_outline),
-                              ),
-                              CsacIconButton(
-                                tooltip: strings.text('Manage'),
-                                onPressed: () => showMemberActions(member),
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
-                          )
-                        : CsacIconButton(
-                            tooltip: strings.text('Open private chat'),
-                            onPressed: () => openPrivateChatForMember(member),
-                            icon: const Icon(Icons.chat_bubble_outline),
-                          ),
                   ),
-                ),
-              ),
+              ],
+            ),
         ],
       ),
     );
@@ -2203,57 +2209,66 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     if (visibleMembers.isEmpty)
                       _EmptyPanel(message: strings.text('No matching members.'))
                     else
-                      for (final member in visibleMembers)
-                        CsacCard(
-                          elevation: 0,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: _RoundedInkClip(
-                            child: ListTile(
-                              leading: _Avatar(
-                                url: member.avatar,
-                                fallback: Icons.person_rounded,
-                                name: member.name,
-                                heroTag: userAvatarHeroTag(
-                                  member.uid,
-                                  'group-management-${group.id}',
-                                ),
-                              ),
-                              title: Text(member.name),
-                              subtitle: member.subtitle.isEmpty
-                                  ? Text('UID ${member.uid}')
-                                  : Text(member.subtitle),
-                              onTap: () => openUserProfile(
-                                context,
-                                widget.state,
-                                member.uid,
-                                group: group,
-                                member: member,
-                                avatarHeroTag: userAvatarHeroTag(
-                                  member.uid,
-                                  'group-management-${group.id}',
-                                ),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CsacIconButton(
-                                    tooltip: strings.text('Open private chat'),
-                                    onPressed: () =>
-                                        openPrivateChatForMember(member),
-                                    icon: const Icon(Icons.chat_bubble_outline),
+                      _ChatListSection(
+                        margin: EdgeInsets.zero,
+                        children: [
+                          for (final entry in visibleMembers.indexed)
+                            _MotionListItem(
+                              index: entry.$1,
+                              child: _ChatListTile(
+                                leading: _Avatar(
+                                  url: entry.$2.avatar,
+                                  fallback: CupertinoIcons.person_fill,
+                                  radius: 25,
+                                  name: entry.$2.name,
+                                  heroTag: userAvatarHeroTag(
+                                    entry.$2.uid,
+                                    'group-management-${group.id}',
                                   ),
-                                  CsacIconButton(
-                                    tooltip: strings.text('Manage'),
-                                    onPressed: acting
-                                        ? null
-                                        : () => showMemberActions(member),
-                                    icon: const Icon(Icons.more_vert),
+                                ),
+                                title: Text(entry.$2.name),
+                                subtitle: Text(
+                                  entry.$2.subtitle.isEmpty
+                                      ? 'UID ${entry.$2.uid}'
+                                      : entry.$2.subtitle,
+                                ),
+                                onTap: () => openUserProfile(
+                                  context,
+                                  widget.state,
+                                  entry.$2.uid,
+                                  group: group,
+                                  member: entry.$2,
+                                  avatarHeroTag: userAvatarHeroTag(
+                                    entry.$2.uid,
+                                    'group-management-${group.id}',
                                   ),
-                                ],
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CsacIconButton(
+                                      tooltip: strings.text(
+                                        'Open private chat',
+                                      ),
+                                      onPressed: () =>
+                                          openPrivateChatForMember(entry.$2),
+                                      icon: const Icon(
+                                        CupertinoIcons.chat_bubble,
+                                      ),
+                                    ),
+                                    CsacIconButton(
+                                      tooltip: strings.text('Manage'),
+                                      onPressed: acting
+                                          ? null
+                                          : () => showMemberActions(entry.$2),
+                                      icon: const Icon(CupertinoIcons.ellipsis),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ),
+                        ],
+                      ),
                     if (currentUserIsOwner) ...[
                       const SizedBox(height: 20),
                       sectionTitle(strings.text('Owner actions')),

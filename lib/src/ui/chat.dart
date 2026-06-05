@@ -102,6 +102,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   StreamSubscription<Duration?>? voiceDurationSub;
   StreamSubscription<Duration>? voicePositionSub;
   StreamSubscription<PlaybackEvent>? voicePlaybackEventSub;
+  StreamSubscription<CsacRealtimeEvent>? realtimeEventSub;
+  Timer? realtimeRefreshDebounce;
   GroupProfile? groupProfile;
   ChatMessage? replyTarget;
   int? playingVoiceMessageId;
@@ -217,6 +219,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     keyboardInsetBottom = currentKeyboardInsetBottom();
     widget.state.addListener(handleAppStateChanged);
     widget.state.setActiveConversation(widget.conversation);
+    realtimeEventSub = widget.state.realtimeEvents.listen(handleRealtimeEvent);
     initialUnreadCount = widget.conversation.unreadCount;
     widget.state.markConversationRead(widget.conversation);
     input.addListener(scheduleDraftSave);
@@ -238,6 +241,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     draftTimer?.cancel();
+    realtimeRefreshDebounce?.cancel();
+    realtimeEventSub?.cancel();
     unawaited(saveDraftNow());
     if (widget.state.isActiveConversation(widget.conversation)) {
       widget.state.setActiveConversation(null);
@@ -257,6 +262,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     voicePlaybackEventSub?.cancel();
     unawaited(voicePlayer.dispose());
     super.dispose();
+  }
+
+  void handleRealtimeEvent(CsacRealtimeEvent event) {
+    if (!mounted || chatLifecyclePaused) {
+      return;
+    }
+    if (event.conversation.type != widget.conversation.type ||
+        event.conversation.id != widget.conversation.id) {
+      return;
+    }
+    final currentLatestId = messages.isEmpty ? 0 : messages.last.id;
+    if (event.latestId > 0 && event.latestId <= currentLatestId) {
+      return;
+    }
+    realtimeRefreshDebounce?.cancel();
+    realtimeRefreshDebounce = Timer(const Duration(milliseconds: 160), () {
+      boostChatRefresh(cycles: 4);
+      unawaited(refresh(silent: true));
+    });
   }
 
   @override

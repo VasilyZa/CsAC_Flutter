@@ -142,6 +142,24 @@ class CsacApiClient {
 
   Map<String, String> get sessionSnapshot => Map<String, String>.from(_cookies);
 
+  String get sessionCookieHeader =>
+      _cookies.entries.map((entry) => '${entry.key}=${entry.value}').join('; ');
+
+  Uri get realtimeWebSocketUri {
+    final uri = Uri.parse(_baseUrl);
+    final segments =
+        uri.pathSegments.isEmpty
+              ? <String>['websocket.php']
+              : <String>[...uri.pathSegments]
+          ..last = 'websocket.php';
+    return uri.replace(
+      scheme: uri.scheme == 'https' ? 'wss' : 'ws',
+      pathSegments: segments,
+      query: null,
+      fragment: null,
+    );
+  }
+
   void setBaseUrl(String value) {
     _baseUrl = normalizeServerUrl(value);
     configureApiAssetBaseUrl(_baseUrl);

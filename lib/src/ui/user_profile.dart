@@ -34,31 +34,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   bool get isSelf => widget.state.user?.uid == widget.uid;
 
-  UserProfile? get placeholderProfile {
-    final currentUser = widget.state.user;
-    if (currentUser != null && currentUser.uid == widget.uid) {
-      return UserProfile(
-        uid: currentUser.uid,
-        nickname: currentUser.nickname,
-        username: currentUser.username,
-        avatar: currentUser.avatar,
-        onlineStatus: currentUser.onlineStatus,
-        platform: currentUser.platform,
-      );
-    }
-    final member = widget.member;
-    if (member != null && member.uid == widget.uid) {
-      return UserProfile(
-        uid: member.uid,
-        nickname: member.nickname.isEmpty ? member.name : member.nickname,
-        username: member.username,
-        avatar: member.avatar,
-        onlineStatus: member.onlineStatus,
-      );
-    }
-    return null;
-  }
-
   bool get canManageMember {
     if (widget.state.debugMode) {
       return true;
@@ -554,27 +529,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final strings = context.strings;
     final colors = Theme.of(context).colorScheme;
     final loaded = profile;
-    final headerProfile = loaded ?? placeholderProfile;
     final member = widget.member;
     return CsacPageScaffold(
       body: loading
-          ? buildProfileScrollView(
-              slivers: [
-                _UserProfileHeaderSliver(
-                  title:
-                      headerProfile?.displayName ??
-                      strings.text('User profile'),
-                  profile: headerProfile,
-                  avatarHeroTag: widget.avatarHeroTag,
-                  loading: loading,
-                  onRefresh: null,
-                ),
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ],
-            )
+          ? const Center(child: CircularProgressIndicator())
           : error != null
           ? buildProfileScrollView(
               slivers: [
@@ -829,66 +787,67 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ],
                         if (createdGroups.isNotEmpty) ...[
                           const SizedBox(height: 20),
-                          Text(
-                            strings.text(
+                          _ChatListSection(
+                            margin: EdgeInsets.zero,
+                            header: strings.text(
                               isSelf
                                   ? 'Created groups'
                                   : 'Created public groups',
                             ),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          for (final group in createdGroups)
-                            CsacCard(
-                              elevation: 0,
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              child: _RoundedInkClip(
-                                child: ListTile(
-                                  leading: _Avatar(
-                                    url: group.avatar,
-                                    fallback: Icons.groups_rounded,
-                                    name: group.name,
-                                    backgroundColor: colors.secondaryContainer,
-                                    foregroundColor:
-                                        colors.onSecondaryContainer,
+                            children: [
+                              for (final entry in createdGroups.indexed)
+                                _MotionListItem(
+                                  index: entry.$1,
+                                  child: _ChatListTile(
+                                    leading: _Avatar(
+                                      url: entry.$2.avatar,
+                                      fallback: CupertinoIcons.group_solid,
+                                      radius: 25,
+                                      name: entry.$2.name,
+                                    ),
+                                    title: Text(entry.$2.name),
+                                    subtitle: Text(
+                                      entry.$2.subtitle.isEmpty
+                                          ? strings.format('Room {id}', {
+                                              'id': entry.$2.id,
+                                            })
+                                          : entry.$2.subtitle,
+                                    ),
+                                    onTap: () => openCreatedGroup(entry.$2),
                                   ),
-                                  title: Text(group.name),
-                                  subtitle: Text(
-                                    group.subtitle.isEmpty
-                                        ? strings.format('Room {id}', {
-                                            'id': group.id,
-                                          })
-                                        : group.subtitle,
-                                  ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () => openCreatedGroup(group),
                                 ),
-                              ),
-                            ),
+                            ],
+                          ),
                         ],
                         if (commonGroups.isNotEmpty) ...[
                           const SizedBox(height: 20),
-                          Text(
-                            strings.text('Common groups'),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                          _ChatListSection(
+                            margin: EdgeInsets.zero,
+                            header: strings.text('Common groups'),
+                            children: [
+                              for (final entry in commonGroups.indexed)
+                                _MotionListItem(
+                                  index: entry.$1,
+                                  child: _ChatListTile(
+                                    leading: _Avatar(
+                                      url: '',
+                                      fallback: CupertinoIcons.group_solid,
+                                      radius: 25,
+                                      name: entry.$2.name,
+                                    ),
+                                    title: Text(entry.$2.name),
+                                    subtitle: Text(
+                                      entry.$2.subtitle.isEmpty
+                                          ? strings.format('Room {id}', {
+                                              'id': entry.$2.id,
+                                            })
+                                          : entry.$2.subtitle,
+                                    ),
+                                    onTap: () => openCommonGroup(entry.$2),
+                                  ),
+                                ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          for (final group in commonGroups)
-                            CsacCard(
-                              elevation: 0,
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              child: ListTile(
-                                leading: const Icon(Icons.groups_outlined),
-                                title: Text(group.name),
-                                subtitle: group.subtitle.isEmpty
-                                    ? null
-                                    : Text(group.subtitle),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => openCommonGroup(group),
-                              ),
-                            ),
                         ],
                       ],
                     ),
@@ -921,6 +880,7 @@ class _UserProfileHeaderSliver extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final loaded = profile;
     final hasProfile = loaded != null;
+    final canPop = Navigator.of(context).canPop();
     final expandedHeight = hasProfile ? 286.0 : 112.0;
     if (!hasProfile) {
       return CupertinoSliverNavigationBar(
@@ -945,6 +905,12 @@ class _UserProfileHeaderSliver extends StatelessWidget {
         profile: loaded,
         avatarHeroTag: avatarHeroTag,
         expandedHeight: expandedHeight,
+        leading: canPop
+            ? CupertinoNavigationBarBackButton(
+                color: Colors.white,
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         trailing: CsacIconButton(
           tooltip: strings.text('Refresh'),
           onPressed: loading || onRefresh == null
@@ -964,6 +930,7 @@ class _UserProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.profile,
     required this.avatarHeroTag,
     required this.expandedHeight,
+    this.leading,
     required this.trailing,
   });
 
@@ -971,6 +938,7 @@ class _UserProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
   final UserProfile profile;
   final Object? avatarHeroTag;
   final double expandedHeight;
+  final Widget? leading;
   final Widget trailing;
 
   @override
@@ -994,6 +962,12 @@ class _UserProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
           avatarHeroTag: avatarHeroTag,
           expandedHeight: expandedHeight,
         ),
+        if (leading != null)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top,
+            left: 4,
+            child: leading!,
+          ),
         Positioned(
           top: MediaQuery.paddingOf(context).top,
           right: 8,
@@ -1009,6 +983,7 @@ class _UserProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
         profile != oldDelegate.profile ||
         avatarHeroTag != oldDelegate.avatarHeroTag ||
         expandedHeight != oldDelegate.expandedHeight ||
+        leading != oldDelegate.leading ||
         trailing != oldDelegate.trailing;
   }
 }

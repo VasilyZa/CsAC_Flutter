@@ -104,7 +104,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   final updateChecker = VersionUpdateChecker();
   final localNotifications = CsacLocalNotificationService.instance;
   final backgroundRefreshChannel = const MethodChannel(
-    'ink.jjmm.csacflutter/background_refresh',
+    'com.xiaobai.csac/background_refresh',
   );
   final scaffoldMessengerKey = GlobalKey<CsacToastMessengerState>();
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -1290,6 +1290,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Uint8List? avatarBytes;
   bool submitting = false;
   bool sendingCode = false;
+  bool acceptedAgreements = false;
   int resendSeconds = 0;
   Timer? resendTimer;
   String? error;
@@ -1308,6 +1309,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> sendEmailCode() async {
     final strings = context.strings;
+    if (!acceptedAgreements) {
+      setState(
+        () => error = strings.text(
+          'Please read and agree to the User Agreement and Privacy Policy.',
+        ),
+      );
+      return;
+    }
     if (email.text.trim().isEmpty) {
       setState(() => error = strings.text('Please enter your email.'));
       return;
@@ -1372,6 +1381,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> submit() async {
     final strings = context.strings;
+    if (!acceptedAgreements) {
+      setState(
+        () => error = strings.text(
+          'Please read and agree to the User Agreement and Privacy Policy.',
+        ),
+      );
+      return;
+    }
     if (username.text.trim().isEmpty ||
         nickname.text.trim().isEmpty ||
         email.text.trim().isEmpty ||
@@ -1423,6 +1440,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => submitting = false);
       }
     }
+  }
+
+  void openAgreementDocument(String title, String assetPath) {
+    Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => AgreementDocumentScreen(
+          title: context.strings.text(title),
+          assetPath: assetPath,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1556,6 +1584,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  _RegisterAgreementConsent(
+                    accepted: acceptedAgreements,
+                    enabled: !submitting && !sendingCode,
+                    onChanged: (value) =>
+                        setState(() => acceptedAgreements = value),
+                    onOpenUserAgreement: () => openAgreementDocument(
+                      'User Agreement',
+                      'docs/用户协议.txt',
+                    ),
+                    onOpenPrivacyPolicy: () => openAgreementDocument(
+                      'Privacy Policy',
+                      'docs/隐私政策.txt',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   _AuthPrimaryButton(
                     label: resendSeconds > 0
                         ? strings.format('Resend in {seconds}s', {
@@ -1563,7 +1606,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           })
                         : strings.text('Send code'),
                     loading: sendingCode,
-                    onTap: resendSeconds > 0 ? null : sendEmailCode,
+                    onTap: acceptedAgreements && resendSeconds <= 0
+                        ? sendEmailCode
+                        : null,
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 12),
@@ -1589,7 +1634,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   _AuthPrimaryButton(
                     label: strings.text('Create account'),
                     loading: submitting,
-                    onTap: submit,
+                    onTap: acceptedAgreements ? submit : null,
                   ),
                   const SizedBox(height: 12),
                   CupertinoButton(
@@ -1600,6 +1645,173 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisterAgreementConsent extends StatelessWidget {
+  const _RegisterAgreementConsent({
+    required this.accepted,
+    required this.enabled,
+    required this.onChanged,
+    required this.onOpenUserAgreement,
+    required this.onOpenPrivacyPolicy,
+  });
+
+  final bool accepted;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onOpenUserAgreement;
+  final VoidCallback onOpenPrivacyPolicy;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CsacPressable(
+      onTap: enabled ? () => onChanged(!accepted) : null,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedContainer(
+            duration: _csacPressFeedbackDuration,
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(top: 1),
+            decoration: BoxDecoration(
+              color: accepted ? primary : colors.cardBackground,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: accepted
+                    ? primary
+                    : colors.separator.withValues(alpha: 0.65),
+                width: 1,
+              ),
+            ),
+            child: accepted
+                ? const Icon(
+                    CupertinoIcons.check_mark,
+                    size: 15,
+                    color: CupertinoColors.white,
+                  )
+                : null,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  strings.text('I have read and agree to'),
+                  style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+                ),
+                const SizedBox(width: 4),
+                _AgreementLink(
+                  label: strings.text('User Agreement'),
+                  onTap: onOpenUserAgreement,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  strings.text('and'),
+                  style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+                ),
+                const SizedBox(width: 4),
+                _AgreementLink(
+                  label: strings.text('Privacy Policy'),
+                  onTap: onOpenPrivacyPolicy,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgreementLink extends StatelessWidget {
+  const _AgreementLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: primary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class AgreementDocumentScreen extends StatelessWidget {
+  const AgreementDocumentScreen({
+    super.key,
+    required this.title,
+    required this.assetPath,
+  });
+
+  final String title;
+  final String assetPath;
+
+  Future<String> loadDocument() async {
+    final raw = await rootBundle.loadString(assetPath);
+    return raw.replaceFirst(RegExp(r'^\uFEFF'), '').trimRight();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return CsacPageScaffold(
+      backgroundColor: colors.systemBackground,
+      appBar: CsacNavigationBar(title: Text(title)),
+      body: SafeArea(
+        child: FutureBuilder<String>(
+          future: loadDocument(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CupertinoActivityIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    strings.text('Unable to load document.'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.secondaryLabel),
+                  ),
+                ),
+              );
+            }
+            return CsacSingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: _AdaptivePageFrame(
+                maxWidth: 720,
+                child: Text(
+                  snapshot.data ?? '',
+                  style: TextStyle(
+                    color: colors.label,
+                    fontSize: 15,
+                    height: 1.55,
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -1914,28 +2126,29 @@ class _AuthPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
     final primary = CupertinoTheme.of(context).primaryColor;
+    final enabled = onTap != null && !loading;
     return _CsacPressable(
       onTap: loading ? null : onTap,
       child: Container(
         height: 52,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: loading
-                ? [colors.tertiaryFill, colors.tertiaryFill]
-                : [primary, primary.withValues(alpha: 0.8)],
+            colors: enabled
+                ? [primary, primary.withValues(alpha: 0.8)]
+                : [colors.tertiaryFill, colors.tertiaryFill],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: loading
-              ? []
-              : [
+          boxShadow: enabled
+              ? [
                   BoxShadow(
                     color: primary.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
-                ],
+                ]
+              : [],
         ),
         alignment: Alignment.center,
         child: loading

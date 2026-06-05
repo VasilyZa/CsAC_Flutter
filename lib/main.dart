@@ -56,6 +56,7 @@ import 'src/platform/desktop_window_chrome.dart';
 import 'src/platform/platform_support.dart';
 import 'src/platform/windows_tray.dart';
 import 'src/preferences.dart';
+import 'src/realtime_client.dart';
 import 'src/update_checker.dart';
 
 part 'src/ui/app_shell.dart';

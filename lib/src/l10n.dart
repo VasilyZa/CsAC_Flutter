@@ -126,6 +126,13 @@ const _zh = <String, String>{
   'Code sent.': '验证码已发送。',
   'Resend in {seconds}s': '{seconds} 秒后重发',
   'Please enter your email.': '请输入邮箱。',
+  'I have read and agree to': '我已阅读并同意',
+  'User Agreement': '用户协议',
+  'Privacy Policy': '隐私政策',
+  'and': '和',
+  'Please read and agree to the User Agreement and Privacy Policy.':
+      '请先阅读并同意用户协议和隐私政策。',
+  'Unable to load document.': '无法加载文档。',
   'Email verification': '邮箱验证',
   'Verify email': '验证邮箱',
   'Verify your email to continue': '请先验证邮箱后继续',

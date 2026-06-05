@@ -12,6 +12,7 @@ import 'local_cache.dart';
 import 'models.dart';
 import 'platform/app_storage.dart';
 import 'preferences.dart';
+import 'realtime_client.dart';
 
 class PerformanceCacheStats {
   const PerformanceCacheStats({
@@ -54,12 +55,39 @@ class CsacAppState extends ChangeNotifier {
     : client = client ?? CsacApiClient(),
       cache = cache ?? CsacLocalCache() {
     this.client.onHttpProtocolChanged = _handleHttpProtocolChanged;
+    _realtimeEventSub = realtime.events.listen(_handleRealtimeEvent);
+    _realtimeStatusSub = realtime.statusChanges.listen((status) {
+      if (!_realtimeConnecting &&
+          (status == CsacRealtimeStatus.disconnected ||
+              status == CsacRealtimeStatus.error)) {
+        _scheduleRealtimeReconnect();
+      }
+      notifyListeners();
+    });
   }
 
   final CsacApiClient client;
   final CsacLocalCache cache;
+  final CsacRealtimeClient realtime = CsacRealtimeClient();
+  StreamSubscription<CsacRealtimeEvent>? _realtimeEventSub;
+  StreamSubscription<CsacRealtimeStatus>? _realtimeStatusSub;
+  Timer? _realtimeReconnectTimer;
+  Timer? _realtimeHomeRefreshDebounce;
+  bool _realtimeConnecting = false;
 
   String get connectionProtocol => apiHttpProtocolLabel(activeHttpProtocol);
+
+  Stream<CsacRealtimeEvent> get realtimeEvents => realtime.events;
+
+  String get realtimeStatusLabel => !preferences.enableExperimentalWebSocket
+      ? 'Disabled'
+      : switch (realtime.status) {
+          CsacRealtimeStatus.disabled => 'Disabled',
+          CsacRealtimeStatus.disconnected => 'Disconnected',
+          CsacRealtimeStatus.connecting => 'Connecting',
+          CsacRealtimeStatus.connected => 'WebSocket connected',
+          CsacRealtimeStatus.error => 'WebSocket error',
+        };
 
   ApiHttpProtocol get activeHttpProtocol => client.lastHttpProtocol;
 
@@ -87,6 +115,16 @@ class CsacAppState extends ChangeNotifier {
 
   String get currentUserAvatar => user?.avatar.trim() ?? '';
 
+  @override
+  void dispose() {
+    _realtimeReconnectTimer?.cancel();
+    _realtimeHomeRefreshDebounce?.cancel();
+    unawaited(_realtimeEventSub?.cancel());
+    unawaited(_realtimeStatusSub?.cancel());
+    unawaited(realtime.close());
+    super.dispose();
+  }
+
   Future<void> initialize() async {
     bootstrapping = true;
     restoreStatus = CsacStrings(
@@ -113,6 +151,7 @@ class CsacAppState extends ChangeNotifier {
       await refreshNotificationCounts();
       unawaited(loadEmojiStickers(forceRefresh: true));
       await refreshDebugMode();
+      unawaited(ensureRealtimeConnection());
     } on CsacAuthException catch (err) {
       await client.clearSession();
       user = await cache.loadUser();
@@ -173,6 +212,7 @@ class CsacAppState extends ChangeNotifier {
         await refreshNotificationCounts();
         unawaited(loadEmojiStickers(forceRefresh: true));
         await refreshDebugMode();
+        unawaited(ensureRealtimeConnection());
       }
     } catch (err) {
       error = err.toString();
@@ -222,6 +262,7 @@ class CsacAppState extends ChangeNotifier {
       await refreshNotificationCounts();
       unawaited(loadEmojiStickers(forceRefresh: true));
       await refreshDebugMode();
+      unawaited(ensureRealtimeConnection());
     } catch (err) {
       error = err.toString();
       rethrow;
@@ -251,6 +292,7 @@ class CsacAppState extends ChangeNotifier {
     await refreshNotificationCounts();
     unawaited(loadEmojiStickers(forceRefresh: true));
     await refreshDebugMode();
+    unawaited(ensureRealtimeConnection());
   }
 
   Future<void> updateThemeMode(ThemeMode mode) async {
@@ -439,6 +481,17 @@ class CsacAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateExperimentalWebSocket(bool enabled) async {
+    preferences = preferences.copyWith(enableExperimentalWebSocket: enabled);
+    await preferences.save();
+    notifyListeners();
+    if (enabled) {
+      unawaited(ensureRealtimeConnection(force: true));
+    } else {
+      await stopRealtimeConnection();
+    }
+  }
+
   bool verifyAppLockPin(String pin) {
     return preferences.verifyAppLockPin(pin);
   }
@@ -456,6 +509,7 @@ class CsacAppState extends ChangeNotifier {
     }
     preferences = preferences.copyWith(serverUrl: normalized);
     await preferences.save();
+    await stopRealtimeConnection();
     _applyPreferredServer();
     await client.clearSession();
     await cache.clear();
@@ -480,6 +534,7 @@ class CsacAppState extends ChangeNotifier {
     String? previousServerUrl,
     bool removeLoginRecord = false,
   }) async {
+    await stopRealtimeConnection();
     if (removeLoginRecord &&
         previousUser != null &&
         previousServerUrl != null) {
@@ -582,6 +637,73 @@ class CsacAppState extends ChangeNotifier {
     client.setBaseUrl(preferences.serverUrl);
   }
 
+  Future<void> ensureRealtimeConnection({bool force = false}) async {
+    if (!preferences.enableExperimentalWebSocket || user == null) {
+      await stopRealtimeConnection();
+      return;
+    }
+    if (_realtimeConnecting) {
+      return;
+    }
+    if (!force && realtime.connected) {
+      realtime.resubscribe(conversations);
+      return;
+    }
+    _realtimeReconnectTimer?.cancel();
+    _realtimeConnecting = true;
+    notifyListeners();
+    try {
+      final cookie = client.sessionCookieHeader;
+      await realtime.connect(
+        uri: client.realtimeWebSocketUri,
+        headers: <String, String>{
+          if (cookie.isNotEmpty) 'Cookie': cookie,
+          'Origin': client.originUrl,
+          'User-Agent': 'CsAC/$csacClientBranch experimental-websocket',
+        },
+        conversations: conversations,
+      );
+      if (realtime.connected) {
+        _realtimeReconnectTimer?.cancel();
+        _realtimeReconnectTimer = null;
+      } else {
+        _scheduleRealtimeReconnect();
+      }
+    } finally {
+      _realtimeConnecting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopRealtimeConnection() async {
+    _realtimeReconnectTimer?.cancel();
+    _realtimeReconnectTimer = null;
+    await realtime.disconnect();
+    _realtimeReconnectTimer?.cancel();
+    _realtimeReconnectTimer = null;
+    notifyListeners();
+  }
+
+  void _scheduleRealtimeReconnect() {
+    if (!preferences.enableExperimentalWebSocket || user == null) {
+      return;
+    }
+    _realtimeReconnectTimer?.cancel();
+    _realtimeReconnectTimer = Timer(const Duration(seconds: 12), () {
+      unawaited(ensureRealtimeConnection(force: true));
+    });
+  }
+
+  void _handleRealtimeEvent(CsacRealtimeEvent event) {
+    if (!preferences.enableExperimentalWebSocket || user == null) {
+      return;
+    }
+    _realtimeHomeRefreshDebounce?.cancel();
+    _realtimeHomeRefreshDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(refreshHome());
+    });
+  }
+
   Future<String> currentClientPlatform() async {
     var rawVersion = '0.0.0';
     try {
@@ -628,6 +750,7 @@ class CsacAppState extends ChangeNotifier {
       await refreshNotificationCounts();
       unawaited(loadEmojiStickers(forceRefresh: true));
       await refreshDebugMode();
+      unawaited(ensureRealtimeConnection());
     } on CsacAuthException {
       await client.clearSession();
       await LoginAccountStore.clearSession(record);
@@ -715,6 +838,13 @@ class CsacAppState extends ChangeNotifier {
     conversations = normalized;
     await cache.saveConversations(normalized);
     offlineMode = false;
+    if (preferences.enableExperimentalWebSocket) {
+      if (realtime.connected) {
+        realtime.resubscribe(normalized);
+      } else {
+        unawaited(ensureRealtimeConnection());
+      }
+    }
     notifyListeners();
   }
 

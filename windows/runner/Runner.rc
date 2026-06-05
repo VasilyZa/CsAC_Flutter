@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "ink.jjmm.csacflutter" "\0"
+            VALUE "CompanyName", "com.xiaobai.csac" "\0"
             VALUE "FileDescription", "csac" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "csac" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 ink.jjmm.csacflutter. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.xiaobai.csac. All rights reserved." "\0"
             VALUE "OriginalFilename", "csac.exe" "\0"
             VALUE "ProductName", "csac" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

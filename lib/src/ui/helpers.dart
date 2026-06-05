@@ -787,6 +787,108 @@ class _CupertinoListTile extends StatelessWidget {
   }
 }
 
+class _ChatListSection extends StatelessWidget {
+  const _ChatListSection({required this.children, this.header, this.margin});
+
+  final List<Widget> children;
+  final String? header;
+  final EdgeInsetsGeometry? margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoListSection.insetGrouped(
+      margin: margin ?? const EdgeInsets.fromLTRB(12, 2, 12, 12),
+      header: header == null ? null : Text(header!.toUpperCase()),
+      backgroundColor: const Color(0x00000000),
+      children: children,
+    );
+  }
+}
+
+class _ChatListTile extends StatelessWidget {
+  const _ChatListTile({
+    required this.title,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.onLongPress,
+    this.onSecondaryTap,
+    this.selected = false,
+    this.subtitleColor,
+    this.subtitleFontWeight,
+    this.backgroundColor,
+  });
+
+  final Widget title;
+  final Widget? leading;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onSecondaryTap;
+  final bool selected;
+  final Color? subtitleColor;
+  final FontWeight? subtitleFontWeight;
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final tileColor =
+        backgroundColor ??
+        (selected
+            ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
+            : colors.cardBackground);
+    final resolvedTitleColor = selected ? primary : colors.label;
+    final tile = CupertinoListTile(
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
+      leadingSize: 50,
+      leadingToTitle: 12,
+      backgroundColor: tileColor,
+      leading: leading,
+      title: DefaultTextStyle.merge(
+        style: TextStyle(
+          color: resolvedTitleColor,
+          fontSize: 16.5,
+          fontWeight: FontWeight.w600,
+          height: 1.16,
+        ),
+        child: title,
+      ),
+      subtitle: subtitle == null
+          ? null
+          : DefaultTextStyle.merge(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: subtitleColor ?? colors.secondaryLabel,
+                fontSize: 13,
+                fontWeight: subtitleFontWeight ?? FontWeight.w400,
+                height: 1.22,
+              ),
+              child: subtitle!,
+            ),
+      trailing:
+          trailing ??
+          (onTap == null
+              ? null
+              : Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 13,
+                  color: colors.tertiaryLabel,
+                )),
+    );
+    return _CupertinoListPressable(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTap: onSecondaryTap,
+      child: tile,
+    );
+  }
+}
+
 class _CupertinoExpansionTile extends StatefulWidget {
   const _CupertinoExpansionTile({
     required this.title,
