@@ -1711,74 +1711,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final canRecall = message.canRecall || mine;
     final canEssence = widget.conversation.type == ConversationType.group;
     final action =
-        await showCupertinoModalPopup<_MessageAction>(
+        await showCsacActionSheet<_MessageAction>(
           context: context,
-          builder: (context) => CupertinoActionSheet(
-            title: Text(strings.text('Message actions')),
-            message: Text('#${message.id} ${message.sender}'),
-            actions: [
-              CupertinoActionSheetAction(
-                onPressed: () =>
-                    Navigator.of(context).pop(_MessageAction.reply),
-                child: Text(strings.text('Reply')),
-              ),
-              CupertinoActionSheetAction(
-                onPressed: () =>
-                    Navigator.of(context).pop(_MessageAction.select),
-                child: Text(strings.text('Select messages')),
-              ),
-              CupertinoActionSheetAction(
-                onPressed: () =>
-                    Navigator.of(context).pop(_MessageAction.copyText),
-                child: Text(strings.text('Copy text')),
-              ),
-              if (plainText.isNotEmpty)
-                CupertinoActionSheetAction(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.selectText),
-                  child: Text(strings.text('Select message text')),
-                ),
-              if (message.imageUrl.isNotEmpty)
-                CupertinoActionSheetAction(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.copyImage),
-                  child: Text(strings.text('Copy image link')),
-                ),
-              if (message.imageUrl.isNotEmpty)
-                CupertinoActionSheetAction(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.openImage),
-                  child: Text(strings.text('Open image')),
-                ),
-              if (message.imageUrl.isNotEmpty)
-                CupertinoActionSheetAction(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.downloadImage),
-                  child: Text(strings.text('Download image')),
-                ),
-              if (canRecall)
-                CupertinoActionSheetAction(
-                  isDestructiveAction: true,
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.recall),
-                  child: Text(strings.text('Recall')),
-                ),
-              if (canEssence)
-                CupertinoActionSheetAction(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_MessageAction.essence),
-                  child: Text(
-                    strings.text(
-                      message.isEssence ? 'Remove essence' : 'Set essence',
-                    ),
-                  ),
-                ),
-            ],
-            cancelButton: CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(strings.text('Cancel')),
+          title: strings.text('Message actions'),
+          message: '#${message.id} ${message.sender}',
+          actions: [
+            CsacActionSheetAction(
+              value: _MessageAction.reply,
+              title: strings.text('Reply'),
+              icon: CupertinoIcons.reply,
             ),
-          ),
+            CsacActionSheetAction(
+              value: _MessageAction.select,
+              title: strings.text('Select messages'),
+              icon: CupertinoIcons.check_mark_circled,
+            ),
+            CsacActionSheetAction(
+              value: _MessageAction.copyText,
+              title: strings.text('Copy text'),
+              icon: CupertinoIcons.doc_on_doc,
+            ),
+            if (plainText.isNotEmpty)
+              CsacActionSheetAction(
+                value: _MessageAction.selectText,
+                title: strings.text('Select message text'),
+                icon: CupertinoIcons.textformat,
+              ),
+            if (message.imageUrl.isNotEmpty)
+              CsacActionSheetAction(
+                value: _MessageAction.copyImage,
+                title: strings.text('Copy image link'),
+                icon: CupertinoIcons.link,
+              ),
+            if (message.imageUrl.isNotEmpty)
+              CsacActionSheetAction(
+                value: _MessageAction.openImage,
+                title: strings.text('Open image'),
+                icon: CupertinoIcons.photo,
+              ),
+            if (message.imageUrl.isNotEmpty)
+              CsacActionSheetAction(
+                value: _MessageAction.downloadImage,
+                title: strings.text('Download image'),
+                icon: CupertinoIcons.arrow_down_circle,
+              ),
+            if (canRecall)
+              CsacActionSheetAction(
+                value: _MessageAction.recall,
+                title: strings.text('Recall'),
+                icon: CupertinoIcons.arrow_counterclockwise,
+                destructive: true,
+              ),
+            if (canEssence)
+              CsacActionSheetAction(
+                value: _MessageAction.essence,
+                title: strings.text(
+                  message.isEssence ? 'Remove essence' : 'Set essence',
+                ),
+                icon: CupertinoIcons.star,
+              ),
+          ],
         ).whenComplete(() {
           if (mounted && pressedMessageId == message.id) {
             setState(() => pressedMessageId = null);
@@ -1894,45 +1886,104 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   List<_ComposeMenuAction> composeMenuActions(CsacStrings strings) {
     return [
-      _ComposeMenuAction(value: 'image', label: strings.text('Image')),
-      _ComposeMenuAction(value: 'camera', label: strings.text('Take photo')),
-      _ComposeMenuAction(value: 'emoji', label: strings.text('Emoji stickers')),
+      _ComposeMenuAction(
+        value: 'image',
+        label: strings.text('Image'),
+        icon: CupertinoIcons.photo,
+        section: strings.text('Send'),
+      ),
+      _ComposeMenuAction(
+        value: 'camera',
+        label: strings.text('Take photo'),
+        icon: CupertinoIcons.camera,
+        section: strings.text('Send'),
+      ),
+      _ComposeMenuAction(
+        value: 'emoji',
+        label: strings.text('Emoji stickers'),
+        icon: CupertinoIcons.smiley,
+        section: strings.text('Send'),
+      ),
       if (supportsVoiceRecording)
         _ComposeMenuAction(
           value: 'recordVoice',
           label: strings.text('Record voice'),
+          icon: CupertinoIcons.mic,
+          section: strings.text('Send'),
         ),
-      _ComposeMenuAction(value: 'voiceFile', label: strings.text('Voice file')),
+      _ComposeMenuAction(
+        value: 'voiceFile',
+        label: strings.text('Voice file'),
+        icon: CupertinoIcons.waveform,
+        section: strings.text('Send'),
+      ),
       if (widget.conversation.type == ConversationType.group)
-        _ComposeMenuAction(value: 'mention', label: strings.text('Mention')),
+        _ComposeMenuAction(
+          value: 'mention',
+          label: strings.text('Mention'),
+          icon: CupertinoIcons.at,
+          section: strings.text('Tools'),
+        ),
       if (widget.conversation.type == ConversationType.group)
-        _ComposeMenuAction(value: 'essence', label: strings.text('Essence')),
-      _ComposeMenuAction(value: 'media', label: strings.text('Media')),
+        _ComposeMenuAction(
+          value: 'essence',
+          label: strings.text('Essence'),
+          icon: CupertinoIcons.star,
+          section: strings.text('Tools'),
+        ),
+      _ComposeMenuAction(
+        value: 'media',
+        label: strings.text('Media'),
+        icon: CupertinoIcons.rectangle_stack,
+        section: strings.text('Tools'),
+      ),
       if (supportsLocalFiles)
-        _ComposeMenuAction(value: 'export', label: strings.text('Export')),
+        _ComposeMenuAction(
+          value: 'export',
+          label: strings.text('Export'),
+          icon: CupertinoIcons.square_arrow_up,
+          section: strings.text('Tools'),
+        ),
     ];
   }
 
   Future<void> showComposeActions() async {
     FocusManager.instance.primaryFocus?.unfocus();
     final strings = context.strings;
-    final selected = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('Add to message')),
-        actions: [
-          for (final action in composeMenuActions(strings))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(action.value),
-              child: Text(action.label),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
-        ),
-      ),
-    );
+    final actions = composeMenuActions(strings);
+    final selected =
+        _ActionSheetPreference.styleOf(context) ==
+            CsacActionSheetStyle.cupertino
+        ? await showCsacActionSheet<String>(
+            context: context,
+            title: strings.text('Add to message'),
+            style: CsacActionSheetStyle.cupertino,
+            actions: [
+              for (final action in actions)
+                CsacActionSheetAction(
+                  value: action.value,
+                  title: action.label,
+                  icon: action.icon,
+                ),
+            ],
+          )
+        : await showCupertinoModalPopup<String>(
+            context: context,
+            builder: (context) {
+              if (MediaQuery.sizeOf(context).width < 500) {
+                return _CompactComposeActionPanel(
+                  title: strings.text('Add to message'),
+                  cancelLabel: strings.text('Cancel'),
+                  actions: actions,
+                );
+              }
+              return _ComposeActionPanel(
+                title: strings.text('Add to message'),
+                cancelLabel: strings.text('Cancel'),
+                actions: actions,
+              );
+            },
+          );
     if (selected != null && mounted) {
       await handleComposeMenuAction(selected);
     }
@@ -1989,34 +2040,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> showChatMoreActions() async {
     final strings = context.strings;
-    final action = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('refresh'),
-            child: Text(strings.text('Refresh')),
-          ),
-          if (widget.conversation.type == ConversationType.group)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('essence'),
-              child: Text(strings.text('Essence')),
-            ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('media'),
-            child: Text(strings.text('Media and files')),
-          ),
-          if (supportsLocalFiles)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('export'),
-              child: Text(strings.text('Export chat history')),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
-        ),
+    final actions = <_ComposeMenuAction>[
+      _ComposeMenuAction(
+        value: 'refresh',
+        label: strings.text('Refresh'),
+        icon: CupertinoIcons.refresh,
+        section: strings.text('More'),
       ),
+      if (widget.conversation.type == ConversationType.group)
+        _ComposeMenuAction(
+          value: 'essence',
+          label: strings.text('Essence'),
+          icon: CupertinoIcons.star,
+          section: strings.text('More'),
+        ),
+      _ComposeMenuAction(
+        value: 'media',
+        label: strings.text('Media and files'),
+        icon: CupertinoIcons.rectangle_stack,
+        section: strings.text('More'),
+      ),
+      if (supportsLocalFiles)
+        _ComposeMenuAction(
+          value: 'export',
+          label: strings.text('Export chat history'),
+          icon: CupertinoIcons.square_arrow_up,
+          section: strings.text('More'),
+        ),
+    ];
+    final action = await showCsacActionSheet<String>(
+      context: context,
+      title: strings.text('More'),
+      actions: [
+        for (final action in actions)
+          CsacActionSheetAction(
+            value: action.value,
+            title: action.label,
+            icon: action.icon,
+          ),
+      ],
     );
     if (action != null && mounted) {
       await handleAppBarMenuAction(action);
@@ -3313,8 +3375,16 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final textColor = cupertinoChatBubbleTextColor(context, color);
     final secondaryTextColor = textColor.withValues(alpha: 0.72);
     final replyColor = widget.mine
-        ? CupertinoColors.white.withValues(alpha: 0.16)
-        : cupertinoColors.fill.withValues(alpha: bubbleOpacity);
+        ? CupertinoColors.white.withValues(alpha: 0.18)
+        : CupertinoColors.secondarySystemFill
+              .resolveFrom(context)
+              .withValues(alpha: 0.46);
+    final replyTextColor = textColor.withValues(
+      alpha: widget.mine ? 0.82 : 0.68,
+    );
+    final replyAccentColor = widget.mine
+        ? CupertinoColors.white.withValues(alpha: 0.48)
+        : primary.withValues(alpha: 0.42);
     final borderRadius = chatBubbleBorderRadius(
       widget.preferences.chatBubbleCornerStyle,
       widget.mine,
@@ -3403,26 +3473,43 @@ class _MessageBubbleState extends State<_MessageBubble> {
                         color: replyColor,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
-                        widget.replyMessage == null
-                            ? strings.format('Reply #{id}', {
-                                'id': widget.message.replyTo,
-                              })
-                            : strings.format('Reply {sender}: {message}', {
-                                'sender': widget.replyMessage!.sender,
-                                'message': compactMessage(
-                                  chatMessagePlainText(
-                                    widget.replyMessage!,
-                                    strings,
-                                  ),
-                                ),
-                              }),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: secondaryTextColor,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: replyAccentColor,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              widget.replyMessage == null
+                                  ? strings.format('Reply #{id}', {
+                                      'id': widget.message.replyTo,
+                                    })
+                                  : strings
+                                        .format('Reply {sender}: {message}', {
+                                          'sender': widget.replyMessage!.sender,
+                                          'message': compactMessage(
+                                            chatMessagePlainText(
+                                              widget.replyMessage!,
+                                              strings,
+                                            ),
+                                          ),
+                                        }),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: replyTextColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -4913,10 +5000,479 @@ class _AnimatedSendButton extends StatelessWidget {
 }
 
 class _ComposeMenuAction {
-  const _ComposeMenuAction({required this.value, required this.label});
+  const _ComposeMenuAction({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.section,
+  });
 
   final String value;
   final String label;
+  final IconData icon;
+  final String section;
+}
+
+class _CompactComposeActionPanel extends StatelessWidget {
+  const _CompactComposeActionPanel({
+    required this.title,
+    required this.cancelLabel,
+    required this.actions,
+  });
+
+  final String title;
+  final String cancelLabel;
+  final List<_ComposeMenuAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final media = MediaQuery.of(context);
+    final screenSize = media.size;
+    final tiny = screenSize.height < 430 || screenSize.shortestSide < 340;
+    final horizontalPadding = tiny ? 6.0 : 10.0;
+    final bottomPadding = tiny ? 6.0 : 10.0;
+    final titleHeight = tiny ? 30.0 : 38.0;
+    final rowHeight = tiny ? 36.0 : 44.0;
+    final cancelHeight = tiny ? 38.0 : 44.0;
+    final sectionGap = tiny ? 6.0 : 8.0;
+    final maxPanelHeight = math.max(
+      160.0,
+      screenSize.height - media.padding.top - media.viewInsets.bottom - 8,
+    );
+    final estimatedHeight =
+        bottomPadding +
+        titleHeight +
+        actions.length * rowHeight +
+        actions.length * 0.5 +
+        sectionGap +
+        cancelHeight;
+    final panelHeight = math.min(estimatedHeight, maxPanelHeight);
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: panelHeight,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              0,
+              horizontalPadding,
+              bottomPadding,
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: CupertinoPopupSurface(
+                      isSurfacePainted: true,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: titleHeight,
+                            child: Center(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.secondaryLabel,
+                                  fontSize: tiny ? 12 : 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _CompactActionDivider(color: colors.separator),
+                          Expanded(
+                            child: CsacListView(
+                              padding: EdgeInsets.zero,
+                              children: [
+                                for (final entry in actions.indexed) ...[
+                                  _CompactComposeActionRow(
+                                    action: entry.$2,
+                                    height: rowHeight,
+                                    tiny: tiny,
+                                  ),
+                                  if (entry.$1 != actions.length - 1)
+                                    _CompactActionDivider(
+                                      color: colors.separator,
+                                      indent: tiny ? 44 : 52,
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: sectionGap),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CupertinoPopupSurface(
+                    isSurfacePainted: true,
+                    child: _CupertinoListPressable(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: SizedBox(
+                        height: cancelHeight,
+                        child: Center(
+                          child: Text(
+                            cancelLabel,
+                            style: TextStyle(
+                              color: colors.primaryColor,
+                              fontSize: tiny ? 17 : 19,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactActionDivider extends StatelessWidget {
+  const _CompactActionDivider({required this.color, this.indent = 52});
+
+  final Color color;
+  final double indent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 0.5,
+      margin: EdgeInsets.only(left: indent),
+      color: color.withValues(alpha: 0.55),
+    );
+  }
+}
+
+class _CompactComposeActionRow extends StatelessWidget {
+  const _CompactComposeActionRow({
+    required this.action,
+    required this.height,
+    required this.tiny,
+  });
+
+  final _ComposeMenuAction action;
+  final double height;
+  final bool tiny;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CupertinoListPressable(
+      onTap: () => Navigator.of(context).pop(action.value),
+      child: SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            SizedBox(
+              width: tiny ? 44 : 52,
+              child: Icon(action.icon, size: tiny ? 18 : 20, color: primary),
+            ),
+            Expanded(
+              child: Text(
+                action.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                  color: colors.label,
+                  fontSize: tiny ? 15 : 17,
+                  fontWeight: FontWeight.w500,
+                  height: 1.1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposeActionPanel extends StatelessWidget {
+  const _ComposeActionPanel({
+    required this.title,
+    required this.cancelLabel,
+    required this.actions,
+  });
+
+  final String title;
+  final String cancelLabel;
+  final List<_ComposeMenuAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final isWide = screenSize.width >= 700;
+    final panelWidth = isWide
+        ? math.min(560.0, screenSize.width - 48)
+        : screenSize.width;
+    final panelRadius = isWide ? 28.0 : 22.0;
+    final sections = <String, List<_ComposeMenuAction>>{};
+    for (final action in actions) {
+      sections
+          .putIfAbsent(action.section, () => <_ComposeMenuAction>[])
+          .add(action);
+    }
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SizedBox(
+        width: panelWidth,
+        child: ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(panelRadius),
+          ),
+          child: CupertinoPopupSurface(
+            isSurfacePainted: true,
+            child: SafeArea(
+              top: false,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: screenSize.height * 0.62,
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(panelRadius),
+                    ),
+                    border: Border.all(
+                      color: colors.separator.withValues(alpha: 0.34),
+                      width: 0.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: CupertinoColors.black.withValues(alpha: 0.22),
+                        blurRadius: 28,
+                        offset: const Offset(0, -10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 8, 8, 6),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: colors.tertiaryLabel.withValues(
+                                  alpha: 0.38,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: TextStyle(
+                                      color: colors.label,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.18,
+                                    ),
+                                  ),
+                                ),
+                                CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: Text(cancelLabel),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      CsacSingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          14,
+                          2,
+                          14,
+                          isWide ? 18 : 12,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final entry in sections.entries) ...[
+                              _ComposeActionSection(
+                                title: entry.key,
+                                actions: entry.value,
+                              ),
+                              if (entry.key != sections.keys.last)
+                                const SizedBox(height: 12),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposeActionSection extends StatelessWidget {
+  const _ComposeActionSection({required this.title, required this.actions});
+
+  final String title;
+  final List<_ComposeMenuAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colors.separator.withValues(alpha: 0.28),
+          width: 0.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  color: colors.secondaryLabel,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.45,
+                ),
+              ),
+            ),
+            _ComposeActionGrid(actions: actions),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposeActionGrid extends StatelessWidget {
+  const _ComposeActionGrid({required this.actions});
+
+  final List<_ComposeMenuAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 460
+            ? 5
+            : constraints.maxWidth >= 340
+            ? 4
+            : 3;
+        final spacing = 4.0;
+        final itemWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final action in actions)
+              SizedBox(
+                width: itemWidth,
+                child: _ComposeActionGridItem(action: action),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ComposeActionGridItem extends StatelessWidget {
+  const _ComposeActionGridItem({required this.action});
+
+  final _ComposeMenuAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return _CupertinoListPressable(
+      onTap: () => Navigator.of(context).pop(action.value),
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.secondarySystemGroupedBackground
+                      .resolveFrom(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: colors.separator.withValues(alpha: 0.28),
+                    width: 0.5,
+                  ),
+                ),
+                child: Icon(action.icon, color: primary, size: 23),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                action.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.label,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EmojiStickerPicker extends StatefulWidget {
@@ -6743,62 +7299,65 @@ class _EssenceMessagesScreenState extends State<EssenceMessagesScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: load,
-        child: CsacListView(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-          children: [
-            if (loading) const LinearProgressIndicator(minHeight: 2),
-            if (error != null) _InlineError(message: error!, onRetry: load),
-            _EssenceStatsHeader(
-              stats: effectiveStats,
-              loading: loadingStats,
-              statsError: statsError,
-              avatarOverrides: contributorAvatars,
-              selectedType: statsType,
-              typeOptions: statsTypeOptions,
-              onTypeChanged: changeStatsType,
-            ),
-            const SizedBox(height: 12),
-            CsacTextField(
-              controller: search,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                labelText: strings.text('Search essence messages'),
-                border: const OutlineInputBorder(),
-                suffixIcon: query.isEmpty
-                    ? null
-                    : CsacIconButton(
-                        tooltip: strings.text('Clear'),
-                        onPressed: search.clear,
-                        icon: const Icon(Icons.clear),
-                      ),
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: load,
+          child: CsacListView(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+            children: [
+              if (loading) const LinearProgressIndicator(minHeight: 2),
+              if (error != null) _InlineError(message: error!, onRetry: load),
+              _EssenceStatsHeader(
+                stats: effectiveStats,
+                loading: loadingStats,
+                statsError: statsError,
+                avatarOverrides: contributorAvatars,
+                selectedType: statsType,
+                typeOptions: statsTypeOptions,
+                onTypeChanged: changeStatsType,
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              strings.format('{count} essence messages', {
-                'count': filteredMessages.length,
-              }),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            if (!loading && messages.isEmpty)
-              _EmptyPanel(message: strings.text('No essence messages.'))
-            else if (!loading && filteredMessages.isEmpty)
-              _EmptyPanel(
-                message: strings.text('No matching essence messages.'),
-              )
-            else
-              for (final message in filteredMessages)
-                _EssenceMessageTile(
-                  message: message,
-                  preferences: widget.state.preferences,
-                  onTap: () => openMessage(message),
+              const SizedBox(height: 12),
+              CsacTextField(
+                controller: search,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  labelText: strings.text('Search essence messages'),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : CsacIconButton(
+                          tooltip: strings.text('Clear'),
+                          onPressed: search.clear,
+                          icon: const Icon(Icons.clear),
+                        ),
                 ),
-          ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                strings.format('{count} essence messages', {
+                  'count': filteredMessages.length,
+                }),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (!loading && messages.isEmpty)
+                _EmptyPanel(message: strings.text('No essence messages.'))
+              else if (!loading && filteredMessages.isEmpty)
+                _EmptyPanel(
+                  message: strings.text('No matching essence messages.'),
+                )
+              else
+                for (final message in filteredMessages)
+                  _EssenceMessageTile(
+                    message: message,
+                    preferences: widget.state.preferences,
+                    onTap: () => openMessage(message),
+                  ),
+            ],
+          ),
         ),
       ),
     );

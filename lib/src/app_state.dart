@@ -366,6 +366,12 @@ class CsacAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateActionSheetStyle(CsacActionSheetStyle style) async {
+    preferences = preferences.copyWith(actionSheetStyle: style);
+    await preferences.save();
+    notifyListeners();
+  }
+
   Future<void> updateShowGroupMemberLevel(bool enabled) async {
     preferences = preferences.copyWith(showGroupMemberLevel: enabled);
     await preferences.save();

@@ -2122,14 +2122,64 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     route: 'auth/register',
     method: ApiDocMethod.post,
     summary: 'Register account',
-    description: 'Create a new user account.',
+    description:
+        'Create a new user account after verifying the registration email code.',
     params: [
       ApiDocParam(name: 'username', description: 'Username', required: true),
       ApiDocParam(name: 'nickname', description: 'Nickname', required: true),
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+      ApiDocParam(
+        name: 'email_code',
+        description: '6-digit email verification code',
+        required: true,
+      ),
       ApiDocParam(name: 'pwd', description: 'Password', required: true),
       ApiDocParam(
         name: 'confirm_pwd',
         description: 'Confirm password',
+        required: true,
+      ),
+      ApiDocParam(
+        name: 'avatar',
+        description:
+            'Multipart avatar file field. File upload is not supported by this debugger.',
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/send_register_code',
+    method: ApiDocMethod.post,
+    summary: 'Send register email code',
+    description:
+        'Send a 6-digit verification code before registering a new account.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/send_email_bind_code',
+    method: ApiDocMethod.post,
+    summary: 'Send email bind code',
+    description:
+        'Send a 6-digit code for an existing logged-in account that still needs email verification.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/verify_email_bind_code',
+    method: ApiDocMethod.post,
+    summary: 'Verify bound email',
+    description:
+        'Verify the email code and bind the email to the current logged-in account.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+      ApiDocParam(
+        name: 'email_code',
+        description: '6-digit email verification code',
         required: true,
       ),
     ],
@@ -2158,11 +2208,22 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     params: [
       ApiDocParam(
         name: 'action',
-        description: 'nickname / privacy / pat_action',
+        description: 'nickname / password / avatar / privacy / pat_action',
         required: true,
         example: 'nickname',
       ),
       ApiDocParam(name: 'nickname', description: 'New nickname'),
+      ApiDocParam(name: 'old_password', description: 'Current password'),
+      ApiDocParam(name: 'new_password', description: 'New password'),
+      ApiDocParam(
+        name: 'confirm_password',
+        description: 'Confirm new password',
+      ),
+      ApiDocParam(
+        name: 'avatar',
+        description:
+            'Multipart avatar file field. File upload is not supported by this debugger.',
+      ),
       ApiDocParam(name: 'pat_action', description: 'Pat action text'),
       ApiDocParam(name: 'allow_auto_join', description: '0 or 1'),
     ],
@@ -2255,7 +2316,8 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     summary: 'Send friend request',
     description: 'Request to add a user as friend.',
     params: [
-      ApiDocParam(name: 'friend_id', description: 'Target UID', required: true),
+      ApiDocParam(name: 'to_uid', description: 'Target UID', required: true),
+      ApiDocParam(name: 'friend_id', description: 'Target UID alias'),
       ApiDocParam(name: 'message', description: 'Request message'),
     ],
   ),
@@ -2273,7 +2335,7 @@ const apiDocEndpoints = <ApiDocEndpoint>[
       ),
       ApiDocParam(
         name: 'action',
-        description: 'agree or reject',
+        description: 'agree or refuse',
         required: true,
         example: 'agree',
       ),
@@ -2722,6 +2784,22 @@ const apiDocEndpoints = <ApiDocEndpoint>[
   ),
   ApiDocEndpoint(
     group: 'Message',
+    route: 'message/send_emoji_msg',
+    method: ApiDocMethod.post,
+    summary: 'Send emoji sticker',
+    description: 'Send an emoji/sticker message to a group or private chat.',
+    params: [
+      ApiDocParam(name: 'room_id', description: 'Group room ID'),
+      ApiDocParam(name: 'friend_id', description: 'Private friend UID'),
+      ApiDocParam(
+        name: 'abbr',
+        description: 'Emoji/sticker abbreviation from emoji/get_list',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Message',
     route: 'message/send_voice_msg',
     method: ApiDocMethod.post,
     summary: 'Send voice message',
@@ -2743,6 +2821,25 @@ const apiDocEndpoints = <ApiDocEndpoint>[
       ApiDocParam(name: 'friend_id', description: 'Private friend UID'),
       ApiDocParam(name: 'room_id', description: 'Group room ID'),
       ApiDocParam(name: 'last_msg_id', description: 'Group last read message'),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Message',
+    route: 'message/poll_updates',
+    method: ApiDocMethod.get,
+    summary: 'Poll message updates',
+    description:
+        'Long-poll for new messages in a group or private conversation.',
+    params: [
+      ApiDocParam(
+        name: 'conversation_type',
+        description: 'group or private. type is also accepted.',
+      ),
+      ApiDocParam(name: 'room_id', description: 'Group room ID'),
+      ApiDocParam(name: 'friend_id', description: 'Private friend UID'),
+      ApiDocParam(name: 'after_id', description: 'Last known message ID'),
+      ApiDocParam(name: 'last_id', description: 'Alias for after_id'),
+      ApiDocParam(name: 'timeout', description: '0-30 seconds', example: '10'),
     ],
   ),
   ApiDocEndpoint(
@@ -2783,6 +2880,15 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     summary: 'Mention counters',
     description:
         'Return group mention and reply counters for the current user.',
+    params: [ApiDocParam(name: 'limit', description: '0-100', example: '50')],
+  ),
+  ApiDocEndpoint(
+    group: 'Emoji',
+    route: 'emoji/get_list',
+    method: ApiDocMethod.get,
+    summary: 'Emoji sticker list',
+    description:
+        'Return configured emoji/sticker abbreviations and image addresses.',
   ),
   ApiDocEndpoint(
     group: 'Essence',
@@ -3154,50 +3260,94 @@ class _ApiEndpointList extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: CsacTextField(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: _CupertinoSearchField(
             controller: search,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: strings.text('Search API endpoints'),
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
+            placeholder: strings.text('Search API endpoints'),
           ),
         ),
         Expanded(
           child: endpoints.isEmpty
               ? _EmptyPanel(message: strings.text('No matching API.'))
-              : CsacListView.builder(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                  itemCount: endpoints.length,
-                  itemBuilder: (context, index) {
-                    final endpoint = endpoints[index];
-                    final active =
-                        endpoint.route == selected.route &&
-                        endpoint.method == selected.method;
-                    return CsacCard(
-                      elevation: 0,
-                      color: active
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : null,
-                      child: ListTile(
-                        dense: true,
-                        leading: _ApiMethodBadge(method: endpoint.methodLabel),
-                        title: Text(endpoint.route),
-                        subtitle: Text(
-                          '${endpoint.group} · ${endpoint.summary}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        selected: active,
-                        onTap: () => onSelect(endpoint),
-                      ),
-                    );
-                  },
+              : CsacListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    CupertinoListSection.insetGrouped(
+                      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      backgroundColor: const Color(0x00000000),
+                      children: [
+                        for (final endpoint in endpoints)
+                          _ApiEndpointTile(
+                            endpoint: endpoint,
+                            selected:
+                                endpoint.route == selected.route &&
+                                endpoint.method == selected.method,
+                            onTap: () => onSelect(endpoint),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _ApiEndpointTile extends StatelessWidget {
+  const _ApiEndpointTile({
+    required this.endpoint,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ApiDocEndpoint endpoint;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    final tileColor = selected
+        ? primary.withValues(alpha: colors.isDark ? 0.18 : 0.10)
+        : colors.cardBackground;
+    return _CupertinoListPressable(
+      onTap: onTap,
+      child: CupertinoListTile(
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
+        leadingSize: 48,
+        leadingToTitle: 12,
+        backgroundColor: tileColor,
+        leading: _ApiMethodBadge(method: endpoint.methodLabel),
+        title: Text(
+          endpoint.route,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: selected ? primary : colors.label,
+            fontSize: 16.5,
+            fontWeight: FontWeight.w600,
+            height: 1.16,
+          ),
+        ),
+        subtitle: Text(
+          '${endpoint.group} · ${endpoint.summary}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: colors.secondaryLabel,
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            height: 1.22,
+          ),
+        ),
+        trailing: Icon(
+          CupertinoIcons.chevron_right,
+          size: 13,
+          color: colors.tertiaryLabel,
+        ),
+      ),
     );
   }
 }
@@ -3357,20 +3507,26 @@ class _ApiMethodBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final post = method == 'POST';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: post ? colors.tertiaryContainer : colors.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          method,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: post
-                ? colors.onTertiaryContainer
-                : colors.onSecondaryContainer,
-            fontWeight: FontWeight.w800,
+    return SizedBox(
+      width: 48,
+      height: 26,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: post ? colors.tertiaryContainer : colors.secondaryContainer,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Center(
+          child: Text(
+            method,
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: post
+                  ? colors.onTertiaryContainer
+                  : colors.onSecondaryContainer,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
       ),
@@ -3815,6 +3971,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String get fontStyleLabel {
     return fontStyleLabelFor(context, widget.state.preferences.fontStyle);
+  }
+
+  String get actionSheetStyleLabel {
+    final strings = context.strings;
+    switch (widget.state.preferences.actionSheetStyle) {
+      case CsacActionSheetStyle.compactBlur:
+        return strings.text('Compact blur');
+      case CsacActionSheetStyle.cupertino:
+        return strings.text('Native Cupertino');
+    }
   }
 
   String get themeColorLabel {
@@ -4347,34 +4513,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     final strings = context.strings;
     final biometricEnabled = widget.state.preferences.appLockBiometricEnabled;
-    final action = await showCupertinoModalPopup<String>(
+    final action = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('App lock')),
-        message: Text(strings.text('Use a PIN to protect this app.')),
-        actions: [
-          if (supportsLocalAuth)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(biometricEnabled ? 'biometricOff' : 'biometricOn'),
-              child: Text(strings.text('Biometric unlock')),
-            ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('changePin'),
-            child: Text(strings.text('Change PIN')),
+      title: strings.text('App lock'),
+      message: strings.text('Use a PIN to protect this app.'),
+      actions: [
+        if (supportsLocalAuth)
+          CsacActionSheetAction(
+            value: biometricEnabled ? 'biometricOff' : 'biometricOn',
+            title: strings.text('Biometric unlock'),
+            icon: CupertinoIcons.lock_rotation,
+            selected: biometricEnabled,
+            reserveSelectionMark: true,
           ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop('disable'),
-            child: Text(strings.text('Disable app lock')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+        CsacActionSheetAction(
+          value: 'changePin',
+          title: strings.text('Change PIN'),
+          icon: CupertinoIcons.lock,
         ),
-      ),
+        CsacActionSheetAction(
+          value: 'disable',
+          title: strings.text('Disable app lock'),
+          icon: CupertinoIcons.lock_open,
+          destructive: true,
+        ),
+      ],
     );
     if (!mounted || action == null) {
       return;
@@ -4561,6 +4724,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (selected != null) {
       await widget.state.updateFontStyle(selected);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> chooseActionSheetStyle() async {
+    final strings = context.strings;
+    final selected = await showCupertinoOptionSheet<CsacActionSheetStyle>(
+      context: context,
+      selected: widget.state.preferences.actionSheetStyle,
+      title: strings.text('Action sheet style'),
+      options: [
+        CupertinoOption(
+          value: CsacActionSheetStyle.compactBlur,
+          title: strings.text('Compact blur'),
+          subtitle: strings.text('Condensed iOS blur menus'),
+        ),
+        CupertinoOption(
+          value: CsacActionSheetStyle.cupertino,
+          title: strings.text('Native Cupertino'),
+          subtitle: strings.text('System CupertinoActionSheet layout'),
+        ),
+      ],
+    );
+    if (selected != null) {
+      await widget.state.updateActionSheetStyle(selected);
       if (mounted) {
         setState(() {});
       }
@@ -4808,27 +4998,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
     final strings = context.strings;
-    final action = await showCupertinoModalPopup<String>(
+    final action = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('Chat background')),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('choose'),
-            child: Text(strings.text('Choose background image')),
-          ),
-          if (widget.state.preferences.chatBackgroundPath.trim().isNotEmpty)
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () => Navigator.of(context).pop('reset'),
-              child: Text(strings.text('Reset background')),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+      title: strings.text('Chat background'),
+      actions: [
+        CsacActionSheetAction(
+          value: 'choose',
+          title: strings.text('Choose background image'),
+          icon: CupertinoIcons.photo,
         ),
-      ),
+        if (widget.state.preferences.chatBackgroundPath.trim().isNotEmpty)
+          CsacActionSheetAction(
+            value: 'reset',
+            title: strings.text('Reset background'),
+            icon: CupertinoIcons.refresh,
+            destructive: true,
+          ),
+      ],
     );
     if (!mounted || action == null) {
       return;
@@ -5019,6 +5205,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Font style',
                 'Font',
                 'Typography',
+                'Action sheet style',
+                'Compact blur',
+                'Native Cupertino',
+                'CupertinoActionSheet',
+                'Menus',
                 'Conversation sorting',
                 'Conversation subtitle',
                 'Recent message',
@@ -5343,6 +5534,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               subtitle: Text(fontStyleLabel),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: chooseFontStyle,
+                            ),
+                            const CsacDivider(height: 1),
+                            ListTile(
+                              leading: const Icon(
+                                CupertinoIcons.rectangle_stack,
+                              ),
+                              title: Text(strings.text('Action sheet style')),
+                              subtitle: Text(actionSheetStyleLabel),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: chooseActionSheetStyle,
                             ),
                             const CsacDivider(height: 1),
                             ListTile(

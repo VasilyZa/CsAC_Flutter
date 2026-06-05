@@ -150,33 +150,31 @@ class _ConversationMediaScreenState extends State<ConversationMediaScreen> {
 
   Future<void> showActions(ConversationMediaItem item) async {
     final strings = context.strings;
-    final action = await showCupertinoModalPopup<String>(
+    final action = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(strings.text('Media and files')),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('open'),
-            child: Text(strings.text('Open original')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('download'),
-            child: Text(strings.text('Download')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('copy'),
-            child: Text(strings.text('Copy link')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('chat'),
-            child: Text(strings.text('View in chat')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+      title: strings.text('Media and files'),
+      actions: [
+        CsacActionSheetAction(
+          value: 'open',
+          title: strings.text('Open original'),
+          icon: CupertinoIcons.arrow_up_right_square,
         ),
-      ),
+        CsacActionSheetAction(
+          value: 'download',
+          title: strings.text('Download'),
+          icon: CupertinoIcons.arrow_down_circle,
+        ),
+        CsacActionSheetAction(
+          value: 'copy',
+          title: strings.text('Copy link'),
+          icon: CupertinoIcons.doc_on_doc,
+        ),
+        CsacActionSheetAction(
+          value: 'chat',
+          title: strings.text('View in chat'),
+          icon: CupertinoIcons.chat_bubble_text,
+        ),
+      ],
     );
     if (!mounted || action == null) {
       return;

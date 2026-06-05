@@ -475,22 +475,25 @@ class _CsacMobileAppState extends State<CsacMobileApp>
             state.preferences.fontStyle,
           ),
           builder: (context, child) {
-            final appContent = _DesktopCommandPaletteHost(
-              state: state,
-              navigatorKey: navigatorKey,
-              scaffoldMessengerKey: scaffoldMessengerKey,
-              enabled:
-                  isDesktopPlatform &&
-                  !locked &&
-                  !state.bootstrapping &&
-                  state.user != null,
-              child: CsacThemeBridge(
-                brightness: effectiveBrightness,
-                seedColor: seedColor,
-                fontStyle: state.preferences.fontStyle,
-                child: CsacToastHost(
-                  key: scaffoldMessengerKey,
-                  child: child ?? const SizedBox.shrink(),
+            final appContent = _ActionSheetPreference(
+              style: state.preferences.actionSheetStyle,
+              child: _DesktopCommandPaletteHost(
+                state: state,
+                navigatorKey: navigatorKey,
+                scaffoldMessengerKey: scaffoldMessengerKey,
+                enabled:
+                    isDesktopPlatform &&
+                    !locked &&
+                    !state.bootstrapping &&
+                    state.user != null,
+                child: CsacThemeBridge(
+                  brightness: effectiveBrightness,
+                  seedColor: seedColor,
+                  fontStyle: state.preferences.fontStyle,
+                  child: CsacToastHost(
+                    key: scaffoldMessengerKey,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             );

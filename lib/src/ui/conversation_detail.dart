@@ -605,42 +605,42 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> showMemberActions(GroupMember member) async {
     final strings = context.strings;
-    final action = await showCupertinoModalPopup<String>(
+    final action = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(member.name),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('title'),
-            child: Text(strings.text('Set member title')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('mute10'),
-            child: Text(strings.text('Mute 10 minutes')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('unmute'),
-            child: Text(strings.text('Unmute')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('admin'),
-            child: Text(strings.text('Set admin')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('removeAdmin'),
-            child: Text(strings.text('Remove admin')),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop('kick'),
-            child: Text(strings.text('Kick member')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+      title: member.name,
+      actions: [
+        CsacActionSheetAction(
+          value: 'title',
+          title: strings.text('Set member title'),
+          icon: CupertinoIcons.textformat,
         ),
-      ),
+        CsacActionSheetAction(
+          value: 'mute10',
+          title: strings.text('Mute 10 minutes'),
+          icon: CupertinoIcons.speaker_slash,
+        ),
+        CsacActionSheetAction(
+          value: 'unmute',
+          title: strings.text('Unmute'),
+          icon: CupertinoIcons.speaker_2,
+        ),
+        CsacActionSheetAction(
+          value: 'admin',
+          title: strings.text('Set admin'),
+          icon: CupertinoIcons.person_badge_plus,
+        ),
+        CsacActionSheetAction(
+          value: 'removeAdmin',
+          title: strings.text('Remove admin'),
+          icon: CupertinoIcons.person_badge_minus,
+        ),
+        CsacActionSheetAction(
+          value: 'kick',
+          title: strings.text('Kick member'),
+          icon: CupertinoIcons.person_crop_circle_badge_xmark,
+          destructive: true,
+        ),
+      ],
     );
     if (action != null) {
       if (action == 'title') {
@@ -1671,48 +1671,48 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       if (!member.hasOwnerRole) 'kick',
     ];
     final strings = context.strings;
-    final selected = await showCupertinoModalPopup<String>(
+    final selected = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(member.name),
-        actions: [
-          if (actions.contains('title'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('title'),
-              child: Text(strings.text('Set member title')),
-            ),
-          if (actions.contains('mute10'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('mute10'),
-              child: Text(strings.text('Mute 10 minutes')),
-            ),
-          if (actions.contains('unmute'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('unmute'),
-              child: Text(strings.text('Unmute')),
-            ),
-          if (actions.contains('admin'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('admin'),
-              child: Text(strings.text('Set admin')),
-            ),
-          if (actions.contains('removeAdmin'))
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('removeAdmin'),
-              child: Text(strings.text('Remove admin')),
-            ),
-          if (actions.contains('kick'))
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () => Navigator.of(context).pop('kick'),
-              child: Text(strings.text('Kick member')),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
-        ),
-      ),
+      title: member.name,
+      actions: [
+        if (actions.contains('title'))
+          CsacActionSheetAction(
+            value: 'title',
+            title: strings.text('Set member title'),
+            icon: CupertinoIcons.textformat,
+          ),
+        if (actions.contains('mute10'))
+          CsacActionSheetAction(
+            value: 'mute10',
+            title: strings.text('Mute 10 minutes'),
+            icon: CupertinoIcons.speaker_slash,
+          ),
+        if (actions.contains('unmute'))
+          CsacActionSheetAction(
+            value: 'unmute',
+            title: strings.text('Unmute'),
+            icon: CupertinoIcons.speaker_2,
+          ),
+        if (actions.contains('admin'))
+          CsacActionSheetAction(
+            value: 'admin',
+            title: strings.text('Set admin'),
+            icon: CupertinoIcons.person_badge_plus,
+          ),
+        if (actions.contains('removeAdmin'))
+          CsacActionSheetAction(
+            value: 'removeAdmin',
+            title: strings.text('Remove admin'),
+            icon: CupertinoIcons.person_badge_minus,
+          ),
+        if (actions.contains('kick'))
+          CsacActionSheetAction(
+            value: 'kick',
+            title: strings.text('Kick member'),
+            icon: CupertinoIcons.person_crop_circle_badge_xmark,
+            destructive: true,
+          ),
+      ],
     );
     if (selected != null) {
       if (selected == 'title') {

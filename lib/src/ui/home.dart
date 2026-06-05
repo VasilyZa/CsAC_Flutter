@@ -810,44 +810,35 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> showConversationActions(Conversation conversation) async {
     final pref = localPref(conversation);
     final strings = context.strings;
-    final selected = await showCupertinoModalPopup<String>(
+    final selected = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(conversation.name),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('pin'),
-            child: Text(
-              strings.text(
-                pref.pinned ? 'Unpin conversation' : 'Pin conversation',
-              ),
-            ),
+      title: conversation.name,
+      actions: [
+        CsacActionSheetAction(
+          value: 'pin',
+          title: strings.text(
+            pref.pinned ? 'Unpin conversation' : 'Pin conversation',
           ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('mute'),
-            child: Text(
-              strings.text(
-                pref.muted ? 'Unmute conversation' : 'Mute conversation',
-              ),
-            ),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: !pref.archived,
-            onPressed: () => Navigator.of(context).pop('archive'),
-            child: Text(
-              strings.text(
-                pref.archived
-                    ? 'Unarchive conversation'
-                    : 'Archive conversation',
-              ),
-            ),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+          icon: pref.pinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
         ),
-      ),
+        CsacActionSheetAction(
+          value: 'mute',
+          title: strings.text(
+            pref.muted ? 'Unmute conversation' : 'Mute conversation',
+          ),
+          icon: pref.muted
+              ? CupertinoIcons.speaker_2
+              : CupertinoIcons.speaker_slash,
+        ),
+        CsacActionSheetAction(
+          value: 'archive',
+          title: strings.text(
+            pref.archived ? 'Unarchive conversation' : 'Archive conversation',
+          ),
+          icon: CupertinoIcons.archivebox,
+          destructive: !pref.archived,
+        ),
+      ],
     );
     if (!mounted || selected == null) {
       return;
@@ -937,47 +928,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> showHomeActions() async {
     final strings = context.strings;
-    final action = await showCupertinoModalPopup<String>(
+    final action = await showCsacActionSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('refresh'),
-            child: Text(strings.text('Refresh')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('addFriend'),
-            child: Text(strings.text('Add friend')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('joinGroup'),
-            child: Text(strings.text('Join group')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('createGroup'),
-            child: Text(strings.text('Create group')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop('searchMessages'),
-            child: Text(strings.text('Search messages')),
-          ),
-          if (widget.navigatorKey != null &&
-              widget.scaffoldMessengerKey != null)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop('commands'),
-              child: Text(strings.text('Commands')),
-            ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop('logout'),
-            child: Text(strings.text('Logout')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.text('Cancel')),
+      actions: [
+        CsacActionSheetAction(
+          value: 'refresh',
+          title: strings.text('Refresh'),
+          icon: CupertinoIcons.arrow_clockwise,
         ),
-      ),
+        CsacActionSheetAction(
+          value: 'addFriend',
+          title: strings.text('Add friend'),
+          icon: CupertinoIcons.person_add,
+        ),
+        CsacActionSheetAction(
+          value: 'joinGroup',
+          title: strings.text('Join group'),
+          icon: CupertinoIcons.group,
+        ),
+        CsacActionSheetAction(
+          value: 'createGroup',
+          title: strings.text('Create group'),
+          icon: CupertinoIcons.plus_circle,
+        ),
+        CsacActionSheetAction(
+          value: 'searchMessages',
+          title: strings.text('Search messages'),
+          icon: CupertinoIcons.search,
+        ),
+        if (widget.navigatorKey != null && widget.scaffoldMessengerKey != null)
+          CsacActionSheetAction(
+            value: 'commands',
+            title: strings.text('Commands'),
+            icon: CupertinoIcons.chevron_left_slash_chevron_right,
+          ),
+        CsacActionSheetAction(
+          value: 'logout',
+          title: strings.text('Logout'),
+          icon: CupertinoIcons.square_arrow_right,
+          destructive: true,
+        ),
+      ],
     );
     if (action != null && mounted) {
       await openHomeAction(action);

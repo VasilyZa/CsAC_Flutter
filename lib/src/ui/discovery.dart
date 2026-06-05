@@ -930,7 +930,7 @@ class _DiscoveryPage extends StatelessWidget {
         border: null,
       ),
       child: SafeArea(
-        top: false,
+        top: true,
         bottom: false,
         child: _AdaptivePageFrame(
           maxWidth: 820,

@@ -732,6 +732,26 @@ class CupertinoOption<T> {
   final bool destructive;
 }
 
+class CsacActionSheetAction<T> {
+  const CsacActionSheetAction({
+    required this.value,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.destructive = false,
+    this.selected = false,
+    this.reserveSelectionMark = false,
+  });
+
+  final T value;
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final bool destructive;
+  final bool selected;
+  final bool reserveSelectionMark;
+}
+
 Future<T?> showCupertinoOptionSheet<T>({
   required BuildContext context,
   required List<CupertinoOption<T>> options,
@@ -739,60 +759,392 @@ Future<T?> showCupertinoOptionSheet<T>({
   String? title,
   String? message,
 }) {
+  return showCsacActionSheet<T>(
+    context: context,
+    title: title,
+    message: message,
+    actions: [
+      for (final option in options)
+        CsacActionSheetAction<T>(
+          value: option.value,
+          title: option.title,
+          subtitle: option.subtitle,
+          destructive: option.destructive,
+          selected: option.value == selected,
+          reserveSelectionMark: true,
+        ),
+    ],
+  );
+}
+
+Future<T?> showCsacActionSheet<T>({
+  required BuildContext context,
+  required List<CsacActionSheetAction<T>> actions,
+  String? title,
+  String? message,
+  String? cancelLabel,
+  CsacActionSheetStyle? style,
+}) {
+  final resolvedStyle = style ?? _ActionSheetPreference.styleOf(context);
+  final resolvedCancelLabel = cancelLabel ?? context.strings.text('Cancel');
   return showCupertinoModalPopup<T>(
     context: context,
-    builder: (sheetContext) => CupertinoActionSheet(
-      title: title == null ? null : Text(title),
-      message: message == null ? null : Text(message),
-      actions: [
-        for (final option in options)
-          CupertinoActionSheetAction(
-            isDestructiveAction: option.destructive,
-            onPressed: () => Navigator.of(sheetContext).pop(option.value),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    builder: (sheetContext) {
+      if (resolvedStyle == CsacActionSheetStyle.cupertino) {
+        return CupertinoActionSheet(
+          title: title == null ? null : Text(title),
+          message: message == null ? null : Text(message),
+          actions: [
+            for (final action in actions)
+              CupertinoActionSheetAction(
+                isDestructiveAction: action.destructive,
+                onPressed: () => Navigator.of(sheetContext).pop(action.value),
+                child: _NativeActionSheetLabel<T>(action: action),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: Text(resolvedCancelLabel),
+          ),
+        );
+      }
+      return _CompactBlurActionSheet<T>(
+        title: title,
+        message: message,
+        cancelLabel: resolvedCancelLabel,
+        actions: actions,
+      );
+    },
+  );
+}
+
+class _NativeActionSheetLabel<T> extends StatelessWidget {
+  const _NativeActionSheetLabel({required this.action});
+
+  final CsacActionSheetAction<T> action;
+
+  @override
+  Widget build(BuildContext context) {
+    if (action.subtitle == null && !action.reserveSelectionMark) {
+      return Text(
+        action.title,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    final secondaryColor = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _CupertinoSelectionMark(
+          selected: action.reserveSelectionMark && action.selected,
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                action.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (action.subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  action.subtitle!,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: secondaryColor, fontSize: 13),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 30),
+      ],
+    );
+  }
+}
+
+class _CompactBlurActionSheet<T> extends StatelessWidget {
+  const _CompactBlurActionSheet({
+    required this.actions,
+    required this.cancelLabel,
+    this.title,
+    this.message,
+  });
+
+  final List<CsacActionSheetAction<T>> actions;
+  final String cancelLabel;
+  final String? title;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final media = MediaQuery.of(context);
+    final screenSize = media.size;
+    final tiny = screenSize.height < 430 || screenSize.shortestSide < 340;
+    final isWide = screenSize.width >= 700;
+    final horizontalPadding = isWide ? 16.0 : (tiny ? 6.0 : 10.0);
+    final bottomPadding = tiny ? 6.0 : 10.0;
+    final panelWidth = isWide ? math.min(560.0, screenSize.width - 48) : null;
+    final rowHeight = tiny ? 38.0 : 44.0;
+    final cancelHeight = tiny ? 38.0 : 44.0;
+    final sectionGap = tiny ? 6.0 : 8.0;
+    final hasHeader = title != null || message != null;
+    final headerHeight = hasHeader ? (message == null ? 38.0 : 58.0) : 0.0;
+    final dividerHeight = math.max(0, actions.length - 1) * 0.5;
+    final headerDividerHeight = hasHeader && actions.isNotEmpty ? 0.5 : 0.0;
+    final maxPanelHeight = math.max(
+      160.0,
+      screenSize.height - media.padding.top - media.viewInsets.bottom - 8,
+    );
+    final estimatedHeight =
+        bottomPadding +
+        headerHeight +
+        headerDividerHeight +
+        actions.length * rowHeight +
+        dividerHeight +
+        sectionGap +
+        cancelHeight;
+    final panelHeight = math.min(estimatedHeight, maxPanelHeight);
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          width: panelWidth,
+          height: panelHeight,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              0,
+              horizontalPadding,
+              bottomPadding,
+            ),
+            child: Column(
               children: [
-                _CupertinoSelectionMark(selected: option.value == selected),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        option.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (option.subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          option.subtitle!,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: CupertinoColors.secondaryLabel.resolveFrom(
-                              sheetContext,
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: CupertinoPopupSurface(
+                      isSurfacePainted: true,
+                      child: Column(
+                        children: [
+                          if (hasHeader) ...[
+                            SizedBox(
+                              height: headerHeight,
+                              child: _CompactActionSheetHeader(
+                                title: title,
+                                message: message,
+                                tiny: tiny,
+                              ),
                             ),
-                            fontSize: 13,
+                            _CompactActionSheetDivider(color: colors.separator),
+                          ],
+                          Expanded(
+                            child: CsacListView(
+                              padding: EdgeInsets.zero,
+                              children: [
+                                for (final entry in actions.indexed) ...[
+                                  _CompactBlurActionSheetRow<T>(
+                                    action: entry.$2,
+                                    height: rowHeight,
+                                    tiny: tiny,
+                                  ),
+                                  if (entry.$1 != actions.length - 1)
+                                    _CompactActionSheetDivider(
+                                      color: colors.separator,
+                                      indent: tiny ? 44 : 52,
+                                    ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 30),
+                SizedBox(height: sectionGap),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CupertinoPopupSurface(
+                    isSurfacePainted: true,
+                    child: _CupertinoListPressable(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: SizedBox(
+                        height: cancelHeight,
+                        child: Center(
+                          child: Text(
+                            cancelLabel,
+                            style: TextStyle(
+                              color: colors.primaryColor,
+                              fontSize: tiny ? 17 : 19,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-      ],
-      cancelButton: CupertinoActionSheetAction(
-        onPressed: () => Navigator.of(sheetContext).pop(),
-        child: Text(sheetContext.strings.text('Cancel')),
+        ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _CompactActionSheetHeader extends StatelessWidget {
+  const _CompactActionSheetHeader({
+    required this.title,
+    required this.message,
+    required this.tiny,
+  });
+
+  final String? title;
+  final String? message;
+  final bool tiny;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: tiny ? 12 : 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (title != null)
+            Text(
+              title!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.secondaryLabel,
+                fontSize: tiny ? 12 : 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (message != null) ...[
+            if (title != null) const SizedBox(height: 2),
+            Text(
+              message!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.tertiaryLabel,
+                fontSize: tiny ? 11 : 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactActionSheetDivider extends StatelessWidget {
+  const _CompactActionSheetDivider({required this.color, this.indent = 0});
+
+  final Color color;
+  final double indent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 0.5,
+      margin: EdgeInsets.only(left: indent),
+      color: color.withValues(alpha: 0.55),
+    );
+  }
+}
+
+class _CompactBlurActionSheetRow<T> extends StatelessWidget {
+  const _CompactBlurActionSheetRow({
+    required this.action,
+    required this.height,
+    required this.tiny,
+  });
+
+  final CsacActionSheetAction<T> action;
+  final double height;
+  final bool tiny;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final tint = action.destructive
+        ? CupertinoColors.destructiveRed.resolveFrom(context)
+        : CupertinoTheme.of(context).primaryColor;
+    final textColor = action.destructive ? tint : colors.label;
+    final leadingIcon = action.selected
+        ? CupertinoIcons.check_mark
+        : action.icon ?? CupertinoIcons.circle;
+    return _CupertinoListPressable(
+      onTap: () => Navigator.of(context).pop(action.value),
+      child: SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            SizedBox(
+              width: tiny ? 44 : 52,
+              child: Icon(
+                leadingIcon,
+                size: tiny ? 18 : 20,
+                color: action.icon == null && !action.selected
+                    ? colors.tertiaryLabel
+                    : tint,
+              ),
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    action.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: tiny ? 15 : 17,
+                      fontWeight: FontWeight.w500,
+                      height: 1.1,
+                    ),
+                  ),
+                  if (action.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      action.subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.secondaryLabel,
+                        fontSize: tiny ? 11 : 12,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class FilledButton extends StatelessWidget {
@@ -2061,6 +2413,24 @@ class _MotionPreference extends InheritedWidget {
   @override
   bool updateShouldNotify(_MotionPreference oldWidget) {
     return reduceMotion != oldWidget.reduceMotion;
+  }
+}
+
+class _ActionSheetPreference extends InheritedWidget {
+  const _ActionSheetPreference({required this.style, required super.child});
+
+  final CsacActionSheetStyle style;
+
+  static CsacActionSheetStyle styleOf(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<_ActionSheetPreference>()
+            ?.style ??
+        CsacActionSheetStyle.compactBlur;
+  }
+
+  @override
+  bool updateShouldNotify(_ActionSheetPreference oldWidget) {
+    return style != oldWidget.style;
   }
 }
 

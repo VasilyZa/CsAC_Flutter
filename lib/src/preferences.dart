@@ -25,6 +25,8 @@ enum GroupMemberBadgeMode { title, role }
 
 enum MobileEnterKeyBehavior { send, newline }
 
+enum CsacActionSheetStyle { compactBlur, cupertino }
+
 const defaultThemeColorValue = 0xff2563eb;
 const defaultChatBubbleColorValue = 0;
 const defaultChatBubbleOpacity = 1.0;
@@ -49,6 +51,7 @@ class CsacPreferences {
     this.enablePat = true,
     this.enableQuickInputTriggers = true,
     this.mobileEnterKeyBehavior = MobileEnterKeyBehavior.send,
+    this.actionSheetStyle = CsacActionSheetStyle.compactBlur,
     this.showGroupMemberLevel = true,
     this.groupMemberBadgeMode = GroupMemberBadgeMode.title,
     this.appLockEnabled = false,
@@ -79,6 +82,7 @@ class CsacPreferences {
       'csac.chat.enable_quick_input_triggers';
   static const _mobileEnterKeyBehaviorKey =
       'csac.chat.mobile_enter_key_behavior';
+  static const _actionSheetStyleKey = 'csac.ui.action_sheet_style';
   static const _showGroupMemberLevelKey = 'csac.chat.show_group_member_level';
   static const _groupMemberBadgeModeKey = 'csac.chat.group_member_badge_mode';
   static const _appLockEnabledKey = 'csac.app_lock.enabled';
@@ -106,6 +110,7 @@ class CsacPreferences {
   final bool enablePat;
   final bool enableQuickInputTriggers;
   final MobileEnterKeyBehavior mobileEnterKeyBehavior;
+  final CsacActionSheetStyle actionSheetStyle;
   final bool showGroupMemberLevel;
   final GroupMemberBadgeMode groupMemberBadgeMode;
   final bool appLockEnabled;
@@ -146,6 +151,7 @@ class CsacPreferences {
     bool? enablePat,
     bool? enableQuickInputTriggers,
     MobileEnterKeyBehavior? mobileEnterKeyBehavior,
+    CsacActionSheetStyle? actionSheetStyle,
     bool? showGroupMemberLevel,
     GroupMemberBadgeMode? groupMemberBadgeMode,
     bool? appLockEnabled,
@@ -180,6 +186,7 @@ class CsacPreferences {
           enableQuickInputTriggers ?? this.enableQuickInputTriggers,
       mobileEnterKeyBehavior:
           mobileEnterKeyBehavior ?? this.mobileEnterKeyBehavior,
+      actionSheetStyle: actionSheetStyle ?? this.actionSheetStyle,
       showGroupMemberLevel: showGroupMemberLevel ?? this.showGroupMemberLevel,
       groupMemberBadgeMode: groupMemberBadgeMode ?? this.groupMemberBadgeMode,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
@@ -232,6 +239,9 @@ class CsacPreferences {
           prefs.getBool(_enableQuickInputTriggersKey) ?? true,
       mobileEnterKeyBehavior: _mobileEnterKeyBehaviorFromName(
         prefs.getString(_mobileEnterKeyBehaviorKey),
+      ),
+      actionSheetStyle: _actionSheetStyleFromName(
+        prefs.getString(_actionSheetStyleKey),
       ),
       showGroupMemberLevel: prefs.getBool(_showGroupMemberLevelKey) ?? true,
       groupMemberBadgeMode: _groupMemberBadgeModeFromName(
@@ -294,6 +304,7 @@ class CsacPreferences {
       _mobileEnterKeyBehaviorKey,
       mobileEnterKeyBehavior.name,
     );
+    await prefs.setString(_actionSheetStyleKey, actionSheetStyle.name);
     await prefs.setBool(_showGroupMemberLevelKey, showGroupMemberLevel);
     await prefs.setString(_groupMemberBadgeModeKey, groupMemberBadgeMode.name);
     await prefs.setBool(_appLockEnabledKey, appLockEnabled);
@@ -434,6 +445,15 @@ class CsacPreferences {
       }
     }
     return MobileEnterKeyBehavior.send;
+  }
+
+  static CsacActionSheetStyle _actionSheetStyleFromName(String? value) {
+    for (final style in CsacActionSheetStyle.values) {
+      if (style.name == value) {
+        return style;
+      }
+    }
+    return CsacActionSheetStyle.compactBlur;
   }
 }
 
