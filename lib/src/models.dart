@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum ConversationType { private, group }
 
 enum SearchScope { all, private, group, image, essence }
@@ -519,6 +521,123 @@ class CommonGroup {
       ].where((part) => part.trim().isNotEmpty).join(' | '),
     );
   }
+}
+
+class SpacePostPage {
+  const SpacePostPage({
+    required this.total,
+    required this.page,
+    required this.pageSize,
+    required this.items,
+  });
+
+  final int total;
+  final int page;
+  final int pageSize;
+  final List<SpacePost> items;
+
+  factory SpacePostPage.fromJson(Map<String, dynamic> json) {
+    return SpacePostPage(
+      total: asInt(json['total']),
+      page: asInt(json['page']) == 0 ? 1 : asInt(json['page']),
+      pageSize: asInt(json['page_size']) == 0 ? 20 : asInt(json['page_size']),
+      items: _spacePostRows(
+        json['list'] ?? json['data'] ?? json['items'],
+      ).map(SpacePost.fromJson).toList(),
+    );
+  }
+}
+
+class SpacePost {
+  const SpacePost({
+    required this.id,
+    required this.senderUid,
+    required this.nickname,
+    this.avatar = '',
+    this.content = '',
+    this.images = const <String>[],
+    this.isReply = false,
+    this.replyId = 0,
+    this.likes = 0,
+    this.isLiked = false,
+    this.createdAt = '',
+    this.replies = const <SpacePost>[],
+  });
+
+  final int id;
+  final int senderUid;
+  final String nickname;
+  final String avatar;
+  final String content;
+  final List<String> images;
+  final bool isReply;
+  final int replyId;
+  final int likes;
+  final bool isLiked;
+  final String createdAt;
+  final List<SpacePost> replies;
+
+  factory SpacePost.fromJson(Map<String, dynamic> json) {
+    return SpacePost(
+      id: firstInt(json, const ['cont_id', 'id']),
+      senderUid: firstInt(json, const ['sender_uid', 'uid', 'user_id']),
+      nickname: firstString(json, const ['nickname', 'name']),
+      avatar: normalizeApiUrl(asString(json['avatar'])),
+      content: asString(json['content']),
+      images: _spaceImageUrls(json['img_conts']),
+      isReply: asInt(json['is_reply']) != 0 || asBool(json['is_reply']),
+      replyId: asInt(json['reply_id']),
+      likes: asInt(json['likes_num']),
+      isLiked: asBool(json['is_liked']),
+      createdAt: readableTimestamp(json['created_at']),
+      replies: _spacePostRows(json['replies']).map(SpacePost.fromJson).toList(),
+    );
+  }
+
+  SpacePost copyWith({int? likes, bool? isLiked, List<SpacePost>? replies}) {
+    return SpacePost(
+      id: id,
+      senderUid: senderUid,
+      nickname: nickname,
+      avatar: avatar,
+      content: content,
+      images: images,
+      isReply: isReply,
+      replyId: replyId,
+      likes: likes ?? this.likes,
+      isLiked: isLiked ?? this.isLiked,
+      createdAt: createdAt,
+      replies: replies ?? this.replies,
+    );
+  }
+}
+
+List<Map<String, dynamic>> _spacePostRows(Object? value) {
+  if (value is List) {
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+  return const <Map<String, dynamic>>[];
+}
+
+List<String> _spaceImageUrls(Object? value) {
+  Object? decoded = value;
+  if (value is String && value.trim().isNotEmpty) {
+    try {
+      decoded = jsonDecode(value);
+    } catch (_) {
+      decoded = value.split(',');
+    }
+  }
+  if (decoded is List) {
+    return decoded
+        .map((item) => normalizeApiUrl(asString(item)))
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+  }
+  return const <String>[];
 }
 
 class EmojiSticker {

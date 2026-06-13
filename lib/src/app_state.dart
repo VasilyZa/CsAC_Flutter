@@ -97,6 +97,7 @@ class CsacAppState extends ChangeNotifier {
 
   CsacUser? user;
   List<Conversation> conversations = const <Conversation>[];
+  Set<int> hiddenGroupConversationIds = const <int>{};
   NotificationCounts notificationCounts = const NotificationCounts();
   CsacPreferences preferences = const CsacPreferences();
   Conversation? activeConversation;
@@ -518,6 +519,7 @@ class CsacAppState extends ChangeNotifier {
     await EmojiPinnedStore.clear();
     user = null;
     conversations = const <Conversation>[];
+    hiddenGroupConversationIds = const <int>{};
     notificationCounts = const NotificationCounts();
     activeConversation = null;
     emojiStickers = const <EmojiSticker>[];
@@ -550,6 +552,7 @@ class CsacAppState extends ChangeNotifier {
     await EmojiPinnedStore.clear();
     user = null;
     conversations = const <Conversation>[];
+    hiddenGroupConversationIds = const <int>{};
     notificationCounts = const NotificationCounts();
     activeConversation = null;
     emojiStickers = const <EmojiSticker>[];
@@ -811,6 +814,7 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> syncConversations() async {
     final loaded = await client.conversations();
+    await syncHiddenGroupConversations(silent: true);
     final cachedActivity = await cache.loadConversationActivity();
     final cachedConversations = {
       for (final conversation in await cache.loadConversations())
@@ -846,6 +850,35 @@ class CsacAppState extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  Future<void> syncHiddenGroupConversations({bool silent = false}) async {
+    try {
+      hiddenGroupConversationIds = await client.hiddenGroupConversations();
+      if (!silent) {
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  bool isConversationHidden(Conversation conversation) {
+    return conversation.type == ConversationType.group &&
+        hiddenGroupConversationIds.contains(conversation.id);
+  }
+
+  Future<bool> toggleHiddenConversation(Conversation conversation) async {
+    if (conversation.type != ConversationType.group) {
+      throw const CsacApiException('Only group conversations can be hidden.');
+    }
+    final hidden = await client.toggleHiddenGroupConversation(conversation.id);
+    hiddenGroupConversationIds = <int>{...hiddenGroupConversationIds};
+    if (hidden) {
+      hiddenGroupConversationIds.add(conversation.id);
+    } else {
+      hiddenGroupConversationIds.remove(conversation.id);
+    }
+    notifyListeners();
+    return hidden;
   }
 
   Conversation _normalizeConversation(Conversation conversation) {
@@ -969,6 +1002,44 @@ class CsacAppState extends ChangeNotifier {
 
   Future<void> refreshHome() async {
     await Future.wait<void>([syncConversations(), refreshNotificationCounts()]);
+  }
+
+  Future<SpacePostPage> loadSpacePosts({int page = 1, int pageSize = 20}) {
+    return client.spacePosts(page: page, pageSize: pageSize);
+  }
+
+  Future<void> sendSpacePost(
+    String content, {
+    List<Uint8List> imageBytes = const <Uint8List>[],
+    List<String> imageFileNames = const <String>[],
+  }) async {
+    await client.sendSpacePost(
+      content,
+      imageBytes: imageBytes,
+      imageFileNames: imageFileNames,
+    );
+  }
+
+  Future<void> replySpacePost(
+    int replyId,
+    String content, {
+    List<Uint8List> imageBytes = const <Uint8List>[],
+    List<String> imageFileNames = const <String>[],
+  }) async {
+    await client.replySpacePost(
+      replyId,
+      content,
+      imageBytes: imageBytes,
+      imageFileNames: imageFileNames,
+    );
+  }
+
+  Future<SpacePost> toggleSpaceLike(int contId) {
+    return client.toggleSpaceLike(contId);
+  }
+
+  Future<void> deleteSpacePost(int contId) {
+    return client.deleteSpacePost(contId);
   }
 
   Future<void> markConversationRead(

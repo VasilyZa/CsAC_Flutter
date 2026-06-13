@@ -2310,6 +2310,27 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     params: [ApiDocParam(name: 'uid', description: 'Target user UID')],
   ),
   ApiDocEndpoint(
+    group: 'User',
+    route: 'user/get_hide_conv_list',
+    method: ApiDocMethod.get,
+    summary: 'Hidden conversations',
+    description: 'Return the hidden group room ID list for current user.',
+  ),
+  ApiDocEndpoint(
+    group: 'User',
+    route: 'user/toggle_hide_conv',
+    method: ApiDocMethod.post,
+    summary: 'Toggle hidden conversation',
+    description: 'Hide or unhide a group conversation for current user.',
+    params: [
+      ApiDocParam(
+        name: 'room_id',
+        description: 'Group room ID',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
     group: 'Friend',
     route: 'friend/send_request',
     method: ApiDocMethod.post,
@@ -2881,6 +2902,79 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     description:
         'Return group mention and reply counters for the current user.',
     params: [ApiDocParam(name: 'limit', description: '0-100', example: '50')],
+  ),
+  ApiDocEndpoint(
+    group: 'Space',
+    route: 'space/get_list',
+    method: ApiDocMethod.get,
+    summary: 'Space post list',
+    description:
+        'Return current user and friends space posts with replies. Only main posts are paginated.',
+    params: [
+      ApiDocParam(name: 'page', description: 'Page number', example: '1'),
+      ApiDocParam(
+        name: 'page_size',
+        description: 'Items per page, max 50',
+        example: '20',
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Space',
+    route: 'space/send',
+    method: ApiDocMethod.post,
+    summary: 'Publish space post',
+    description:
+        'Publish a text or image space post. Multipart image upload is not supported by this debugger.',
+    params: [
+      ApiDocParam(name: 'content', description: 'Post text'),
+      ApiDocParam(name: 'images', description: 'Multipart file[] field, max 9'),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Space',
+    route: 'space/reply',
+    method: ApiDocMethod.post,
+    summary: 'Reply space post',
+    description:
+        'Reply to a space post with text or images. Multipart image upload is not supported by this debugger.',
+    params: [
+      ApiDocParam(
+        name: 'reply_id',
+        description: 'Target space post ID',
+        required: true,
+      ),
+      ApiDocParam(name: 'content', description: 'Reply text'),
+      ApiDocParam(name: 'images', description: 'Multipart file[] field, max 9'),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Space',
+    route: 'space/toggle_like',
+    method: ApiDocMethod.post,
+    summary: 'Toggle space like',
+    description: 'Like or unlike a space post.',
+    params: [
+      ApiDocParam(
+        name: 'cont_id',
+        description: 'Space post ID',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Space',
+    route: 'space/delete',
+    method: ApiDocMethod.post,
+    summary: 'Delete space post',
+    description: 'Delete your own space post or reply.',
+    params: [
+      ApiDocParam(
+        name: 'cont_id',
+        description: 'Space post ID',
+        required: true,
+      ),
+    ],
   ),
   ApiDocEndpoint(
     group: 'Emoji',

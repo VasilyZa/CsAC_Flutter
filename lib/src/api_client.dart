@@ -489,6 +489,29 @@ class CsacApiClient {
     return _list(data, 'groups').map(Group.fromJson).toList();
   }
 
+  Future<Set<int>> hiddenGroupConversations() async {
+    final data = await get('user/get_hide_conv_list');
+    final raw = data['hide_conv_list'];
+    if (raw is List) {
+      return raw.map(asInt).where((id) => id > 0).toSet();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return raw
+          .split(',')
+          .map((item) => int.tryParse(item.trim()) ?? 0)
+          .where((id) => id > 0)
+          .toSet();
+    }
+    return const <int>{};
+  }
+
+  Future<bool> toggleHiddenGroupConversation(int roomId) async {
+    final data = await postForm('user/toggle_hide_conv', <String, String>{
+      'room_id': '$roomId',
+    });
+    return asBool(data['is_hidden']);
+  }
+
   Future<List<GroupProfile>> publicGroups() async {
     final data = await get('group/get_public_list');
     return _firstList(data, const [
@@ -515,6 +538,74 @@ class CsacApiClient {
       isInGroup: true,
       isOwner: true,
     );
+  }
+
+  Future<SpacePostPage> spacePosts({int page = 1, int pageSize = 20}) async {
+    final data = await get('space/get_list', <String, String>{
+      'page': '$page',
+      'page_size': '$pageSize',
+    });
+    return SpacePostPage.fromJson(data);
+  }
+
+  Future<int> sendSpacePost(
+    String content, {
+    List<Uint8List> imageBytes = const <Uint8List>[],
+    List<String> imageFileNames = const <String>[],
+  }) async {
+    final data = imageBytes.isEmpty
+        ? await postForm('space/send', <String, String>{
+            if (content.trim().isNotEmpty) 'content': content.trim(),
+          })
+        : await postMultipartFiles(
+            'space/send',
+            <String, String>{
+              if (content.trim().isNotEmpty) 'content': content.trim(),
+            },
+            fileField: 'images',
+            fileBytes: imageBytes,
+            fileNames: imageFileNames,
+          );
+    return firstInt(data, const ['cont_id', 'id']);
+  }
+
+  Future<void> deleteSpacePost(int contId) {
+    return postForm('space/delete', <String, String>{'cont_id': '$contId'});
+  }
+
+  Future<SpacePost> toggleSpaceLike(int contId) async {
+    final data = await postForm('space/toggle_like', <String, String>{
+      'cont_id': '$contId',
+    });
+    return SpacePost(
+      id: contId,
+      senderUid: 0,
+      nickname: '',
+      likes: asInt(data['likes_num']),
+      isLiked: asBool(data['is_liked']),
+    );
+  }
+
+  Future<int> replySpacePost(
+    int replyId,
+    String content, {
+    List<Uint8List> imageBytes = const <Uint8List>[],
+    List<String> imageFileNames = const <String>[],
+  }) async {
+    final fields = <String, String>{
+      'reply_id': '$replyId',
+      if (content.trim().isNotEmpty) 'content': content.trim(),
+    };
+    final data = imageBytes.isEmpty
+        ? await postForm('space/reply', fields)
+        : await postMultipartFiles(
+            'space/reply',
+            fields,
+            fileField: 'images',
+            fileBytes: imageBytes,
+            fileNames: imageFileNames,
+          );
+    return firstInt(data, const ['cont_id', 'id']);
   }
 
   Future<GroupProfile> groupProfile(int roomId) async {
@@ -1342,6 +1433,35 @@ class CsacApiClient {
       request.files.add(
         http.MultipartFile.fromBytes(fileField, fileBytes, filename: fileName),
       );
+      return request;
+    });
+  }
+
+  Future<Map<String, dynamic>> postMultipartFiles(
+    String route,
+    Map<String, String> fields, {
+    required String fileField,
+    required List<Uint8List> fileBytes,
+    required List<String> fileNames,
+  }) {
+    final uri = _routeUri(route);
+    return _send(() {
+      final request = http.MultipartRequest('POST', uri);
+      request.fields.addAll(fields);
+      for (final entry in fileBytes.indexed) {
+        final fileName = entry.$1 < fileNames.length
+            ? fileNames[entry.$1]
+            : 'image_${entry.$1 + 1}.jpg';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            fileField,
+            entry.$2,
+            filename: fileName.trim().isEmpty
+                ? 'image_${entry.$1 + 1}.jpg'
+                : fileName.trim(),
+          ),
+        );
+      }
       return request;
     });
   }

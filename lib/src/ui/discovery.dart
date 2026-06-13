@@ -831,6 +831,820 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   }
 }
 
+class SpaceTimelineScreen extends StatefulWidget {
+  const SpaceTimelineScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<SpaceTimelineScreen> createState() => _SpaceTimelineScreenState();
+}
+
+class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
+  List<SpacePost> posts = const <SpacePost>[];
+  bool loading = true;
+  bool loadingMore = false;
+  int page = 1;
+  int total = 0;
+  String? error;
+
+  bool get hasMore => posts.length < total;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(load(refresh: true));
+  }
+
+  Future<void> load({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        loading = true;
+        error = null;
+        page = 1;
+      });
+    } else {
+      setState(() => loadingMore = true);
+    }
+    try {
+      final loaded = await widget.state.loadSpacePosts(
+        page: refresh ? 1 : page + 1,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        total = loaded.total;
+        page = loaded.page;
+        posts = refresh ? loaded.items : [...posts, ...loaded.items];
+      });
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          loadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> openComposer({SpacePost? replyTo}) async {
+    final changed = await Navigator.of(context).push<bool>(
+      CsacPageRoute<bool>(
+        builder: (_) =>
+            SpaceComposerScreen(state: widget.state, replyTo: replyTo),
+      ),
+    );
+    if (changed == true && mounted) {
+      await load(refresh: true);
+    }
+  }
+
+  Future<void> toggleLike(SpacePost post) async {
+    final previousPosts = posts;
+    final optimistic = post.copyWith(
+      isLiked: !post.isLiked,
+      likes: math.max(0, post.likes + (post.isLiked ? -1 : 1)),
+    );
+    setState(() {
+      error = null;
+      posts = _replaceSpacePost(posts, optimistic);
+    });
+    try {
+      final updated = await widget.state.toggleSpaceLike(post.id);
+      if (mounted) {
+        setState(() => posts = _replaceSpacePost(posts, updated));
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          posts = previousPosts;
+          error = err.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> deletePost(SpacePost post) async {
+    final strings = context.strings;
+    final confirmed = await showCupertinoCsacDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(strings.text('Delete post?')),
+        content: Text(strings.text('This space post will be deleted.')),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(strings.text('Cancel')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(strings.text('Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await widget.state.deleteSpacePost(post.id);
+      if (mounted) {
+        await load(refresh: true);
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return _DiscoveryPage(
+      title: strings.text('Space'),
+      trailing: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size.square(36),
+        onPressed: loading ? null : () => load(refresh: true),
+        child: loading
+            ? CupertinoActivityIndicator(radius: 9, color: colors.primaryColor)
+            : Icon(
+                CupertinoIcons.refresh,
+                size: 20,
+                color: colors.primaryColor,
+              ),
+      ),
+      bottomBar: _DiscoveryPrimaryBar(
+        label: strings.text('Post update'),
+        icon: CupertinoIcons.paperplane_fill,
+        loading: false,
+        onPressed: () => openComposer(),
+      ),
+      child: CsacCustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          CupertinoSliverRefreshControl(onRefresh: () => load(refresh: true)),
+          if (error != null)
+            SliverToBoxAdapter(
+              child: _DiscoveryErrorBanner(
+                message: error!,
+                onDismiss: () => setState(() => error = null),
+              ),
+            ),
+          if (loading)
+            SliverToBoxAdapter(
+              child: _DiscoveryProgressStrip(
+                label: strings.text('Loading space posts...'),
+              ),
+            )
+          else if (posts.isEmpty)
+            SliverToBoxAdapter(
+              child: _DiscoveryEmptyState(
+                icon: CupertinoIcons.sparkles,
+                message: strings.text('No space posts yet.'),
+              ),
+            )
+          else
+            SliverList.builder(
+              itemCount: posts.length,
+              itemBuilder: (context, index) => _SpacePostCard(
+                post: posts[index],
+                currentUid: widget.state.user?.uid ?? 0,
+                onLike: () => toggleLike(posts[index]),
+                onReply: () => openComposer(replyTo: posts[index]),
+                onDelete: deletePost,
+              ),
+            ),
+          if (!loading && hasMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                child: CupertinoButton(
+                  color: colors.cardBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  onPressed: loadingMore ? null : () => load(),
+                  child: loadingMore
+                      ? CupertinoActivityIndicator(
+                          radius: 9,
+                          color: colors.primaryColor,
+                        )
+                      : Text(strings.text('Load more')),
+                ),
+              ),
+            )
+          else
+            const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+        ],
+      ),
+    );
+  }
+}
+
+List<SpacePost> _replaceSpacePost(List<SpacePost> items, SpacePost updated) {
+  return [
+    for (final item in items)
+      if (item.id == updated.id)
+        item.copyWith(likes: updated.likes, isLiked: updated.isLiked)
+      else
+        item.copyWith(
+          replies: [
+            for (final reply in item.replies)
+              reply.id == updated.id
+                  ? reply.copyWith(
+                      likes: updated.likes,
+                      isLiked: updated.isLiked,
+                    )
+                  : reply,
+          ],
+        ),
+  ];
+}
+
+class SpaceComposerScreen extends StatefulWidget {
+  const SpaceComposerScreen({super.key, required this.state, this.replyTo});
+
+  final CsacAppState state;
+  final SpacePost? replyTo;
+
+  @override
+  State<SpaceComposerScreen> createState() => _SpaceComposerScreenState();
+}
+
+class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
+  final content = TextEditingController();
+  final picker = ImagePicker();
+  final imageBytes = <Uint8List>[];
+  final imageNames = <String>[];
+  bool sending = false;
+  String? error;
+
+  @override
+  void dispose() {
+    content.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickImages() async {
+    final picked = await picker.pickMultiImage(imageQuality: 86);
+    if (picked.isEmpty || !mounted) {
+      return;
+    }
+    for (final image in picked.take(9 - imageBytes.length)) {
+      imageBytes.add(await image.readAsBytes());
+      imageNames.add(image.name.trim().isEmpty ? 'space.jpg' : image.name);
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> submit() async {
+    final text = content.text.trim();
+    final strings = context.strings;
+    if (text.isEmpty && imageBytes.isEmpty) {
+      setState(() => error = strings.text('Write something or choose images.'));
+      return;
+    }
+    setState(() {
+      sending = true;
+      error = null;
+    });
+    try {
+      final replyTo = widget.replyTo;
+      if (replyTo == null) {
+        await widget.state.sendSpacePost(
+          text,
+          imageBytes: imageBytes,
+          imageFileNames: imageNames,
+        );
+      } else {
+        await widget.state.replySpacePost(
+          replyTo.id,
+          text,
+          imageBytes: imageBytes,
+          imageFileNames: imageNames,
+        );
+      }
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => sending = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final replyTo = widget.replyTo;
+    return _DiscoveryPage(
+      title: strings.text(replyTo == null ? 'Post update' : 'Reply post'),
+      bottomBar: _DiscoveryPrimaryBar(
+        label: strings.text(replyTo == null ? 'Post update' : 'Reply'),
+        icon: CupertinoIcons.paperplane_fill,
+        loading: sending,
+        onPressed: sending ? null : submit,
+      ),
+      child: CsacCustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          SliverToBoxAdapter(
+            child: _DiscoveryListSection(
+              header: strings.text(
+                replyTo == null ? 'New space post' : 'Reply to',
+              ),
+              footer: strings.text('You can attach up to 9 images.'),
+              children: [
+                if (replyTo != null)
+                  CupertinoListTile(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    leading: _Avatar(
+                      url: replyTo.avatar,
+                      fallback: CupertinoIcons.person_fill,
+                      name: replyTo.nickname,
+                    ),
+                    title: Text(replyTo.nickname),
+                    subtitle: Text(
+                      replyTo.content.isEmpty
+                          ? strings.text('[image]')
+                          : replyTo.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                _DiscoveryFormFieldTile(
+                  label: strings.text('Content'),
+                  controller: content,
+                  icon: CupertinoIcons.text_bubble,
+                  minLines: 5,
+                  maxLines: 8,
+                ),
+                _DiscoveryActionTile(
+                  label: strings.text('Choose images'),
+                  icon: CupertinoIcons.photo_on_rectangle,
+                  loading: false,
+                  onTap: imageBytes.length >= 9 ? null : pickImages,
+                ),
+              ],
+            ),
+          ),
+          if (imageBytes.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in imageBytes.indexed)
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              entry.$2,
+                              width: 86,
+                              height: 86,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size.square(24),
+                              color: CupertinoColors.black.withValues(
+                                alpha: 0.45,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              onPressed: () => setState(() {
+                                imageBytes.removeAt(entry.$1);
+                                imageNames.removeAt(entry.$1);
+                              }),
+                              child: const Icon(
+                                CupertinoIcons.xmark,
+                                size: 13,
+                                color: CupertinoColors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          if (error != null)
+            SliverToBoxAdapter(
+              child: _DiscoveryErrorBanner(
+                message: error!,
+                onDismiss: () => setState(() => error = null),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+              child: Text(
+                strings.text('Friends can see your space posts.'),
+                style: TextStyle(color: colors.secondaryLabel, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpacePostCard extends StatelessWidget {
+  const _SpacePostCard({
+    required this.post,
+    required this.currentUid,
+    required this.onLike,
+    required this.onReply,
+    required this.onDelete,
+  });
+
+  final SpacePost post;
+  final int currentUid;
+  final VoidCallback onLike;
+  final VoidCallback onReply;
+  final ValueChanged<SpacePost> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colors.separator.withValues(alpha: 0.24),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Avatar(
+                url: post.avatar,
+                fallback: CupertinoIcons.person_fill,
+                name: post.nickname,
+                radius: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.nickname.isEmpty
+                          ? 'UID ${post.senderUid}'
+                          : post.nickname,
+                      style: TextStyle(
+                        color: colors.label,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (post.createdAt.isNotEmpty)
+                      Text(
+                        post.createdAt,
+                        style: TextStyle(
+                          color: colors.secondaryLabel,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (post.senderUid == currentUid)
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(32),
+                  onPressed: () => onDelete(post),
+                  child: Icon(
+                    CupertinoIcons.delete,
+                    size: 18,
+                    color: colors.destructive,
+                  ),
+                ),
+            ],
+          ),
+          if (post.content.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              post.content.trim(),
+              style: TextStyle(color: colors.label, fontSize: 15, height: 1.35),
+            ),
+          ],
+          if (post.images.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _SpaceImageGrid(images: post.images),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                borderRadius: BorderRadius.circular(999),
+                color: post.isLiked
+                    ? primary.withValues(alpha: colors.isDark ? 0.22 : 0.12)
+                    : colors.tertiaryFill,
+                onPressed: onLike,
+                child: SizedBox(
+                  width: 48,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: animation,
+                            child: child,
+                          ),
+                        ),
+                        child: SizedBox(
+                          key: ValueKey<bool>(post.isLiked),
+                          width: 16,
+                          height: 16,
+                          child: Center(
+                            child: Transform.translate(
+                              offset: Offset(post.isLiked ? -0.8 : 0, 0),
+                              child: Icon(
+                                post.isLiked
+                                    ? CupertinoIcons.heart_fill
+                                    : CupertinoIcons.heart,
+                                size: 15,
+                                color: post.isLiked
+                                    ? primary
+                                    : colors.secondaryLabel,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        child: Text(
+                          '${post.likes}',
+                          key: ValueKey<int>(post.likes),
+                          style: TextStyle(
+                            color: post.isLiked
+                                ? primary
+                                : colors.secondaryLabel,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                borderRadius: BorderRadius.circular(999),
+                color: colors.tertiaryFill,
+                onPressed: onReply,
+                child: Text(strings.text('Reply')),
+              ),
+            ],
+          ),
+          if (post.replies.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: colors.tertiaryFill.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  for (final reply in post.replies)
+                    _SpaceReplyTile(
+                      reply: reply,
+                      canDelete: reply.senderUid == currentUid,
+                      onDelete: () => onDelete(reply),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SpaceImageGrid extends StatelessWidget {
+  const _SpaceImageGrid({required this.images});
+
+  final List<String> images;
+
+  @override
+  Widget build(BuildContext context) {
+    if (images.length == 1) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width - 56;
+          return _SpaceImageTile(
+            image: images.first,
+            single: true,
+            maxWidth: availableWidth,
+          );
+        },
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width - 56;
+        final columns = images.length == 4 ? 2 : 3;
+        final tileSize = ((availableWidth - 6 * (columns - 1)) / columns)
+            .clamp(64.0, 120.0)
+            .toDouble();
+        return Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final image in images.take(9))
+              _SpaceImageTile(image: image, size: tileSize),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SpaceImageTile extends StatelessWidget {
+  const _SpaceImageTile({
+    required this.image,
+    this.size,
+    this.single = false,
+    this.maxWidth,
+  });
+
+  final String image;
+  final double? size;
+  final bool single;
+  final double? maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final width = single
+        ? math
+              .min((maxWidth ?? MediaQuery.sizeOf(context).width - 56), 300)
+              .toDouble()
+        : size!;
+    final image = Image.network(
+      this.image,
+      width: single ? width : size,
+      height: single ? null : size,
+      fit: single ? BoxFit.contain : BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => Container(
+        width: single ? width : size,
+        height: single ? 160 : size,
+        color: colors.tertiaryFill,
+        alignment: Alignment.center,
+        child: Icon(CupertinoIcons.photo, color: colors.tertiaryLabel),
+      ),
+    );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => showImagePreview(context, this.image),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: single
+            ? ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: width, maxHeight: 360),
+                child: image,
+              )
+            : Container(
+                width: size,
+                height: size,
+                color: CupertinoColors.black,
+                alignment: Alignment.center,
+                child: image,
+              ),
+      ),
+    );
+  }
+}
+
+class _SpaceReplyTile extends StatelessWidget {
+  const _SpaceReplyTile({
+    required this.reply,
+    required this.canDelete,
+    required this.onDelete,
+  });
+
+  final SpacePost reply;
+  final bool canDelete;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final strings = context.strings;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: reply.nickname.isEmpty
+                            ? 'UID ${reply.senderUid}'
+                            : reply.nickname,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const TextSpan(text: ': '),
+                      TextSpan(
+                        text: reply.content.trim().isEmpty
+                            ? strings.text('[image]')
+                            : reply.content.trim(),
+                      ),
+                    ],
+                  ),
+                  style: TextStyle(
+                    color: colors.label,
+                    fontSize: 13,
+                    height: 1.28,
+                  ),
+                ),
+                if (reply.images.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _SpaceImageGrid(images: reply.images),
+                ],
+              ],
+            ),
+          ),
+          if (canDelete)
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(24),
+              onPressed: onDelete,
+              child: Icon(
+                CupertinoIcons.delete,
+                size: 14,
+                color: colors.destructive,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({
     required this.result,

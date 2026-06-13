@@ -219,6 +219,7 @@ class _MainShellState extends State<MainShell> {
             : null,
       ),
       MessageSearchScreen(state: widget.state, embedded: true),
+      SpaceTimelineScreen(state: widget.state),
       NoticeCenterScreen(state: widget.state),
       ProfileScreen(state: widget.state),
     ];
@@ -227,7 +228,7 @@ class _MainShellState extends State<MainShell> {
       if (value == 0) {
         widget.state.loadConversations();
       }
-      if (value == 2) {
+      if (value == 3) {
         widget.state.refreshNotificationCounts();
       }
     }
@@ -283,6 +284,11 @@ class _MainShellState extends State<MainShell> {
               icon: const Icon(CupertinoIcons.search),
               activeIcon: const Icon(CupertinoIcons.search_circle_fill),
               label: context.strings.text('Search'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(CupertinoIcons.sparkles),
+              activeIcon: const Icon(CupertinoIcons.sparkles),
+              label: context.strings.text('Space'),
             ),
             BottomNavigationBarItem(
               icon: _TabBadgeIcon(
@@ -349,6 +355,12 @@ class _CupertinoSideRail extends StatelessWidget {
         CupertinoIcons.search,
         CupertinoIcons.search_circle_fill,
         context.strings.text('Search'),
+        0,
+      ),
+      (
+        CupertinoIcons.sparkles,
+        CupertinoIcons.sparkles,
+        context.strings.text('Space'),
         0,
       ),
       (
@@ -640,7 +652,14 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-enum _ConversationGroupFilter { all, important, friends, groups, archived }
+enum _ConversationGroupFilter {
+  all,
+  important,
+  friends,
+  groups,
+  archived,
+  hidden,
+}
 
 class _ConversationScreenState extends State<ConversationScreen> {
   final search = TextEditingController();
@@ -706,6 +725,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
             !loaded.values.any((value) => value.archived)) {
           groupFilter = _ConversationGroupFilter.all;
         }
+        if (groupFilter == _ConversationGroupFilter.hidden &&
+            widget.state.hiddenGroupConversationIds.isEmpty) {
+          groupFilter = _ConversationGroupFilter.all;
+        }
       });
     }
   }
@@ -747,35 +770,45 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   bool conversationInCurrentGroup(Conversation conversation) {
     final pref = localPref(conversation);
+    final hidden = widget.state.isConversationHidden(conversation);
     switch (groupFilter) {
       case _ConversationGroupFilter.all:
-        return !pref.archived;
+        return !pref.archived && !hidden;
       case _ConversationGroupFilter.important:
-        return !pref.archived && pref.pinned;
+        return !pref.archived && !hidden && pref.pinned;
       case _ConversationGroupFilter.friends:
         return !pref.archived && conversation.type == ConversationType.private;
       case _ConversationGroupFilter.groups:
-        return !pref.archived && conversation.type == ConversationType.group;
+        return !pref.archived &&
+            !hidden &&
+            conversation.type == ConversationType.group;
       case _ConversationGroupFilter.archived:
-        return pref.archived;
+        return pref.archived && !hidden;
+      case _ConversationGroupFilter.hidden:
+        return hidden;
     }
   }
 
   int groupCount(_ConversationGroupFilter filter) {
     return widget.state.conversations.where((conversation) {
       final pref = localPref(conversation);
+      final hidden = widget.state.isConversationHidden(conversation);
       switch (filter) {
         case _ConversationGroupFilter.all:
-          return !pref.archived;
+          return !pref.archived && !hidden;
         case _ConversationGroupFilter.important:
-          return !pref.archived && pref.pinned;
+          return !pref.archived && !hidden && pref.pinned;
         case _ConversationGroupFilter.friends:
           return !pref.archived &&
               conversation.type == ConversationType.private;
         case _ConversationGroupFilter.groups:
-          return !pref.archived && conversation.type == ConversationType.group;
+          return !pref.archived &&
+              !hidden &&
+              conversation.type == ConversationType.group;
         case _ConversationGroupFilter.archived:
-          return pref.archived;
+          return pref.archived && !hidden;
+        case _ConversationGroupFilter.hidden:
+          return hidden;
       }
     }).length;
   }
@@ -795,6 +828,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         return 'No group conversations.';
       case _ConversationGroupFilter.archived:
         return 'No archived conversations.';
+      case _ConversationGroupFilter.hidden:
+        return 'No hidden conversations.';
     }
   }
 
@@ -809,6 +844,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> showConversationActions(Conversation conversation) async {
     final pref = localPref(conversation);
+    final hidden = widget.state.isConversationHidden(conversation);
     final strings = context.strings;
     final selected = await showCsacActionSheet<String>(
       context: context,
@@ -838,6 +874,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
           icon: CupertinoIcons.archivebox,
           destructive: !pref.archived,
         ),
+        if (conversation.type == ConversationType.group)
+          CsacActionSheetAction(
+            value: 'hide',
+            title: strings.text(
+              hidden ? 'Unhide conversation' : 'Hide conversation',
+            ),
+            icon: hidden ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+            destructive: !hidden,
+          ),
       ],
     );
     if (!mounted || selected == null) {
@@ -864,6 +909,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
             pinned: current.archived ? current.pinned : false,
           ),
         );
+        break;
+      case 'hide':
+        await widget.state.toggleHiddenConversation(conversation);
+        if (mounted && groupFilter == _ConversationGroupFilter.hidden) {
+          setState(() {});
+        }
         break;
     }
   }
@@ -995,6 +1046,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       _ConversationGroupFilter.friends,
       _ConversationGroupFilter.groups,
       _ConversationGroupFilter.archived,
+      _ConversationGroupFilter.hidden,
     ];
     Future<void> openConversation(Conversation conversation) async {
       if (widget.onConversationSelected != null) {
@@ -1343,6 +1395,8 @@ String _conversationGroupLabel(_ConversationGroupFilter filter) {
       return 'Groups ({count})';
     case _ConversationGroupFilter.archived:
       return 'Archived ({count})';
+    case _ConversationGroupFilter.hidden:
+      return 'Hidden ({count})';
   }
 }
 
@@ -1358,6 +1412,8 @@ String _conversationGroupSectionLabel(_ConversationGroupFilter filter) {
       return 'Groups';
     case _ConversationGroupFilter.archived:
       return 'Archived';
+    case _ConversationGroupFilter.hidden:
+      return 'Hidden';
   }
 }
 
@@ -1373,6 +1429,8 @@ IconData _conversationGroupIcon(_ConversationGroupFilter filter) {
       return CupertinoIcons.group;
     case _ConversationGroupFilter.archived:
       return CupertinoIcons.archivebox;
+    case _ConversationGroupFilter.hidden:
+      return CupertinoIcons.eye_slash;
   }
 }
 
