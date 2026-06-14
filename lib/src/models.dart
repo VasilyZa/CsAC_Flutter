@@ -384,6 +384,7 @@ class GroupProfile {
     this.joinType = '',
     this.showPublic = false,
     this.allowInvite = true,
+    this.allowSearch = true,
     this.memberCount = 0,
     this.isInGroup = false,
     this.isAdmin = false,
@@ -404,6 +405,7 @@ class GroupProfile {
   final String joinType;
   final bool showPublic;
   final bool allowInvite;
+  final bool allowSearch;
   final int memberCount;
   final bool isInGroup;
   final bool isAdmin;
@@ -466,6 +468,9 @@ class GroupProfile {
       ]),
       allowInvite: json.containsKey('allow_invite')
           ? firstBool(json, const ['allow_invite'])
+          : true,
+      allowSearch: json.containsKey('allow_search')
+          ? firstBool(json, const ['allow_search'])
           : true,
       memberCount: asInt(json['member_count']),
       isInGroup: asBool(json['is_in_group']),
@@ -538,11 +543,11 @@ class SpacePostPage {
 
   factory SpacePostPage.fromJson(Map<String, dynamic> json) {
     return SpacePostPage(
-      total: asInt(json['total']),
-      page: asInt(json['page']) == 0 ? 1 : asInt(json['page']),
-      pageSize: asInt(json['page_size']) == 0 ? 20 : asInt(json['page_size']),
+      total: firstInt(json, const ['total', 'count']),
+      page: firstInt(json, const ['page']).ifZero(1),
+      pageSize: firstInt(json, const ['page_size', 'pageSize']).ifZero(20),
       items: _spacePostRows(
-        json['list'] ?? json['data'] ?? json['items'],
+        json['list'] ?? json['items'] ?? json['data'],
       ).map(SpacePost.fromJson).toList(),
     );
   }
@@ -578,18 +583,27 @@ class SpacePost {
   final List<SpacePost> replies;
 
   factory SpacePost.fromJson(Map<String, dynamic> json) {
+    final senderUid = firstInt(json, const ['sender_uid', 'uid', 'user_id']);
     return SpacePost(
       id: firstInt(json, const ['cont_id', 'id']),
-      senderUid: firstInt(json, const ['sender_uid', 'uid', 'user_id']),
-      nickname: firstString(json, const ['nickname', 'name']),
+      senderUid: senderUid,
+      nickname: firstString(json, const [
+        'nickname',
+        'name',
+      ]).ifEmpty(senderUid > 0 ? 'UID $senderUid' : ''),
       avatar: normalizeApiUrl(asString(json['avatar'])),
-      content: asString(json['content']),
-      images: _spaceImageUrls(json['img_conts']),
+      content: firstString(json, const ['content', 'text', 'message']),
+      images: spacePostImageList(json),
       isReply: asInt(json['is_reply']) != 0 || asBool(json['is_reply']),
-      replyId: asInt(json['reply_id']),
-      likes: asInt(json['likes_num']),
-      isLiked: asBool(json['is_liked']),
-      createdAt: readableTimestamp(json['created_at']),
+      replyId: firstInt(json, const ['reply_id', 'parent_id']),
+      likes: firstInt(json, const ['likes_num', 'like_count', 'likes']),
+      isLiked: asBool(json['is_liked']) || asBool(json['liked']),
+      createdAt: firstReadableTime(json, const [
+        'created_at',
+        'create_time',
+        'time',
+        'add_time',
+      ]),
       replies: _spacePostRows(json['replies']).map(SpacePost.fromJson).toList(),
     );
   }
@@ -612,9 +626,51 @@ class SpacePost {
   }
 }
 
+class SpaceLikeUpdate {
+  const SpaceLikeUpdate({
+    required this.isLiked,
+    required this.likes,
+    this.message = '',
+  });
+
+  final bool isLiked;
+  final int likes;
+  final String message;
+
+  factory SpaceLikeUpdate.fromJson(Map<String, dynamic> json) {
+    final nested = json['data'];
+    final nestedMap = nested is Map
+        ? Map<String, dynamic>.from(nested)
+        : const <String, dynamic>{};
+    return SpaceLikeUpdate(
+      isLiked: asBool(json['is_liked']) || asBool(nestedMap['is_liked']),
+      likes: firstInt(
+        json,
+        const ['likes_num', 'like_count', 'likes'],
+      ).ifZero(firstInt(nestedMap, const ['likes_num', 'like_count', 'likes'])),
+      message: firstString(json, const [
+        'message',
+      ]).ifEmpty(firstString(nestedMap, const ['message'])),
+    );
+  }
+}
+
 List<Map<String, dynamic>> _spacePostRows(Object? value) {
-  if (value is List) {
-    return value
+  Object? decoded = value;
+  if (value is String && value.trim().isNotEmpty) {
+    try {
+      decoded = jsonDecode(value);
+    } catch (_) {
+      decoded = const <Object?>[];
+    }
+  }
+  if (decoded is Map) {
+    return _spacePostRows(
+      decoded['list'] ?? decoded['items'] ?? decoded['data'],
+    );
+  }
+  if (decoded is List) {
+    return decoded
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -622,7 +678,65 @@ List<Map<String, dynamic>> _spacePostRows(Object? value) {
   return const <Map<String, dynamic>>[];
 }
 
-List<String> _spaceImageUrls(Object? value) {
+List<String> spacePostImageList(Map<String, dynamic> json) {
+  final images = <String>[];
+  final seen = <String>{};
+  for (final key in const [
+    'img_conts',
+    'img_cont',
+    'image_conts',
+    'image_cont',
+    'images',
+    'image',
+    'image_urls',
+    'image_url',
+    'img_urls',
+    'img_url',
+    'imgs',
+    'photos',
+    'photo_urls',
+    'pictures',
+    'picture_urls',
+    'media',
+    'attachments',
+  ]) {
+    for (final image in normalizeApiUrlList(json[key])) {
+      if (seen.add(image)) {
+        images.add(image);
+      }
+    }
+  }
+  return images;
+}
+
+List<String> normalizeApiUrlList(Object? value) {
+  final result = <String>[];
+  void add(Object? item) {
+    if (item is Map) {
+      for (final key in const [
+        'url',
+        'path',
+        'src',
+        'image',
+        'image_url',
+        'img_url',
+        'thumb',
+        'thumbnail',
+      ]) {
+        final nested = item[key];
+        if (asString(nested).trim().isNotEmpty) {
+          add(nested);
+          return;
+        }
+      }
+      return;
+    }
+    final text = asString(item).trim();
+    if (text.isNotEmpty) {
+      result.add(normalizeApiUrl(text));
+    }
+  }
+
   Object? decoded = value;
   if (value is String && value.trim().isNotEmpty) {
     try {
@@ -632,12 +746,13 @@ List<String> _spaceImageUrls(Object? value) {
     }
   }
   if (decoded is List) {
-    return decoded
-        .map((item) => normalizeApiUrl(asString(item)))
-        .where((item) => item.trim().isNotEmpty)
-        .toList();
+    for (final item in decoded) {
+      add(item);
+    }
+  } else {
+    add(decoded);
   }
-  return const <String>[];
+  return result.where((item) => item.trim().isNotEmpty).toList();
 }
 
 class EmojiSticker {
@@ -862,7 +977,7 @@ class ChatMessage {
     ]);
     var body = asString(json['content']).trim();
     if (isRecalled) {
-      body = body.isEmpty ? '[recalled]' : body;
+      body = '[recalled]';
     } else {
       if (image.isNotEmpty && contentLooksLikeImage) {
         body = '';

@@ -418,7 +418,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       }
       navigator.popUntil((route) => route.isFirst);
       messenger.showToast(
-        CsacToast(content: Text(strings.text('Account deleted.'))),
+        CsacToast(content: Text(strings.text('Account deletion scheduled.'))),
       );
     } catch (err) {
       if (mounted) {
@@ -530,6 +530,20 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     onTap: updatingAvatar ? null : changeAvatar,
                   ),
                   _CupertinoListTile(
+                    title: strings.text('My QR code'),
+                    subtitle: strings.text(
+                      'Share your profile link as a QR code',
+                    ),
+                    leading: const Icon(CupertinoIcons.qrcode),
+                    onTap: user == null
+                        ? null
+                        : () => Navigator.of(context).push(
+                            CsacPageRoute<void>(
+                              builder: (_) => UserQrScreen(state: widget.state),
+                            ),
+                          ),
+                  ),
+                  _CupertinoListTile(
                     title: strings.text('Pat action'),
                     subtitle: user?.patAction ?? defaultPatAction,
                     leading: const Icon(CupertinoIcons.hand_raised),
@@ -553,7 +567,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   _CupertinoListTile(
                     title: strings.text('Delete account'),
                     subtitle: strings.text(
-                      'Permanently delete this account and owned groups.',
+                      'Start a 14-day account deletion cooling period.',
                     ),
                     leading: Icon(
                       CupertinoIcons.delete,
@@ -624,7 +638,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
         children: [
           Text(
             strings.text(
-              'This will permanently delete your account, messages and owned groups. This cannot be undone.',
+              'This will start a 14-day deletion cooling period. During this time you can restore the account by email token.',
             ),
           ),
           const SizedBox(height: 12),
@@ -2119,6 +2133,52 @@ const apiDocEndpoints = <ApiDocEndpoint>[
   ),
   ApiDocEndpoint(
     group: 'Auth',
+    route: 'auth/login_by_email',
+    method: ApiDocMethod.post,
+    summary: 'Login by email',
+    description: 'Log in with email and password.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+      ApiDocParam(name: 'pwd', description: 'Password', required: true),
+      ApiDocParam(
+        name: 'platform',
+        description: 'Client identifier: client-branch-version',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/send_login_code',
+    method: ApiDocMethod.post,
+    summary: 'Send login email code',
+    description: 'Send a 6-digit email code for passwordless login.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/login_by_code',
+    method: ApiDocMethod.post,
+    summary: 'Login by email code',
+    description: 'Log in with email and a 6-digit email code.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+      ApiDocParam(
+        name: 'email_code',
+        description: '6-digit login code',
+        required: true,
+      ),
+      ApiDocParam(
+        name: 'platform',
+        description: 'Client identifier: client-branch-version',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
     route: 'auth/register',
     method: ApiDocMethod.post,
     summary: 'Register account',
@@ -2192,6 +2252,32 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     description: 'Clear the current server session.',
   ),
   ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/request_restore',
+    method: ApiDocMethod.post,
+    summary: 'Request account restore',
+    description: 'Send an account restore token to the bound email address.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+    ],
+  ),
+  ApiDocEndpoint(
+    group: 'Auth',
+    route: 'auth/restore_account',
+    method: ApiDocMethod.post,
+    summary: 'Restore account',
+    description:
+        'Restore an account during the 14-day deletion cooling period.',
+    params: [
+      ApiDocParam(name: 'email', description: 'Email address', required: true),
+      ApiDocParam(
+        name: 'restore_token',
+        description: 'Restore token from email',
+        required: true,
+      ),
+    ],
+  ),
+  ApiDocEndpoint(
     group: 'User',
     route: 'user/get_info',
     method: ApiDocMethod.get,
@@ -2258,7 +2344,8 @@ const apiDocEndpoints = <ApiDocEndpoint>[
     route: 'user/delete_account',
     method: ApiDocMethod.post,
     summary: 'Delete account',
-    description: 'Permanently delete the current account and owned groups.',
+    description:
+        'Start a 14-day account deletion cooling period. The account can be restored during this period.',
   ),
   ApiDocEndpoint(
     group: 'User',
@@ -2587,6 +2674,11 @@ const apiDocEndpoints = <ApiDocEndpoint>[
       ApiDocParam(name: 'answer', description: 'Join answer'),
       ApiDocParam(name: 'show_in_list', description: '0 or 1'),
       ApiDocParam(name: 'allow_invite', description: '0 or 1'),
+      ApiDocParam(
+        name: 'allow_search',
+        description:
+            '0 or 1. When 0, non-members cannot search or actively join.',
+      ),
     ],
   ),
   ApiDocEndpoint(

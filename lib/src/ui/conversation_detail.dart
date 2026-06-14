@@ -886,6 +886,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   title: strings.text('Invite member'),
                   onTap: () => inviteMember(profile),
                 ),
+              _CupertinoListTile(
+                leading: const Icon(CupertinoIcons.qrcode),
+                title: strings.text('Group QR code'),
+                onTap: () => Navigator.of(context).push(
+                  CsacPageRoute<void>(
+                    builder: (_) => GroupQrScreen(group: profile),
+                  ),
+                ),
+              ),
               if (!isInGroup)
                 _CupertinoListTile(
                   leading: const Icon(CupertinoIcons.person_2_fill),
@@ -1544,6 +1553,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     final answer = TextEditingController(text: group.answer);
     var showPublic = group.showPublic;
     var allowInvite = group.allowInvite;
+    var allowSearch = group.allowSearch;
     final strings = context.strings;
     final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
@@ -1603,6 +1613,22 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   onChanged: (value) =>
                       setDialogState(() => allowInvite = value),
                 ),
+                CsacSwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(strings.text('Allow search and active join')),
+                  subtitle: Text(
+                    strings.text(
+                      'When off, only member invites or QR codes can be used to join.',
+                    ),
+                  ),
+                  value: allowSearch,
+                  onChanged: (value) => setDialogState(() {
+                    allowSearch = value;
+                    if (!value) {
+                      showPublic = false;
+                    }
+                  }),
+                ),
               ],
             ),
           ),
@@ -1639,6 +1665,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
         answer: answerText,
         showPublic: showPublic,
         allowInvite: allowInvite,
+        allowSearch: allowSearch,
       ),
       'Group settings updated.',
     );
@@ -2123,7 +2150,13 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                             actionTile(
                               icon: Icons.tune,
                               title: strings.text('Join settings'),
-                              subtitle: group.joinType,
+                              subtitle: [
+                                if (group.joinType.trim().isNotEmpty)
+                                  group.joinType,
+                                group.allowSearch
+                                    ? strings.text('Searchable')
+                                    : strings.text('Invite or QR only'),
+                              ].join(' | '),
                               onTap: editSettings,
                             ),
                             const CsacDivider(height: 1),

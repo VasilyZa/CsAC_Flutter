@@ -153,6 +153,13 @@ class CsacAppState extends ChangeNotifier {
       unawaited(loadEmojiStickers(forceRefresh: true));
       await refreshDebugMode();
       unawaited(ensureRealtimeConnection());
+    } on CsacEmailVerificationRequiredException {
+      user = await cache.loadUser();
+      conversations = _sortConversations(await cache.loadConversations());
+      offlineMode = false;
+      sessionExpired = false;
+      needsEmailVerification = true;
+      error = null;
     } on CsacAuthException catch (err) {
       await client.clearSession();
       user = await cache.loadUser();
@@ -164,13 +171,6 @@ class CsacAppState extends ChangeNotifier {
           : CsacStrings(
               localeForLanguage(preferences.language),
             ).text('Session expired. Cached history is available offline.');
-    } on CsacEmailVerificationRequiredException {
-      user = await cache.loadUser();
-      conversations = _sortConversations(await cache.loadConversations());
-      offlineMode = false;
-      sessionExpired = false;
-      needsEmailVerification = true;
-      error = null;
     } catch (_) {
       user = await cache.loadUser();
       conversations = _sortConversations(await cache.loadConversations());
@@ -188,19 +188,51 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> login(String username, String password) async {
+    await _loginWith(
+      usernameForRecord: username,
+      loginCall: () async => client.login(
+        username,
+        password,
+        platform: await currentClientPlatform(),
+      ),
+    );
+  }
+
+  Future<void> loginByEmail(String email, String password) async {
+    await _loginWith(
+      usernameForRecord: email,
+      loginCall: () async => client.loginByEmail(
+        email,
+        password,
+        platform: await currentClientPlatform(),
+      ),
+    );
+  }
+
+  Future<void> loginByEmailCode(String email, String emailCode) async {
+    await _loginWith(
+      usernameForRecord: email,
+      loginCall: () async => client.loginByEmailCode(
+        email,
+        emailCode,
+        platform: await currentClientPlatform(),
+      ),
+    );
+  }
+
+  Future<void> _loginWith({
+    required String usernameForRecord,
+    required Future<CsacUser> Function() loginCall,
+  }) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      user = await client.login(
-        username,
-        password,
-        platform: await currentClientPlatform(),
-      );
+      user = await loginCall();
       await cache.saveUser(user!);
       await LoginAccountStore.upsert(
         user: user!,
-        username: username,
+        username: usernameForRecord,
         serverUrl: client.baseUrl,
         sessionCookies: client.sessionSnapshot,
       );
@@ -215,6 +247,12 @@ class CsacAppState extends ChangeNotifier {
         await refreshDebugMode();
         unawaited(ensureRealtimeConnection());
       }
+    } on CsacEmailVerificationRequiredException {
+      offlineMode = false;
+      sessionExpired = false;
+      needsEmailVerification = true;
+      error = null;
+      rethrow;
     } catch (err) {
       error = err.toString();
       rethrow;
@@ -273,12 +311,27 @@ class CsacAppState extends ChangeNotifier {
     }
   }
 
-  Future<void> sendRegisterEmailCode(String email) async {
-    await client.sendRegisterEmailCode(email: email);
+  Future<EmailCodeResponse> sendRegisterEmailCode(String email) {
+    return client.sendRegisterEmailCode(email: email);
   }
 
-  Future<void> sendEmailBindCode(String email) async {
-    await client.sendEmailBindCode(email: email);
+  Future<EmailCodeResponse> sendLoginEmailCode(String email) {
+    return client.sendLoginEmailCode(email: email);
+  }
+
+  Future<EmailCodeResponse> sendEmailBindCode(String email) {
+    return client.sendEmailBindCode(email: email);
+  }
+
+  Future<void> requestAccountRestore(String email) {
+    return client.requestAccountRestore(email: email);
+  }
+
+  Future<void> restoreAccount({
+    required String email,
+    required String restoreToken,
+  }) {
+    return client.restoreAccount(email: email, restoreToken: restoreToken);
   }
 
   Future<void> verifyEmailBindCode({
@@ -1034,7 +1087,7 @@ class CsacAppState extends ChangeNotifier {
     );
   }
 
-  Future<SpacePost> toggleSpaceLike(int contId) {
+  Future<SpaceLikeUpdate> toggleSpaceLike(int contId) {
     return client.toggleSpaceLike(contId);
   }
 
@@ -1504,6 +1557,7 @@ class CsacAppState extends ChangeNotifier {
     required String answer,
     required bool showPublic,
     required bool allowInvite,
+    required bool allowSearch,
   }) async {
     await client.updateGroupSettings(
       roomId,
@@ -1513,6 +1567,7 @@ class CsacAppState extends ChangeNotifier {
       answer: answer,
       showPublic: showPublic,
       allowInvite: allowInvite,
+      allowSearch: allowSearch,
     );
     await syncConversations();
   }

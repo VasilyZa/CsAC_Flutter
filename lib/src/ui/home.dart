@@ -19,6 +19,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int index = 0;
   int lastUnreadChats = 0;
+  int? focusedSpacePostId;
   Conversation? selectedConversation;
   Timer? timer;
 
@@ -198,16 +199,34 @@ class _MainShellState extends State<MainShell> {
         return openDeepLinkTab(0);
       case CsacDeepLinkAction.search:
         return openDeepLinkTab(1);
+      case CsacDeepLinkAction.searchResult:
+        return openDeepLinkTab(1);
       case CsacDeepLinkAction.space:
         return openDeepLinkTab(2);
+      case CsacDeepLinkAction.spacePost:
+        return openDeepLinkSpacePost(target.id ?? 0);
       case CsacDeepLinkAction.notices:
         return openDeepLinkTab(3);
       case CsacDeepLinkAction.profile:
         return openDeepLinkTab(4);
+      case CsacDeepLinkAction.userProfile:
+        return openDeepLinkUserProfile(target.id ?? 0);
       case CsacDeepLinkAction.groupChat:
         return openDeepLinkChat(ConversationType.group, target.id ?? 0);
       case CsacDeepLinkAction.privateChat:
         return openDeepLinkChat(ConversationType.private, target.id ?? 0);
+      case CsacDeepLinkAction.groupMessage:
+        return openDeepLinkChat(
+          ConversationType.group,
+          target.id ?? 0,
+          focusMessageId: target.messageId,
+        );
+      case CsacDeepLinkAction.privateMessage:
+        return openDeepLinkChat(
+          ConversationType.private,
+          target.id ?? 0,
+          focusMessageId: target.messageId,
+        );
       case CsacDeepLinkAction.unsupported:
         return false;
     }
@@ -228,7 +247,11 @@ class _MainShellState extends State<MainShell> {
     return true;
   }
 
-  Future<bool> openDeepLinkChat(ConversationType type, int id) async {
+  Future<bool> openDeepLinkChat(
+    ConversationType type,
+    int id, {
+    int? focusMessageId,
+  }) async {
     if (id <= 0) {
       return false;
     }
@@ -260,9 +283,34 @@ class _MainShellState extends State<MainShell> {
     }
     await Navigator.of(context).push(
       CsacPageRoute<void>(
-        builder: (_) => ChatScreen(state: widget.state, conversation: opened),
+        builder: (_) => ChatScreen(
+          state: widget.state,
+          conversation: opened,
+          focusMessageId: focusMessageId,
+        ),
       ),
     );
+    return true;
+  }
+
+  Future<bool> openDeepLinkUserProfile(int uid) async {
+    if (uid <= 0) {
+      return false;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    await openUserProfile(context, widget.state, uid);
+    return true;
+  }
+
+  bool openDeepLinkSpacePost(int postId) {
+    if (postId <= 0) {
+      return false;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() {
+      index = 2;
+      focusedSpacePostId = postId;
+    });
     return true;
   }
 
@@ -285,6 +333,7 @@ class _MainShellState extends State<MainShell> {
         state: widget.state,
         navigatorKey: widget.navigatorKey,
         scaffoldMessengerKey: widget.scaffoldMessengerKey,
+        onOpenDeepLinkTarget: openDeepLinkTarget,
         embedded: true,
         selectedConversation: selectedConversation,
         onConversationSelected: wide
@@ -301,7 +350,7 @@ class _MainShellState extends State<MainShell> {
             : null,
       ),
       MessageSearchScreen(state: widget.state, embedded: true),
-      SpaceTimelineScreen(state: widget.state),
+      SpaceTimelineScreen(state: widget.state, focusPostId: focusedSpacePostId),
       NoticeCenterScreen(state: widget.state),
       ProfileScreen(state: widget.state),
     ];
@@ -721,6 +770,7 @@ class ConversationScreen extends StatefulWidget {
     this.embedded = false,
     this.selectedConversation,
     this.onConversationSelected,
+    this.onOpenDeepLinkTarget,
   });
 
   final CsacAppState state;
@@ -729,6 +779,7 @@ class ConversationScreen extends StatefulWidget {
   final bool embedded;
   final Conversation? selectedConversation;
   final ValueChanged<Conversation>? onConversationSelected;
+  final Future<bool> Function(CsacDeepLinkTarget target)? onOpenDeepLinkTarget;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -1006,6 +1057,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       case 'refresh':
         await refresh();
         break;
+      case 'scanQr':
+        await scanQrCode();
+        break;
       case 'addFriend':
         await Navigator.of(context).push(
           CsacPageRoute<void>(
@@ -1052,6 +1106,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
     if (mounted &&
         action != 'refresh' &&
+        action != 'scanQr' &&
         action != 'searchMessages' &&
         action != 'commands' &&
         action != 'logout') {
@@ -1069,6 +1124,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
           title: strings.text('Refresh'),
           icon: CupertinoIcons.arrow_clockwise,
         ),
+        if (isMobilePlatform)
+          CsacActionSheetAction(
+            value: 'scanQr',
+            title: strings.text('Scan QR code'),
+            icon: CupertinoIcons.qrcode_viewfinder,
+          ),
         CsacActionSheetAction(
           value: 'addFriend',
           title: strings.text('Add friend'),
@@ -1105,6 +1166,61 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
     if (action != null && mounted) {
       await openHomeAction(action);
+    }
+  }
+
+  Future<void> scanQrCode() async {
+    if (!isMobilePlatform) {
+      return;
+    }
+    final uri = await openCsacQrScanner(context);
+    if (uri == null || !mounted) {
+      return;
+    }
+    final target = parseCsacDeepLink(uri);
+    if (!target.isSupported) {
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
+          content: Text(context.strings.text('Unsupported CsAC link.')),
+        ),
+      );
+      return;
+    }
+    final handled = widget.onOpenDeepLinkTarget == null
+        ? await openScannedDeepLinkTarget(target)
+        : await widget.onOpenDeepLinkTarget!(target);
+    if (mounted && !handled) {
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(
+          content: Text(context.strings.text('Unable to open CsAC link.')),
+        ),
+      );
+    }
+  }
+
+  Future<bool> openScannedDeepLinkTarget(CsacDeepLinkTarget target) async {
+    switch (target.action) {
+      case CsacDeepLinkAction.userProfile:
+        final uid = target.id ?? 0;
+        if (uid <= 0) {
+          return false;
+        }
+        await openUserProfile(context, widget.state, uid);
+        return true;
+      case CsacDeepLinkAction.unsupported:
+        return false;
+      case CsacDeepLinkAction.chats:
+      case CsacDeepLinkAction.search:
+      case CsacDeepLinkAction.searchResult:
+      case CsacDeepLinkAction.space:
+      case CsacDeepLinkAction.spacePost:
+      case CsacDeepLinkAction.notices:
+      case CsacDeepLinkAction.profile:
+      case CsacDeepLinkAction.groupChat:
+      case CsacDeepLinkAction.privateChat:
+      case CsacDeepLinkAction.groupMessage:
+      case CsacDeepLinkAction.privateMessage:
+        return false;
     }
   }
 

@@ -692,6 +692,39 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
     );
   }
 
+  Future<void> openResultQr(MessageSearchResult result) {
+    final strings = context.strings;
+    final conversation = result.conversation;
+    final message = result.message;
+    final link = conversation.type == ConversationType.group
+        ? csacGroupMessageDeepLink(conversation.id, message.id)
+        : csacPrivateMessageDeepLink(conversation.id, message.id);
+    return Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => CsacQrShareScreen(
+          title: strings.text('Search result QR code'),
+          link: link,
+          cardTitle: conversation.name,
+          cardSubtitle: strings.format('Message #{id} from {name}', {
+            'id': message.id,
+            'name': message.sender,
+          }),
+          avatarUrl: conversation.avatar,
+          fallbackIcon: conversation.type == ConversationType.group
+              ? CupertinoIcons.group_solid
+              : CupertinoIcons.person_fill,
+          helperText: strings.text('Scan to open this search result in CsAC.'),
+          shareTitle: strings.text('Share search result QR code'),
+          shareSubject: strings.text('CsAC search result QR code'),
+          fileName:
+              'csac-search-result-${conversation.type.name}-${conversation.id}-${message.id}.png',
+          copyToast: strings.text('Search result link copied.'),
+          semanticsLabel: strings.text('CsAC search result QR code'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -806,6 +839,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
                                 result: results[index],
                                 preferences: widget.state.preferences,
                                 onTap: () => openResult(results[index]),
+                                onQrTap: () => openResultQr(results[index]),
                               ),
                             ),
                         ],
@@ -832,9 +866,10 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 }
 
 class SpaceTimelineScreen extends StatefulWidget {
-  const SpaceTimelineScreen({super.key, required this.state});
+  const SpaceTimelineScreen({super.key, required this.state, this.focusPostId});
 
   final CsacAppState state;
+  final int? focusPostId;
 
   @override
   State<SpaceTimelineScreen> createState() => _SpaceTimelineScreenState();
@@ -845,10 +880,14 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
   bool loading = true;
   bool loadingMore = false;
   int page = 1;
+  int pageSize = 20;
   int total = 0;
   String? error;
+  int? lastFocusedPostId;
+  final postKeys = <int, GlobalKey>{};
 
-  bool get hasMore => posts.length < total;
+  bool get hasMore =>
+      total > 0 ? posts.length < total : posts.length >= pageSize;
 
   @override
   void initState() {
@@ -856,10 +895,50 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
     unawaited(load(refresh: true));
   }
 
+  @override
+  void didUpdateWidget(covariant SpaceTimelineScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusPostId != widget.focusPostId) {
+      scheduleFocusPost(force: true);
+    }
+  }
+
+  void scheduleFocusPost({bool force = false}) {
+    final postId = widget.focusPostId ?? 0;
+    if (postId <= 0) {
+      return;
+    }
+    if (!force &&
+        lastFocusedPostId == postId &&
+        postKeys[postId]?.currentContext != null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final keyContext = postKeys[postId]?.currentContext;
+      if (keyContext == null) {
+        return;
+      }
+      lastFocusedPostId = postId;
+      Scrollable.ensureVisible(
+        keyContext,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
+
   Future<void> load({bool refresh = false}) async {
+    if (!refresh && (loadingMore || !hasMore)) {
+      return;
+    }
+    final targetPage = refresh ? 1 : page + 1;
     if (refresh) {
       setState(() {
-        loading = true;
+        loading = posts.isEmpty;
         error = null;
         page = 1;
       });
@@ -867,17 +946,19 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
       setState(() => loadingMore = true);
     }
     try {
-      final loaded = await widget.state.loadSpacePosts(
-        page: refresh ? 1 : page + 1,
-      );
+      final loaded = await widget.state.loadSpacePosts(page: targetPage);
       if (!mounted) {
         return;
       }
       setState(() {
         total = loaded.total;
-        page = loaded.page;
-        posts = refresh ? loaded.items : [...posts, ...loaded.items];
+        page = loaded.page <= 0 ? targetPage : loaded.page;
+        pageSize = loaded.pageSize <= 0 ? pageSize : loaded.pageSize;
+        posts = refresh
+            ? _mergeSpacePosts(const <SpacePost>[], loaded.items)
+            : _mergeSpacePosts(posts, loaded.items);
       });
+      scheduleFocusPost(force: refresh);
     } catch (err) {
       if (mounted) {
         setState(() => error = err.toString());
@@ -901,7 +982,48 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
     );
     if (changed == true && mounted) {
       await load(refresh: true);
+      if (mounted) {
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
+            content: Text(
+              context.strings.text(
+                replyTo == null ? 'Post published.' : 'Reply sent.',
+              ),
+            ),
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> openPostUser(SpacePost post) async {
+    final uid = post.senderUid;
+    if (uid <= 0) {
+      return;
+    }
+    await openUserProfile(context, widget.state, uid);
+  }
+
+  Future<void> openPostQr(SpacePost post) {
+    final strings = context.strings;
+    return Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => CsacQrShareScreen(
+          title: strings.text('Post QR code'),
+          link: csacSpacePostDeepLink(post.id),
+          cardTitle: post.nickname,
+          cardSubtitle: strings.format('Post #{id}', {'id': post.id}),
+          avatarUrl: post.avatar,
+          fallbackIcon: CupertinoIcons.globe,
+          helperText: strings.text('Scan to open this post in CsAC.'),
+          shareTitle: strings.text('Share post QR code'),
+          shareSubject: strings.text('CsAC post QR code'),
+          fileName: 'csac-post-${post.id}.png',
+          copyToast: strings.text('Post link copied.'),
+          semanticsLabel: strings.text('CsAC post QR code'),
+        ),
+      ),
+    );
   }
 
   Future<void> toggleLike(SpacePost post) async {
@@ -917,7 +1039,12 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
     try {
       final updated = await widget.state.toggleSpaceLike(post.id);
       if (mounted) {
-        setState(() => posts = _replaceSpacePost(posts, updated));
+        setState(
+          () => posts = _replaceSpacePost(
+            posts,
+            post.copyWith(likes: updated.likes, isLiked: updated.isLiked),
+          ),
+        );
       }
     } catch (err) {
       if (mounted) {
@@ -931,11 +1058,20 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
 
   Future<void> deletePost(SpacePost post) async {
     final strings = context.strings;
+    final isReply =
+        post.isReply ||
+        posts.any((item) => item.replies.any((reply) => reply.id == post.id));
     final confirmed = await showCupertinoCsacDialog<bool>(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: Text(strings.text('Delete post?')),
-        content: Text(strings.text('This space post will be deleted.')),
+        title: Text(strings.text(isReply ? 'Delete reply?' : 'Delete post?')),
+        content: Text(
+          strings.text(
+            isReply
+                ? 'This reply will be deleted.'
+                : 'This post and its replies will be deleted.',
+          ),
+        ),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context, false),
@@ -955,7 +1091,7 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
     try {
       await widget.state.deleteSpacePost(post.id);
       if (mounted) {
-        await load(refresh: true);
+        setState(() => posts = _removeSpacePost(posts, post.id));
       }
     } catch (err) {
       if (mounted) {
@@ -1011,6 +1147,7 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
             SliverToBoxAdapter(
               child: _DiscoveryErrorBanner(
                 message: error!,
+                onRetry: () => load(refresh: true),
                 onDismiss: () => setState(() => error = null),
               ),
             ),
@@ -1031,11 +1168,16 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
             SliverList.builder(
               itemCount: posts.length,
               itemBuilder: (context, index) => _SpacePostCard(
+                key: postKeys.putIfAbsent(posts[index].id, () => GlobalKey()),
                 post: posts[index],
                 currentUid: widget.state.user?.uid ?? 0,
                 onLike: () => toggleLike(posts[index]),
                 onReply: () => openComposer(replyTo: posts[index]),
+                onUserTap: () => openPostUser(posts[index]),
+                onQr: () => openPostQr(posts[index]),
                 onDelete: deletePost,
+                onReplyLike: toggleLike,
+                onReplyUserTap: openPostUser,
               ),
             ),
           if (!loading && hasMore)
@@ -1083,6 +1225,43 @@ List<SpacePost> _replaceSpacePost(List<SpacePost> items, SpacePost updated) {
   ];
 }
 
+List<SpacePost> _mergeSpacePosts(
+  List<SpacePost> existing,
+  Iterable<SpacePost> incoming,
+) {
+  final byId = <int, SpacePost>{for (final post in existing) post.id: post};
+  for (final post in incoming) {
+    if (post.id > 0) {
+      byId[post.id] = post;
+    }
+  }
+  final merged = byId.values.toList();
+  merged.sort((a, b) {
+    final byTime = b.createdAt.compareTo(a.createdAt);
+    if (byTime != 0) {
+      return byTime;
+    }
+    return b.id.compareTo(a.id);
+  });
+  return merged;
+}
+
+List<SpacePost> _removeSpacePost(List<SpacePost> items, int id) {
+  return [
+    for (final item in items)
+      if (item.id != id)
+        item.copyWith(
+          replies: [
+            for (final reply in item.replies)
+              if (reply.id != id) reply,
+          ],
+        ),
+  ];
+}
+
+const _spaceMaxImages = 9;
+const _spaceMaxImageBytes = 5 * 1024 * 1024;
+
 class SpaceComposerScreen extends StatefulWidget {
   const SpaceComposerScreen({super.key, required this.state, this.replyTo});
 
@@ -1099,6 +1278,7 @@ class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
   final imageBytes = <Uint8List>[];
   final imageNames = <String>[];
   bool sending = false;
+  bool picking = false;
   String? error;
 
   @override
@@ -1108,16 +1288,44 @@ class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
   }
 
   Future<void> pickImages() async {
-    final picked = await picker.pickMultiImage(imageQuality: 86);
-    if (picked.isEmpty || !mounted) {
+    if (picking || imageBytes.length >= _spaceMaxImages) {
       return;
     }
-    for (final image in picked.take(9 - imageBytes.length)) {
-      imageBytes.add(await image.readAsBytes());
-      imageNames.add(image.name.trim().isEmpty ? 'space.jpg' : image.name);
-    }
-    if (mounted) {
-      setState(() {});
+    final strings = context.strings;
+    setState(() {
+      picking = true;
+      error = null;
+    });
+    try {
+      final picked = await picker.pickMultiImage(imageQuality: 86);
+      if (picked.isEmpty || !mounted) {
+        return;
+      }
+      var skippedOversize = false;
+      for (final image in picked.take(_spaceMaxImages - imageBytes.length)) {
+        final length = await image.length();
+        if (length > _spaceMaxImageBytes) {
+          skippedOversize = true;
+          continue;
+        }
+        imageBytes.add(await image.readAsBytes());
+        imageNames.add(pickedImageFileName(image, ImageSource.gallery));
+      }
+      if (mounted) {
+        setState(() {
+          if (skippedOversize) {
+            error = strings.text('Some images exceed 5 MB.');
+          }
+        });
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => picking = false);
+      }
     }
   }
 
@@ -1125,8 +1333,15 @@ class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
     final text = content.text.trim();
     final strings = context.strings;
     if (text.isEmpty && imageBytes.isEmpty) {
-      setState(() => error = strings.text('Write something or choose images.'));
+      setState(
+        () => error = strings.text(
+          'Please enter text or choose at least one image.',
+        ),
+      );
       return;
+    }
+    if (isMobilePlatform) {
+      FocusManager.instance.primaryFocus?.unfocus();
     }
     setState(() {
       sending = true;
@@ -1205,66 +1420,37 @@ class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                _DiscoveryFormFieldTile(
-                  label: strings.text('Content'),
-                  controller: content,
-                  icon: CupertinoIcons.text_bubble,
-                  minLines: 5,
-                  maxLines: 8,
-                ),
                 _DiscoveryActionTile(
-                  label: strings.text('Choose images'),
+                  label:
+                      '${strings.text('Choose images')} · ${strings.format('{count}/9 images', {'count': imageBytes.length})}',
                   icon: CupertinoIcons.photo_on_rectangle,
-                  loading: false,
-                  onTap: imageBytes.length >= 9 ? null : pickImages,
+                  loading: picking,
+                  onTap: imageBytes.length >= _spaceMaxImages || picking
+                      ? null
+                      : pickImages,
                 ),
               ],
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _SpaceMarkdownEditor(
+                controller: content,
+                hintText: strings.text("What's new?"),
+              ),
             ),
           ),
           if (imageBytes.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final entry in imageBytes.indexed)
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.memory(
-                              entry.$2,
-                              width: 86,
-                              height: 86,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 2,
-                            right: 2,
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size.square(24),
-                              color: CupertinoColors.black.withValues(
-                                alpha: 0.45,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              onPressed: () => setState(() {
-                                imageBytes.removeAt(entry.$1);
-                                imageNames.removeAt(entry.$1);
-                              }),
-                              child: const Icon(
-                                CupertinoIcons.xmark,
-                                size: 13,
-                                color: CupertinoColors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
+                child: _SpaceSelectedImageGrid(
+                  images: imageBytes,
+                  onRemove: (index) => setState(() {
+                    imageBytes.removeAt(index);
+                    imageNames.removeAt(index);
+                  }),
                 ),
               ),
             ),
@@ -1292,18 +1478,27 @@ class _SpaceComposerScreenState extends State<SpaceComposerScreen> {
 
 class _SpacePostCard extends StatelessWidget {
   const _SpacePostCard({
+    super.key,
     required this.post,
     required this.currentUid,
     required this.onLike,
     required this.onReply,
+    required this.onUserTap,
+    required this.onQr,
     required this.onDelete,
+    required this.onReplyLike,
+    required this.onReplyUserTap,
   });
 
   final SpacePost post;
   final int currentUid;
   final VoidCallback onLike;
   final VoidCallback onReply;
+  final VoidCallback onUserTap;
+  final VoidCallback onQr;
   final ValueChanged<SpacePost> onDelete;
+  final ValueChanged<SpacePost> onReplyLike;
+  final ValueChanged<SpacePost> onReplyUserTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1326,25 +1521,33 @@ class _SpacePostCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Avatar(
-                url: post.avatar,
-                fallback: CupertinoIcons.person_fill,
-                name: post.nickname,
-                radius: 22,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onUserTap,
+                child: _Avatar(
+                  url: post.avatar,
+                  fallback: CupertinoIcons.person_fill,
+                  name: post.nickname,
+                  radius: 22,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      post.nickname.isEmpty
-                          ? 'UID ${post.senderUid}'
-                          : post.nickname,
-                      style: TextStyle(
-                        color: colors.label,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onUserTap,
+                      child: Text(
+                        post.nickname.isEmpty
+                            ? 'UID ${post.senderUid}'
+                            : post.nickname,
+                        style: TextStyle(
+                          color: colors.label,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     if (post.createdAt.isNotEmpty)
@@ -1373,9 +1576,10 @@ class _SpacePostCard extends StatelessWidget {
           ),
           if (post.content.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              post.content.trim(),
-              style: TextStyle(color: colors.label, fontSize: 15, height: 1.35),
+            _ChatMarkdownText(
+              text: post.content.trim(),
+              textColor: colors.label,
+              secondaryTextColor: colors.secondaryLabel,
             ),
           ],
           if (post.images.isNotEmpty) ...[
@@ -1385,6 +1589,13 @@ class _SpacePostCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size.square(32),
+                onPressed: onQr,
+                child: const Icon(CupertinoIcons.qrcode, size: 18),
+              ),
+              const SizedBox(width: 8),
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -1466,8 +1677,12 @@ class _SpacePostCard extends StatelessWidget {
             const SizedBox(height: 10),
             Container(
               decoration: BoxDecoration(
-                color: colors.tertiaryFill.withValues(alpha: 0.6),
+                color: colors.cardBackground,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colors.separator.withValues(alpha: 0.22),
+                  width: 0.5,
+                ),
               ),
               child: Column(
                 children: [
@@ -1475,6 +1690,8 @@ class _SpacePostCard extends StatelessWidget {
                     _SpaceReplyTile(
                       reply: reply,
                       canDelete: reply.senderUid == currentUid,
+                      onLike: () => onReplyLike(reply),
+                      onUserTap: () => onReplyUserTap(reply),
                       onDelete: () => onDelete(reply),
                     ),
                 ],
@@ -1590,11 +1807,15 @@ class _SpaceReplyTile extends StatelessWidget {
   const _SpaceReplyTile({
     required this.reply,
     required this.canDelete,
+    required this.onLike,
+    required this.onUserTap,
     required this.onDelete,
   });
 
   final SpacePost reply;
   final bool canDelete;
+  final VoidCallback onLike;
+  final VoidCallback onUserTap;
   final VoidCallback onDelete;
 
   @override
@@ -1606,32 +1827,112 @@ class _SpaceReplyTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onUserTap,
+            child: _Avatar(
+              url: reply.avatar,
+              fallback: CupertinoIcons.person_fill,
+              name: reply.nickname,
+              radius: 15,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: reply.nickname.isEmpty
-                            ? 'UID ${reply.senderUid}'
-                            : reply.nickname,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onUserTap,
+                        child: Text(
+                          reply.nickname.isEmpty
+                              ? 'UID ${reply.senderUid}'
+                              : reply.nickname,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.label,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                      const TextSpan(text: ': '),
-                      TextSpan(
-                        text: reply.content.trim().isEmpty
-                            ? strings.text('[image]')
-                            : reply.content.trim(),
+                    ),
+                    if (reply.createdAt.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        reply.createdAt,
+                        style: TextStyle(
+                          color: colors.secondaryLabel,
+                          fontSize: 11,
+                        ),
                       ),
                     ],
-                  ),
-                  style: TextStyle(
-                    color: colors.label,
-                    fontSize: 13,
-                    height: 1.28,
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: reply.content.trim().isEmpty
+                          ? Text(
+                              strings.text('[image]'),
+                              style: TextStyle(
+                                color: colors.label,
+                                fontSize: 13,
+                                height: 1.28,
+                              ),
+                            )
+                          : _ChatMarkdownText(
+                              text: reply.content.trim(),
+                              textColor: colors.label,
+                              secondaryTextColor: colors.secondaryLabel,
+                            ),
+                    ),
+                    const SizedBox(width: 8),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: Size.zero,
+                      borderRadius: BorderRadius.circular(999),
+                      color: reply.isLiked
+                          ? colors.primaryColor.withValues(alpha: 0.14)
+                          : colors.tertiaryFill,
+                      onPressed: onLike,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            reply.isLiked
+                                ? CupertinoIcons.heart_fill
+                                : CupertinoIcons.heart,
+                            size: 13,
+                            color: reply.isLiked
+                                ? colors.primaryColor
+                                : colors.secondaryLabel,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${reply.likes}',
+                            style: TextStyle(
+                              color: reply.isLiked
+                                  ? colors.primaryColor
+                                  : colors.secondaryLabel,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 if (reply.images.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -1657,16 +1958,491 @@ class _SpaceReplyTile extends StatelessWidget {
   }
 }
 
+class _SpaceMarkdownEditor extends StatefulWidget {
+  const _SpaceMarkdownEditor({
+    required this.controller,
+    required this.hintText,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+
+  @override
+  State<_SpaceMarkdownEditor> createState() => _SpaceMarkdownEditorState();
+}
+
+class _SpaceMarkdownEditorState extends State<_SpaceMarkdownEditor> {
+  final focusNode = FocusNode();
+  bool preview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(handleTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpaceMarkdownEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(handleTextChanged);
+      widget.controller.addListener(handleTextChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(handleTextChanged);
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  void handleTextChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  TextSelection safeSelection() {
+    final selection = widget.controller.selection;
+    final textLength = widget.controller.text.length;
+    if (!selection.isValid) {
+      return TextSelection.collapsed(offset: textLength);
+    }
+    return TextSelection(
+      baseOffset: selection.baseOffset.clamp(0, textLength),
+      extentOffset: selection.extentOffset.clamp(0, textLength),
+    );
+  }
+
+  void replaceSelection(
+    String replacement, {
+    required int selectedStart,
+    required int selectedEnd,
+  }) {
+    final text = widget.controller.text;
+    final selection = safeSelection();
+    final start = math.min(selection.start, selection.end);
+    final end = math.max(selection.start, selection.end);
+    widget.controller.value = TextEditingValue(
+      text: text.replaceRange(start, end, replacement),
+      selection: TextSelection(
+        baseOffset: selectedStart,
+        extentOffset: selectedEnd,
+      ),
+    );
+    focusNode.requestFocus();
+  }
+
+  void wrapSelection(String prefix, String suffix, String placeholder) {
+    final text = widget.controller.text;
+    final selection = safeSelection();
+    final start = math.min(selection.start, selection.end);
+    final end = math.max(selection.start, selection.end);
+    final selected = text.substring(start, end);
+    final body = selected.isEmpty ? placeholder : selected;
+    final selectedStart = start + prefix.length;
+    replaceSelection(
+      '$prefix$body$suffix',
+      selectedStart: selectedStart,
+      selectedEnd: selectedStart + body.length,
+    );
+  }
+
+  void insertBlock(String before, String after, String placeholder) {
+    final text = widget.controller.text;
+    final selection = safeSelection();
+    final start = math.min(selection.start, selection.end);
+    final end = math.max(selection.start, selection.end);
+    final selected = text.substring(start, end);
+    final body = selected.isEmpty ? placeholder : selected;
+    final selectedStart = start + before.length;
+    replaceSelection(
+      '$before$body$after',
+      selectedStart: selectedStart,
+      selectedEnd: selectedStart + body.length,
+    );
+  }
+
+  void prefixSelectedLines(String Function(int index) prefixForLine) {
+    final text = widget.controller.text;
+    final selection = safeSelection();
+    final start = math.min(selection.start, selection.end);
+    final end = math.max(selection.start, selection.end);
+    final lineStart = text.lastIndexOf('\n', math.max(0, start - 1)) + 1;
+    var lineEnd = text.indexOf('\n', end);
+    if (lineEnd < 0) {
+      lineEnd = text.length;
+    }
+    final lines = text.substring(lineStart, lineEnd).split('\n');
+    final replacement = [
+      for (var i = 0; i < lines.length; i++) '${prefixForLine(i)}${lines[i]}',
+    ].join('\n');
+    widget.controller.value = TextEditingValue(
+      text: text.replaceRange(lineStart, lineEnd, replacement),
+      selection: TextSelection(
+        baseOffset: lineStart,
+        extentOffset: lineStart + replacement.length,
+      ),
+    );
+    focusNode.requestFocus();
+  }
+
+  void insertLink() {
+    final strings = context.strings;
+    final text = widget.controller.text;
+    final selection = safeSelection();
+    final start = math.min(selection.start, selection.end);
+    final end = math.max(selection.start, selection.end);
+    final selected = text.substring(start, end);
+    final label = selected.isEmpty ? strings.text('Text') : selected;
+    const url = 'https://';
+    widget.controller.value = TextEditingValue(
+      text: text.replaceRange(start, end, '[$label]($url)'),
+      selection: TextSelection(
+        baseOffset: start + label.length + 3,
+        extentOffset: start + label.length + 3 + url.length,
+      ),
+    );
+    focusNode.requestFocus();
+  }
+
+  void applyAction(_SpaceMarkdownAction action) {
+    final strings = context.strings;
+    switch (action) {
+      case _SpaceMarkdownAction.bold:
+        wrapSelection('**', '**', strings.text('Text'));
+        break;
+      case _SpaceMarkdownAction.italic:
+        wrapSelection('*', '*', strings.text('Text'));
+        break;
+      case _SpaceMarkdownAction.strikethrough:
+        wrapSelection('~~', '~~', strings.text('Text'));
+        break;
+      case _SpaceMarkdownAction.heading:
+        prefixSelectedLines((_) => '## ');
+        break;
+      case _SpaceMarkdownAction.quote:
+        prefixSelectedLines((_) => '> ');
+        break;
+      case _SpaceMarkdownAction.bulletList:
+        prefixSelectedLines((_) => '- ');
+        break;
+      case _SpaceMarkdownAction.numberedList:
+        prefixSelectedLines((index) => '${index + 1}. ');
+        break;
+      case _SpaceMarkdownAction.inlineCode:
+        wrapSelection('`', '`', strings.text('code'));
+        break;
+      case _SpaceMarkdownAction.codeBlock:
+        insertBlock('```\n', '\n```', strings.text('code'));
+        break;
+      case _SpaceMarkdownAction.link:
+        insertLink();
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    final content = widget.controller.text.trim();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colors.separator.withValues(alpha: 0.24),
+          width: 0.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: colors.cardBackground,
+                border: Border(
+                  bottom: BorderSide(
+                    color: colors.separator.withValues(alpha: 0.18),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CupertinoSlidingSegmentedControl<bool>(
+                    groupValue: preview,
+                    children: {
+                      false: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(strings.text('Edit')),
+                      ),
+                      true: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(strings.text('Preview')),
+                      ),
+                    },
+                    onValueChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() => preview = value);
+                      if (!preview) {
+                        focusNode.requestFocus();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final action in _SpaceMarkdownAction.values)
+                          _SpaceMarkdownActionButton(
+                            action: action,
+                            enabled: !preview,
+                            onPressed: () => applyAction(action),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (preview)
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 150),
+                  child: content.isEmpty
+                      ? _DiscoveryEmptyState(
+                          icon: CupertinoIcons.doc_text,
+                          message: strings.text('Nothing to preview.'),
+                        )
+                      : _ChatMarkdownText(
+                          text: content,
+                          textColor: colors.label,
+                          secondaryTextColor: colors.secondaryLabel,
+                        ),
+                ),
+              )
+            else
+              CupertinoTextField(
+                controller: widget.controller,
+                focusNode: focusNode,
+                autofocus: true,
+                minLines: 7,
+                maxLines: 12,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                placeholder: widget.hintText,
+                placeholderStyle: TextStyle(color: colors.tertiaryLabel),
+                style: TextStyle(color: colors.label, fontSize: 15),
+                cursorColor: colors.primaryColor,
+                padding: const EdgeInsets.all(14),
+                decoration: const BoxDecoration(color: Colors.transparent),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _SpaceMarkdownAction {
+  bold,
+  italic,
+  strikethrough,
+  heading,
+  quote,
+  bulletList,
+  numberedList,
+  inlineCode,
+  codeBlock,
+  link,
+}
+
+class _SpaceMarkdownActionButton extends StatelessWidget {
+  const _SpaceMarkdownActionButton({
+    required this.action,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final _SpaceMarkdownAction action;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  String label(CsacStrings strings) {
+    switch (action) {
+      case _SpaceMarkdownAction.bold:
+        return strings.text('Bold');
+      case _SpaceMarkdownAction.italic:
+        return strings.text('Italic');
+      case _SpaceMarkdownAction.strikethrough:
+        return strings.text('Strikethrough');
+      case _SpaceMarkdownAction.heading:
+        return strings.text('Heading');
+      case _SpaceMarkdownAction.quote:
+        return strings.text('Quote');
+      case _SpaceMarkdownAction.bulletList:
+        return strings.text('Bulleted list');
+      case _SpaceMarkdownAction.numberedList:
+        return strings.text('Numbered list');
+      case _SpaceMarkdownAction.inlineCode:
+        return strings.text('Inline code');
+      case _SpaceMarkdownAction.codeBlock:
+        return strings.text('Code block');
+      case _SpaceMarkdownAction.link:
+        return strings.text('Insert link');
+    }
+  }
+
+  IconData get icon {
+    switch (action) {
+      case _SpaceMarkdownAction.bold:
+        return CupertinoIcons.bold;
+      case _SpaceMarkdownAction.italic:
+        return CupertinoIcons.italic;
+      case _SpaceMarkdownAction.strikethrough:
+        return CupertinoIcons.strikethrough;
+      case _SpaceMarkdownAction.heading:
+        return CupertinoIcons.textformat_size;
+      case _SpaceMarkdownAction.quote:
+        return CupertinoIcons.quote_bubble;
+      case _SpaceMarkdownAction.bulletList:
+        return CupertinoIcons.list_bullet;
+      case _SpaceMarkdownAction.numberedList:
+        return CupertinoIcons.list_number;
+      case _SpaceMarkdownAction.inlineCode:
+        return CupertinoIcons.chevron_left_slash_chevron_right;
+      case _SpaceMarkdownAction.codeBlock:
+        return CupertinoIcons.chevron_left_slash_chevron_right;
+      case _SpaceMarkdownAction.link:
+        return CupertinoIcons.link;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size.square(34),
+        borderRadius: BorderRadius.circular(10),
+        color: colors.cardBackground,
+        onPressed: enabled ? onPressed : null,
+        child: Icon(
+          icon,
+          size: 18,
+          semanticLabel: label(context.strings),
+          color: enabled ? colors.primaryColor : colors.tertiaryLabel,
+        ),
+      ),
+    );
+  }
+}
+
+class _SpaceSelectedImageGrid extends StatelessWidget {
+  const _SpaceSelectedImageGrid({required this.images, required this.onRemove});
+
+  final List<Uint8List> images;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width - 32;
+        final tileSize = ((width - 16) / 3).clamp(72.0, 116.0).toDouble();
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in images.indexed)
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.memory(
+                      entry.$2,
+                      width: tileSize,
+                      height: tileSize,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size.square(26),
+                      color: CupertinoColors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(13),
+                      onPressed: () => onRemove(entry.$1),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 13,
+                        color: CupertinoColors.white,
+                        semanticLabel: context.strings.text('Remove image'),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 6,
+                    bottom: 6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.black.withValues(alpha: 0.48),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        child: Text(
+                          '${entry.$1 + 1}',
+                          style: const TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({
     required this.result,
     required this.preferences,
     required this.onTap,
+    required this.onQrTap,
   });
 
   final MessageSearchResult result;
   final CsacPreferences preferences;
   final VoidCallback onTap;
+  final VoidCallback onQrTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1717,14 +2493,26 @@ class _SearchResultTile extends StatelessWidget {
           ],
         ],
       ),
-      trailing: Icon(
-        message.imageUrl.isNotEmpty
-            ? CupertinoIcons.photo
-            : message.isEssence
-            ? CupertinoIcons.star
-            : CupertinoIcons.chevron_right,
-        color: colors.tertiaryLabel,
-        size: 18,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(30),
+            onPressed: onQrTap,
+            child: const Icon(CupertinoIcons.qrcode, size: 18),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            message.imageUrl.isNotEmpty
+                ? CupertinoIcons.photo
+                : message.isEssence
+                ? CupertinoIcons.star
+                : CupertinoIcons.chevron_right,
+            color: colors.tertiaryLabel,
+            size: 18,
+          ),
+        ],
       ),
       onTap: onTap,
     );
@@ -1951,10 +2739,15 @@ class _DiscoveryActionTile extends StatelessWidget {
 }
 
 class _DiscoveryErrorBanner extends StatelessWidget {
-  const _DiscoveryErrorBanner({required this.message, required this.onDismiss});
+  const _DiscoveryErrorBanner({
+    required this.message,
+    required this.onDismiss,
+    this.onRetry,
+  });
 
   final String message;
   final VoidCallback onDismiss;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1981,6 +2774,13 @@ class _DiscoveryErrorBanner extends StatelessWidget {
               style: TextStyle(color: colors.label, fontSize: 14),
             ),
           ),
+          if (onRetry != null)
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              onPressed: onRetry,
+              child: Text(context.strings.text('Retry')),
+            ),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             minimumSize: Size.zero,

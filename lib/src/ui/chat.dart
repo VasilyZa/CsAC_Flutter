@@ -1751,6 +1751,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               icon: CupertinoIcons.check_mark_circled,
             ),
             CsacActionSheetAction(
+              value: _MessageAction.qrCode,
+              title: strings.text('Message QR code'),
+              icon: CupertinoIcons.qrcode,
+            ),
+            CsacActionSheetAction(
               value: _MessageAction.copyText,
               title: strings.text('Copy text'),
               icon: CupertinoIcons.doc_on_doc,
@@ -1778,6 +1783,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 value: _MessageAction.downloadImage,
                 title: strings.text('Download image'),
                 icon: CupertinoIcons.arrow_down_circle,
+              ),
+            if (isMobilePlatform && message.imageUrl.isNotEmpty)
+              CsacActionSheetAction(
+                value: _MessageAction.scanImageQr,
+                title: strings.text('Scan QR code in image'),
+                icon: CupertinoIcons.qrcode_viewfinder,
               ),
             if (canRecall)
               CsacActionSheetAction(
@@ -1819,6 +1830,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           CsacToast(content: Text(context.strings.text('Message copied'))),
         );
         break;
+      case _MessageAction.qrCode:
+        await openMessageQr(message);
+        break;
       case _MessageAction.selectText:
         await showSelectableMessageText(message);
         break;
@@ -1833,6 +1847,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         break;
       case _MessageAction.downloadImage:
         await downloadImage(context, message.imageUrl);
+        break;
+      case _MessageAction.scanImageQr:
+        await scanMessageImageQr(message);
         break;
       case _MessageAction.reply:
         setReplyTarget(message);
@@ -1873,6 +1890,213 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Future<void> openMessageQr(ChatMessage message) {
+    final strings = context.strings;
+    final link = widget.conversation.type == ConversationType.group
+        ? csacGroupMessageDeepLink(widget.conversation.id, message.id)
+        : csacPrivateMessageDeepLink(widget.conversation.id, message.id);
+    return Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => CsacQrShareScreen(
+          title: strings.text('Message QR code'),
+          link: link,
+          cardTitle: widget.conversation.name,
+          cardSubtitle: strings.format('Message #{id} from {name}', {
+            'id': message.id,
+            'name': message.sender,
+          }),
+          avatarUrl: displayedConversation.avatar,
+          fallbackIcon: widget.conversation.type == ConversationType.group
+              ? CupertinoIcons.group_solid
+              : CupertinoIcons.person_fill,
+          helperText: strings.text('Scan to open this message in CsAC.'),
+          shareTitle: strings.text('Share message QR code'),
+          shareSubject: strings.text('CsAC message QR code'),
+          fileName:
+              'csac-message-${widget.conversation.type.name}-${widget.conversation.id}-${message.id}.png',
+          copyToast: strings.text('Message link copied.'),
+          semanticsLabel: strings.text('CsAC message QR code'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> scanMessageImageQr(ChatMessage message) async {
+    if (!isMobilePlatform || message.imageUrl.isEmpty) {
+      return;
+    }
+    final strings = context.strings;
+    String? cachedPath;
+    try {
+      cachedPath = await cacheQrScanImageUrl(message.imageUrl);
+      final value = await firstQrValueInImagePath(cachedPath);
+      if (!mounted) {
+        return;
+      }
+      if (value == null) {
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
+            content: Text(strings.text('No QR code found in this image.')),
+          ),
+        );
+        return;
+      }
+      await openScannedQrValue(value);
+    } catch (err) {
+      if (mounted) {
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
+            content: Text(
+              strings.format('QR scan failed: {error}', {'error': err}),
+            ),
+          ),
+        );
+      }
+    } finally {
+      final path = cachedPath;
+      if (path != null) {
+        unawaited(deleteLocalFileIfExists(path));
+      }
+    }
+  }
+
+  Future<void> openScannedQrValue(String value) async {
+    final strings = context.strings;
+    final uri = Uri.tryParse(value);
+    if (uri == null || !isCsacDeepLink(uri)) {
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('This is not a CsAC QR code.'))),
+      );
+      return;
+    }
+    final target = parseCsacDeepLink(uri);
+    if (!target.isSupported) {
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Unsupported CsAC link.'))),
+      );
+      return;
+    }
+    final confirmed = await confirmScannedCsacUri(context, uri);
+    if (!mounted || confirmed == null) {
+      return;
+    }
+    final confirmedTarget = parseCsacDeepLink(confirmed);
+    final handled = await openScannedDeepLinkTarget(confirmedTarget);
+    if (mounted && !handled) {
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Unable to open CsAC link.'))),
+      );
+    }
+  }
+
+  Future<bool> openScannedDeepLinkTarget(CsacDeepLinkTarget target) async {
+    switch (target.action) {
+      case CsacDeepLinkAction.userProfile:
+        final uid = target.id ?? 0;
+        if (uid <= 0) {
+          return false;
+        }
+        await openUserProfile(context, widget.state, uid);
+        return true;
+      case CsacDeepLinkAction.groupChat:
+        return openDeepLinkedConversation(ConversationType.group, target.id);
+      case CsacDeepLinkAction.privateChat:
+        return openDeepLinkedConversation(ConversationType.private, target.id);
+      case CsacDeepLinkAction.groupMessage:
+        return openDeepLinkedConversation(
+          ConversationType.group,
+          target.id,
+          focusMessageId: target.messageId,
+        );
+      case CsacDeepLinkAction.privateMessage:
+        return openDeepLinkedConversation(
+          ConversationType.private,
+          target.id,
+          focusMessageId: target.messageId,
+        );
+      case CsacDeepLinkAction.chats:
+      case CsacDeepLinkAction.search:
+      case CsacDeepLinkAction.searchResult:
+      case CsacDeepLinkAction.space:
+      case CsacDeepLinkAction.spacePost:
+      case CsacDeepLinkAction.notices:
+      case CsacDeepLinkAction.profile:
+      case CsacDeepLinkAction.unsupported:
+        return false;
+    }
+  }
+
+  Future<bool> openDeepLinkedConversation(
+    ConversationType type,
+    int? id, {
+    int? focusMessageId,
+  }) async {
+    final conversationId = id ?? 0;
+    if (conversationId <= 0) {
+      return false;
+    }
+    if (widget.conversation.type == type &&
+        widget.conversation.id == conversationId) {
+      if (focusMessageId != null && focusMessageId > 0) {
+        await Navigator.of(context).push(
+          CsacPageRoute<void>(
+            builder: (_) => ChatScreen(
+              state: widget.state,
+              conversation: widget.conversation,
+              focusMessageId: focusMessageId,
+            ),
+          ),
+        );
+      }
+      return true;
+    }
+    var conversation = widget.state.conversations
+        .where((item) => item.type == type && item.id == conversationId)
+        .firstOrNull;
+    if (conversation == null) {
+      try {
+        await widget.state.loadConversations();
+      } catch (_) {}
+      if (!mounted) {
+        return false;
+      }
+      conversation = widget.state.conversations
+          .where((item) => item.type == type && item.id == conversationId)
+          .firstOrNull;
+    }
+    if (conversation == null && type == ConversationType.group) {
+      await Navigator.of(context).push(
+        CsacPageRoute<void>(
+          builder: (_) => ConversationDetailScreen(
+            state: widget.state,
+            conversation: Conversation(
+              type: ConversationType.group,
+              id: conversationId,
+              name: context.strings.format('Room {id}', {'id': conversationId}),
+            ),
+          ),
+        ),
+      );
+      return true;
+    }
+    if (conversation == null && type == ConversationType.private) {
+      await openUserProfile(context, widget.state, conversationId);
+      return true;
+    }
+    final opened = conversation!.copyWith(unreadCount: 0);
+    unawaited(widget.state.markConversationRead(opened));
+    await Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => ChatScreen(
+          state: widget.state,
+          conversation: opened,
+          focusMessageId: focusMessageId,
+        ),
+      ),
+    );
+    return true;
   }
 
   void openConversationDetails() {
@@ -3783,10 +4007,7 @@ class _ChatBackground extends StatelessWidget {
 }
 
 String _escapeMarkdownHtml(String value) {
-  return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;');
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 }
 
 final highlight_core.Highlight _chatCodeHighlighter = highlight_core.Highlight()
@@ -3932,7 +4153,8 @@ List<InlineSpan> _chatCodeNodeSpans(
 ) {
   final spans = <InlineSpan>[];
   for (final node in nodes) {
-    final style = tokenStyles[node.className] ?? baseStyle;
+    final tokenStyle = tokenStyles[node.className];
+    final style = tokenStyle == null ? baseStyle : baseStyle.merge(tokenStyle);
     if (node.value != null) {
       spans.add(TextSpan(text: node.value, style: style));
     }
@@ -6838,11 +7060,13 @@ class _GroupAnnouncementBar extends StatelessWidget {
 
 enum _MessageAction {
   select,
+  qrCode,
   copyText,
   selectText,
   copyImage,
   openImage,
   downloadImage,
+  scanImageQr,
   reply,
   recall,
   essence,

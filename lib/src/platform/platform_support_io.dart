@@ -218,6 +218,24 @@ Future<String> createTemporaryVoicePath() async {
   );
 }
 
+Future<String> writeTemporaryQrScanImage(
+  Uint8List bytes,
+  String sourceName,
+) async {
+  final directory = await getTemporaryDirectory();
+  final extension = p.extension(sourceName).trim().isEmpty
+      ? '.png'
+      : p.extension(sourceName);
+  final file = File(
+    p.join(
+      directory.path,
+      'csac_qr_scan_${DateTime.now().millisecondsSinceEpoch}$extension',
+    ),
+  );
+  await file.writeAsBytes(bytes, flush: true);
+  return file.path;
+}
+
 Future<void> deleteLocalFileIfExists(String path) async {
   final file = File(path);
   if (await file.exists()) {

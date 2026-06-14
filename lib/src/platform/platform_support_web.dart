@@ -70,4 +70,11 @@ Future<String> createTemporaryVoicePath() async {
   throw UnsupportedError('Voice recording is not supported on Web.');
 }
 
+Future<String> writeTemporaryQrScanImage(
+  Uint8List bytes,
+  String sourceName,
+) async {
+  throw UnsupportedError('QR image scanning is not supported on Web.');
+}
+
 Future<void> deleteLocalFileIfExists(String path) async {}

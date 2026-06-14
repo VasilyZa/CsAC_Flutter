@@ -1063,6 +1063,8 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
+enum _LoginMode { usernamePassword, emailPassword, emailCode }
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.state});
 
@@ -1074,10 +1076,16 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final username = TextEditingController();
+  final email = TextEditingController();
+  final emailCode = TextEditingController();
   final password = TextEditingController();
   final passwordFocus = FocusNode();
   List<LoginAccountRecord> accounts = const <LoginAccountRecord>[];
+  _LoginMode loginMode = _LoginMode.usernamePassword;
   bool loadingAccounts = true;
+  bool sendingLoginCode = false;
+  int resendSeconds = 0;
+  Timer? resendTimer;
   String? error;
 
   @override
@@ -1089,9 +1097,37 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     username.dispose();
+    email.dispose();
+    emailCode.dispose();
     password.dispose();
     passwordFocus.dispose();
+    resendTimer?.cancel();
     super.dispose();
+  }
+
+  String loginModeLabel(CsacStrings strings, _LoginMode mode) {
+    return switch (mode) {
+      _LoginMode.usernamePassword => strings.text('Username'),
+      _LoginMode.emailPassword => strings.text('Email password'),
+      _LoginMode.emailCode => strings.text('Email code'),
+    };
+  }
+
+  void startResendTimer(int seconds) {
+    resendTimer?.cancel();
+    setState(() => resendSeconds = seconds <= 0 ? 60 : seconds);
+    resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (resendSeconds <= 1) {
+        timer.cancel();
+        setState(() => resendSeconds = 0);
+      } else {
+        setState(() => resendSeconds -= 1);
+      }
+    });
   }
 
   Future<void> loadAccounts() async {
@@ -1139,21 +1175,67 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> submit() async {
+    final strings = context.strings;
     final name = username.text.trim();
-    if (name.isEmpty || password.text.isEmpty) {
-      setState(
-        () =>
-            error = context.strings.text('Username and password are required.'),
-      );
+    final emailText = email.text.trim();
+    final code = emailCode.text.trim();
+    final needsPassword = loginMode != _LoginMode.emailCode;
+    final missingCredential = switch (loginMode) {
+      _LoginMode.usernamePassword => name.isEmpty,
+      _LoginMode.emailPassword => emailText.isEmpty,
+      _LoginMode.emailCode => emailText.isEmpty || code.isEmpty,
+    };
+    if (missingCredential || (needsPassword && password.text.isEmpty)) {
+      setState(() => error = strings.text('Please fill all fields.'));
       return;
     }
     try {
-      await widget.state.login(name, password.text);
+      switch (loginMode) {
+        case _LoginMode.usernamePassword:
+          await widget.state.login(name, password.text);
+          break;
+        case _LoginMode.emailPassword:
+          await widget.state.loginByEmail(emailText, password.text);
+          break;
+        case _LoginMode.emailCode:
+          await widget.state.loginByEmailCode(emailText, code);
+          break;
+      }
       if (mounted) {
         await loadAccounts();
       }
     } catch (err) {
       setState(() => error = err.toString());
+    }
+  }
+
+  Future<void> sendLoginCode() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please enter your email.'));
+      return;
+    }
+    setState(() {
+      sendingLoginCode = true;
+      error = null;
+    });
+    try {
+      final response = await widget.state.sendLoginEmailCode(email.text);
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Code sent.'))));
+      startResendTimer(response.resendAfter);
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => sendingLoginCode = false);
+      }
     }
   }
 
@@ -1175,6 +1257,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> openRegister() async {
     await Navigator.of(context).push(
       CsacPageRoute<void>(builder: (_) => RegisterScreen(state: widget.state)),
+    );
+  }
+
+  Future<void> openAccountRestore() async {
+    await Navigator.of(context).push(
+      CsacPageRoute<void>(
+        builder: (_) => AccountRestoreScreen(state: widget.state),
+      ),
     );
   }
 
@@ -1240,32 +1330,92 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 36),
+                  CupertinoSlidingSegmentedControl<_LoginMode>(
+                    groupValue: loginMode,
+                    children: {
+                      for (final mode in _LoginMode.values)
+                        mode: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(loginModeLabel(strings, mode)),
+                        ),
+                    },
+                    onValueChanged: (value) {
+                      if (value == null || widget.state.loading) {
+                        return;
+                      }
+                      setState(() {
+                        loginMode = value;
+                        error = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
                       color: colors.cardBackground,
                       child: Column(
                         children: [
-                          _LoginField(
-                            controller: username,
-                            placeholder: strings.text('Username'),
-                            icon: CupertinoIcons.person,
-                            textInputAction: TextInputAction.next,
-                          ),
+                          if (loginMode == _LoginMode.usernamePassword)
+                            _LoginField(
+                              controller: username,
+                              placeholder: strings.text('Username'),
+                              icon: CupertinoIcons.person,
+                              textInputAction: TextInputAction.next,
+                            )
+                          else
+                            _LoginField(
+                              controller: email,
+                              placeholder: strings.text('Email'),
+                              icon: CupertinoIcons.mail,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                            ),
                           Container(height: 0.5, color: colors.separator),
-                          _LoginField(
-                            controller: password,
-                            focusNode: passwordFocus,
-                            placeholder: strings.text('Password'),
-                            icon: CupertinoIcons.lock,
-                            obscureText: true,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => submit(),
-                          ),
+                          if (loginMode == _LoginMode.emailCode)
+                            _LoginField(
+                              controller: emailCode,
+                              placeholder: strings.text('Email login code'),
+                              icon: CupertinoIcons.number,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => submit(),
+                            )
+                          else
+                            _LoginField(
+                              controller: password,
+                              focusNode: passwordFocus,
+                              placeholder: strings.text('Password'),
+                              icon: CupertinoIcons.lock,
+                              obscureText: true,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => submit(),
+                            ),
                         ],
                       ),
                     ),
                   ),
+                  if (loginMode == _LoginMode.emailCode) ...[
+                    const SizedBox(height: 10),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: resendSeconds > 0 || sendingLoginCode
+                          ? null
+                          : sendLoginCode,
+                      child: sendingLoginCode
+                          ? CupertinoActivityIndicator(
+                              radius: 9,
+                              color: colors.primaryColor,
+                            )
+                          : Text(
+                              resendSeconds > 0
+                                  ? strings.format('Resend in {seconds}s', {
+                                      'seconds': resendSeconds,
+                                    })
+                                  : strings.text('Send login code'),
+                            ),
+                    ),
+                  ],
                   if (error != null) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -1300,9 +1450,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: 20),
                   _AuthPrimaryButton(
-                    label: strings.text('Login'),
+                    label: strings.text(
+                      loginMode == _LoginMode.emailCode
+                          ? 'Login with code'
+                          : 'Login',
+                    ),
                     loading: widget.state.loading,
                     onTap: submit,
+                  ),
+                  const SizedBox(height: 6),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: widget.state.loading ? null : openAccountRestore,
+                    child: Text(strings.text('Restore deleted account')),
                   ),
                   const SizedBox(height: 12),
                   if (loadingAccounts)
@@ -1417,14 +1577,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       error = null;
     });
     try {
-      await widget.state.sendRegisterEmailCode(email.text);
+      final response = await widget.state.sendRegisterEmailCode(email.text);
       if (!mounted) {
         return;
       }
       CsacToastMessenger.of(
         context,
       ).showToast(CsacToast(content: Text(strings.text('Code sent.'))));
-      setState(() => resendSeconds = 60);
+      setState(() => resendSeconds = response.resendAfter);
       resendTimer?.cancel();
       resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
@@ -1948,14 +2108,14 @@ class _EmailVerificationRequiredScreenState
       error = null;
     });
     try {
-      await widget.state.sendEmailBindCode(email.text);
+      final response = await widget.state.sendEmailBindCode(email.text);
       if (!mounted) {
         return;
       }
       CsacToastMessenger.of(
         context,
       ).showToast(CsacToast(content: Text(strings.text('Code sent.'))));
-      setState(() => resendSeconds = 60);
+      setState(() => resendSeconds = response.resendAfter);
       resendTimer?.cancel();
       resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
@@ -2117,6 +2277,184 @@ class _EmailVerificationRequiredScreenState
   }
 }
 
+class AccountRestoreScreen extends StatefulWidget {
+  const AccountRestoreScreen({super.key, required this.state});
+
+  final CsacAppState state;
+
+  @override
+  State<AccountRestoreScreen> createState() => _AccountRestoreScreenState();
+}
+
+class _AccountRestoreScreenState extends State<AccountRestoreScreen> {
+  final email = TextEditingController();
+  final token = TextEditingController();
+  bool requesting = false;
+  bool restoring = false;
+  String? error;
+
+  @override
+  void dispose() {
+    email.dispose();
+    token.dispose();
+    super.dispose();
+  }
+
+  Future<void> requestRestore() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please enter your email.'));
+      return;
+    }
+    setState(() {
+      requesting = true;
+      error = null;
+    });
+    try {
+      await widget.state.requestAccountRestore(email.text);
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(context).showToast(
+        CsacToast(content: Text(strings.text('Restore email sent.'))),
+      );
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => requesting = false);
+      }
+    }
+  }
+
+  Future<void> restore() async {
+    final strings = context.strings;
+    if (email.text.trim().isEmpty || token.text.trim().isEmpty) {
+      setState(() => error = strings.text('Please fill all fields.'));
+      return;
+    }
+    setState(() {
+      restoring = true;
+      error = null;
+    });
+    try {
+      await widget.state.restoreAccount(
+        email: email.text,
+        restoreToken: token.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text('Account restored.'))));
+      Navigator.of(context).pop();
+    } catch (err) {
+      if (mounted) {
+        setState(() => error = err.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => restoring = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return CsacPageScaffold(
+      backgroundColor: colors.systemBackground,
+      appBar: CsacNavigationBar(
+        title: Text(strings.text('Restore deleted account')),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: CsacSingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    CupertinoIcons.arrow_counterclockwise_circle_fill,
+                    size: 56,
+                    color: CupertinoTheme.of(context).primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    strings.text('Restore a deleted account'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.label,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    strings.text(
+                      'Accounts in the 14-day cooling period can be restored with an email token.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.secondaryLabel),
+                  ),
+                  const SizedBox(height: 24),
+                  _CupertinoGroupedCard(
+                    margin: EdgeInsets.zero,
+                    children: [
+                      _CupertinoFormField(
+                        controller: email,
+                        placeholder: strings.text('Email'),
+                        icon: CupertinoIcons.mail,
+                        enabled: !restoring,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      _CupertinoFormField(
+                        controller: token,
+                        placeholder: strings.text('Restore token'),
+                        icon: CupertinoIcons.number,
+                        enabled: !restoring,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => restore(),
+                      ),
+                    ],
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.destructive),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  _AuthPrimaryButton(
+                    label: strings.text('Send restore email'),
+                    loading: requesting,
+                    onTap: requesting || restoring ? null : requestRestore,
+                  ),
+                  const SizedBox(height: 12),
+                  _AuthPrimaryButton(
+                    label: strings.text('Restore account'),
+                    loading: restoring,
+                    onTap: requesting || restoring ? null : restore,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LoginField extends StatelessWidget {
   const _LoginField({
     required this.controller,
@@ -2124,6 +2462,7 @@ class _LoginField extends StatelessWidget {
     required this.icon,
     this.focusNode,
     this.obscureText = false,
+    this.keyboardType,
     this.textInputAction,
     this.onSubmitted,
   });
@@ -2133,6 +2472,7 @@ class _LoginField extends StatelessWidget {
   final IconData icon;
   final FocusNode? focusNode;
   final bool obscureText;
+  final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
 
@@ -2144,6 +2484,7 @@ class _LoginField extends StatelessWidget {
       focusNode: focusNode,
       placeholder: placeholder,
       obscureText: obscureText,
+      keyboardType: keyboardType,
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
       prefix: Padding(

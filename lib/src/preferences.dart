@@ -1386,3 +1386,90 @@ class LoginAccountStore {
         record.username.trim().toLowerCase();
   }
 }
+
+class QrScanHistoryEntry {
+  const QrScanHistoryEntry({required this.link, required this.scannedAt});
+
+  final String link;
+  final int scannedAt;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{'link': link, 'scannedAt': scannedAt};
+  }
+
+  factory QrScanHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return QrScanHistoryEntry(
+      link: asString(json['link']),
+      scannedAt: asInt(json['scannedAt']),
+    );
+  }
+}
+
+class QrScanHistoryStore {
+  const QrScanHistoryStore._();
+
+  static const _key = 'csac.qr_scan_history';
+  static const _maxEntries = 40;
+
+  static Future<List<QrScanHistoryEntry>> loadAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <QrScanHistoryEntry>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <QrScanHistoryEntry>[];
+      }
+      final entries = <QrScanHistoryEntry>[];
+      for (final item in decoded) {
+        if (item is Map) {
+          final entry = QrScanHistoryEntry.fromJson(
+            Map<String, dynamic>.from(item),
+          );
+          if (entry.link.trim().isNotEmpty) {
+            entries.add(entry);
+          }
+        }
+      }
+      entries.sort((a, b) => b.scannedAt.compareTo(a.scannedAt));
+      return entries;
+    } catch (_) {
+      return const <QrScanHistoryEntry>[];
+    }
+  }
+
+  static Future<void> add(String link) async {
+    final normalized = link.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    final entries = <QrScanHistoryEntry>[
+      QrScanHistoryEntry(
+        link: normalized,
+        scannedAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+      for (final entry in await loadAll())
+        if (entry.link.trim() != normalized) entry,
+    ];
+    await _save(entries.take(_maxEntries).toList());
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+
+  static Future<void> _save(List<QrScanHistoryEntry> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (entries.isEmpty) {
+      await prefs.remove(_key);
+      return;
+    }
+    await prefs.setString(
+      _key,
+      jsonEncode([for (final entry in entries) entry.toJson()]),
+    );
+  }
+}

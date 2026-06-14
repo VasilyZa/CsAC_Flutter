@@ -24,8 +24,37 @@ class CsacAuthException extends CsacApiException {
   const CsacAuthException(super.message);
 }
 
-class CsacEmailVerificationRequiredException extends CsacApiException {
-  const CsacEmailVerificationRequiredException(super.message);
+class CsacEmailVerificationRequiredException extends CsacAuthException {
+  const CsacEmailVerificationRequiredException(
+    super.message, {
+    this.resendAfter = 60,
+    this.expiresIn = 600,
+  });
+
+  final int resendAfter;
+  final int expiresIn;
+}
+
+class EmailCodeResponse {
+  const EmailCodeResponse({this.resendAfter = 60, this.expiresIn = 600});
+
+  final int resendAfter;
+  final int expiresIn;
+
+  factory EmailCodeResponse.fromJson(Map<String, dynamic> json) {
+    final nested = json['data'];
+    final nestedMap = nested is Map
+        ? Map<String, dynamic>.from(nested)
+        : const <String, dynamic>{};
+    return EmailCodeResponse(
+      resendAfter: firstInt(json, const ['resend_after', 'resendAfter'])
+          .ifZero(firstInt(nestedMap, const ['resend_after', 'resendAfter']))
+          .ifZero(60),
+      expiresIn: firstInt(json, const ['expires_in', 'expiresIn'])
+          .ifZero(firstInt(nestedMap, const ['expires_in', 'expiresIn']))
+          .ifZero(600),
+    );
+  }
 }
 
 class NetworkDiagnosticReport {
@@ -242,15 +271,77 @@ class CsacApiClient {
       'pwd': password,
       'platform': clientPlatform,
     });
+    if (_needsEmailVerification(data)) {
+      needsEmailVerification = true;
+      await saveSession();
+      throw CsacEmailVerificationRequiredException(
+        _message(data, 'Email verification is required.'),
+        resendAfter: _firstResponseInt(data, const [
+          'resend_after',
+          'resendAfter',
+        ]).ifZero(60),
+        expiresIn: _firstResponseInt(data, const [
+          'expires_in',
+          'expiresIn',
+        ]).ifZero(600),
+      );
+    }
     final user = data['user'];
     if (user is! Map<String, dynamic>) {
       throw const CsacApiException('Login succeeded but no user was returned.');
     }
-    needsEmailVerification = asBool(data['needs_email_verification']);
+    needsEmailVerification = false;
     await saveSession();
-    if (!needsEmailVerification) {
-      await refreshPlatform(platform: clientPlatform);
+    await refreshPlatform(platform: clientPlatform);
+    return CsacUser.fromJson(user);
+  }
+
+  Future<CsacUser> loginByEmail(
+    String email,
+    String password, {
+    String? platform,
+  }) async {
+    final clientPlatform = platform ?? await _clientPlatformIdentifier();
+    final data = await postForm('auth/login_by_email', <String, String>{
+      'email': email.trim(),
+      'pwd': password,
+      'platform': clientPlatform,
+    });
+    final user = data['user'];
+    if (user is! Map<String, dynamic>) {
+      throw const CsacApiException('Login succeeded but no user was returned.');
     }
+    needsEmailVerification = false;
+    await saveSession();
+    await refreshPlatform(platform: clientPlatform);
+    return CsacUser.fromJson(user);
+  }
+
+  Future<EmailCodeResponse> sendLoginEmailCode({required String email}) async {
+    final data = await postForm('auth/send_login_code', <String, String>{
+      'email': email.trim(),
+    });
+    return EmailCodeResponse.fromJson(data);
+  }
+
+  Future<CsacUser> loginByEmailCode(
+    String email,
+    String emailCode, {
+    String? platform,
+  }) async {
+    final clientPlatform = platform ?? await _clientPlatformIdentifier();
+    final data = await postForm('auth/login_by_code', <String, String>{
+      'email': email.trim(),
+      'email_code': emailCode.trim(),
+      'platform': clientPlatform,
+    });
+    final user = data['user'];
+    if (user is! Map<String, dynamic>) {
+      throw const CsacApiException('Login succeeded but no user was returned.');
+    }
+    needsEmailVerification = false;
+    await saveSession();
+    await refreshPlatform(platform: clientPlatform);
     return CsacUser.fromJson(user);
   }
 
@@ -306,16 +397,20 @@ class CsacApiClient {
     return CsacUser.fromJson(user);
   }
 
-  Future<void> sendRegisterEmailCode({required String email}) async {
-    await postForm('auth/send_register_code', <String, String>{
+  Future<EmailCodeResponse> sendRegisterEmailCode({
+    required String email,
+  }) async {
+    final data = await postForm('auth/send_register_code', <String, String>{
       'email': email.trim(),
     });
+    return EmailCodeResponse.fromJson(data);
   }
 
-  Future<void> sendEmailBindCode({required String email}) async {
-    await postForm('auth/send_email_bind_code', <String, String>{
+  Future<EmailCodeResponse> sendEmailBindCode({required String email}) async {
+    final data = await postForm('auth/send_email_bind_code', <String, String>{
       'email': email.trim(),
     });
+    return EmailCodeResponse.fromJson(data);
   }
 
   Future<void> verifyEmailBindCode({
@@ -343,6 +438,22 @@ class CsacApiClient {
     } finally {
       await clearSession();
     }
+  }
+
+  Future<void> requestAccountRestore({required String email}) async {
+    await postForm('auth/request_restore', <String, String>{
+      'email': email.trim(),
+    });
+  }
+
+  Future<void> restoreAccount({
+    required String email,
+    required String restoreToken,
+  }) async {
+    await postForm('auth/restore_account', <String, String>{
+      'email': email.trim(),
+      'restore_token': restoreToken.trim(),
+    });
   }
 
   Future<CsacUser> currentUser() async {
@@ -491,25 +602,25 @@ class CsacApiClient {
 
   Future<Set<int>> hiddenGroupConversations() async {
     final data = await get('user/get_hide_conv_list');
-    final raw = data['hide_conv_list'];
-    if (raw is List) {
-      return raw.map(asInt).where((id) => id > 0).toSet();
-    }
-    if (raw is String && raw.trim().isNotEmpty) {
-      return raw
-          .split(',')
-          .map((item) => int.tryParse(item.trim()) ?? 0)
-          .where((id) => id > 0)
-          .toSet();
-    }
-    return const <int>{};
+    return _hiddenRoomIdSet(data);
   }
 
   Future<bool> toggleHiddenGroupConversation(int roomId) async {
     final data = await postForm('user/toggle_hide_conv', <String, String>{
       'room_id': '$roomId',
     });
-    return asBool(data['is_hidden']);
+    final nested = data['data'];
+    final nestedMap = nested is Map
+        ? Map<String, dynamic>.from(nested)
+        : const <String, dynamic>{};
+    if (data.containsKey('is_hidden') || data.containsKey('isHidden')) {
+      return asBool(data['is_hidden'] ?? data['isHidden']);
+    }
+    if (nestedMap.containsKey('is_hidden') ||
+        nestedMap.containsKey('isHidden')) {
+      return asBool(nestedMap['is_hidden'] ?? nestedMap['isHidden']);
+    }
+    return _hiddenRoomIdSet(data).contains(roomId);
   }
 
   Future<List<GroupProfile>> publicGroups() async {
@@ -542,10 +653,10 @@ class CsacApiClient {
 
   Future<SpacePostPage> spacePosts({int page = 1, int pageSize = 20}) async {
     final data = await get('space/get_list', <String, String>{
-      'page': '$page',
-      'page_size': '$pageSize',
+      'page': '${page < 1 ? 1 : page}',
+      'page_size': '${pageSize.clamp(1, 50)}',
     });
-    return SpacePostPage.fromJson(data);
+    return SpacePostPage.fromJson(_spaceResponseSource(data));
   }
 
   Future<int> sendSpacePost(
@@ -573,17 +684,11 @@ class CsacApiClient {
     return postForm('space/delete', <String, String>{'cont_id': '$contId'});
   }
 
-  Future<SpacePost> toggleSpaceLike(int contId) async {
+  Future<SpaceLikeUpdate> toggleSpaceLike(int contId) async {
     final data = await postForm('space/toggle_like', <String, String>{
       'cont_id': '$contId',
     });
-    return SpacePost(
-      id: contId,
-      senderUid: 0,
-      nickname: '',
-      likes: asInt(data['likes_num']),
-      isLiked: asBool(data['is_liked']),
-    );
+    return SpaceLikeUpdate.fromJson(data);
   }
 
   Future<int> replySpacePost(
@@ -900,6 +1005,7 @@ class CsacApiClient {
     required String answer,
     required bool showPublic,
     required bool allowInvite,
+    required bool allowSearch,
   }) {
     return postForm('group/update_settings', <String, String>{
       'room_id': '$roomId',
@@ -911,6 +1017,7 @@ class CsacApiClient {
       'show_public': showPublic ? '1' : '0',
       'show_in_list': showPublic ? '1' : '0',
       'allow_invite': allowInvite ? '1' : '0',
+      'allow_search': allowSearch ? '1' : '0',
     });
   }
 
@@ -1718,6 +1825,23 @@ class CsacApiClient {
     return fallback;
   }
 
+  bool _needsEmailVerification(Map<String, dynamic> data) {
+    return asBool(data['needs_email_verification']) ||
+        asBool(data['needsEmailVerification']);
+  }
+
+  int _firstResponseInt(Map<String, dynamic> data, List<String> keys) {
+    final direct = firstInt(data, keys);
+    if (direct > 0) {
+      return direct;
+    }
+    final nested = data['data'];
+    if (nested is Map) {
+      return firstInt(Map<String, dynamic>.from(nested), keys);
+    }
+    return 0;
+  }
+
   List<Map<String, dynamic>> _list(Map<String, dynamic> data, String key) {
     final value = data[key];
     if (value is List) {
@@ -1749,6 +1873,62 @@ class CsacApiClient {
       }
     }
     return const <Map<String, dynamic>>[];
+  }
+
+  Map<String, dynamic> _spaceResponseSource(Map<String, dynamic> data) {
+    final nested = data['data'];
+    if (nested is Map) {
+      final mapped = Map<String, dynamic>.from(nested);
+      if (mapped['list'] is List || mapped['items'] is List) {
+        return <String, dynamic>{...data, ...mapped};
+      }
+    }
+    return data;
+  }
+
+  Set<int> _hiddenRoomIdSet(Map<String, dynamic> data) {
+    return _hiddenRoomIdValues(data).map(asInt).where((id) => id > 0).toSet();
+  }
+
+  List<Object?> _hiddenRoomIdValues(Map<String, dynamic> data) {
+    final direct = _firstScalarList(data, const [
+      'hide_conv_list',
+      'hidden_conv_list',
+      'hidden_conversations',
+    ]);
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final nested = data['data'];
+    if (nested is List) {
+      return nested;
+    }
+    if (nested is String && nested.trim().isNotEmpty) {
+      return nested.split(',');
+    }
+    if (nested is Map) {
+      return _hiddenRoomIdValues(Map<String, dynamic>.from(nested));
+    }
+    return const <Object?>[];
+  }
+
+  List<Object?> _firstScalarList(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is List) {
+        return value;
+      }
+      if (value is String && value.trim().isNotEmpty) {
+        return value.split(',');
+      }
+      if (value is Map) {
+        final nested = _firstScalarList(Map<String, dynamic>.from(value), keys);
+        if (nested.isNotEmpty) {
+          return nested;
+        }
+      }
+    }
+    return const <Object?>[];
   }
 
   Map<String, dynamic>? _firstMap(

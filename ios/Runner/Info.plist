@@ -40,7 +40,9 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>CsAC needs microphone access to record and send voice messages.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>CsAC needs camera access to take and send chat photos.</string>
+	<string>CsAC needs camera access to take photos and scan QR codes.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CsAC needs photo library access to choose images and scan QR codes from pictures.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>CsAC uses Face ID to unlock local chat history.</string>
 	<key>UILaunchStoryboardName</key>
