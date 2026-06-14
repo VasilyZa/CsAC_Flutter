@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:app_links/app_links.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -48,6 +49,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'src/app_state.dart';
 import 'src/api_client.dart';
 import 'src/api_protocol.dart';
+import 'src/deep_links.dart';
 import 'src/l10n.dart';
 import 'src/models.dart';
 import 'src/notification_service.dart';

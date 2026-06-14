@@ -168,6 +168,15 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
             openRoute(MessageSearchScreen(state: widget.state), context),
       ),
       _CommandPaletteAction(
+        id: 'space',
+        icon: Icons.public_outlined,
+        title: strings.text('Space'),
+        subtitle: strings.text('Friends space feed'),
+        keywords: const ['space', 'feed', 'dynamic', '动态', '空间'],
+        run: (context) =>
+            openRoute(SpaceTimelineScreen(state: widget.state), context),
+      ),
+      _CommandPaletteAction(
         id: 'clear_local_cache',
         icon: Icons.cleaning_services_outlined,
         title: strings.text('Clear local cache'),

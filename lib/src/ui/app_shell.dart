@@ -45,7 +45,21 @@ Future<void> showVersionUpdateDialog(
                     style: Theme.of(dialogContext).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 6),
-                  SelectableText(result.releaseNotes.trim()),
+                  MarkdownBody(
+                    data: result.releaseNotes.trim(),
+                    selectable: true,
+                    onTapLink: (text, href, title) {
+                      if (href == null || href.trim().isEmpty) {
+                        return;
+                      }
+                      unawaited(
+                        launchUrl(
+                          Uri.parse(href.trim()),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ],
             ),
@@ -108,7 +122,10 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   );
   final scaffoldMessengerKey = GlobalKey<CsacToastMessengerState>();
   final navigatorKey = GlobalKey<NavigatorState>();
+  final mainShellKey = GlobalKey<_MainShellState>();
   StreamSubscription<Conversation>? notificationTapSub;
+  StreamSubscription<Uri>? deepLinkSub;
+  Uri? pendingDeepLink;
   bool locked = false;
   bool wasBackgrounded = false;
   bool appLockSessionUnlocked = false;
@@ -138,6 +155,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     backgroundRefreshChannel.setMethodCallHandler(handleBackgroundRefreshCall);
     unawaited(state.initialize());
     unawaited(localNotifications.initialize());
+    unawaited(initializeDeepLinks());
     notificationTapSub = localNotifications.taps.listen(openNotificationChat);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       maybeCheckForUpdatesOnStartup();
@@ -150,8 +168,76 @@ class _CsacMobileAppState extends State<CsacMobileApp>
     WidgetsBinding.instance.removeObserver(this);
     backgroundRefreshChannel.setMethodCallHandler(null);
     notificationTapSub?.cancel();
+    deepLinkSub?.cancel();
     updateChecker.close();
     super.dispose();
+  }
+
+  Future<void> initializeDeepLinks() async {
+    try {
+      final links = AppLinks();
+      final initial = await links.getInitialLink();
+      if (initial != null) {
+        handleDeepLink(initial);
+      }
+      deepLinkSub = links.uriLinkStream.listen(
+        handleDeepLink,
+        onError: (Object error) {
+          if (kDebugMode) {
+            debugPrint('CsAC deep link stream failed: $error');
+          }
+        },
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('CsAC deep link initialization failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
+  }
+
+  void handleDeepLink(Uri uri) {
+    if (!isCsacDeepLink(uri)) {
+      return;
+    }
+    pendingDeepLink = uri;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(consumePendingDeepLink());
+    });
+  }
+
+  Future<void> consumePendingDeepLink() async {
+    final uri = pendingDeepLink;
+    if (uri == null || state.bootstrapping) {
+      return;
+    }
+    final target = parseCsacDeepLink(uri);
+    if (!target.isSupported) {
+      pendingDeepLink = null;
+      showDeepLinkToast('Unsupported CsAC link.');
+      return;
+    }
+    if (state.user == null || state.needsEmailVerification || locked) {
+      return;
+    }
+    final handled = await mainShellKey.currentState?.openDeepLinkTarget(target);
+    if (handled == null) {
+      return;
+    }
+    pendingDeepLink = null;
+    if (!handled) {
+      showDeepLinkToast('Unable to open CsAC link.');
+    }
+  }
+
+  void showDeepLinkToast(String message) {
+    final context = navigatorKey.currentContext;
+    final strings = context == null
+        ? CsacStrings(localeForLanguage(state.preferences.language))
+        : CsacStrings.of(context);
+    scaffoldMessengerKey.currentState?.showToast(
+      CsacToast(content: Text(strings.text(message))),
+    );
   }
 
   Future<void> openNotificationChat(Conversation tapped) async {
@@ -309,6 +395,11 @@ class _CsacMobileAppState extends State<CsacMobileApp>
   void handleStateChanged() {
     maybeCheckForUpdatesOnStartup();
     maybePrimeLocalNotificationPermission();
+    if (pendingDeepLink != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(consumePendingDeepLink());
+      });
+    }
     final userId = state.user?.uid ?? 0;
     if (userId != appLockUserId) {
       appLockUserId = userId;
@@ -523,7 +614,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
                           state: state,
                         )
                       : MainShell(
-                          key: const ValueKey<String>('main'),
+                          key: mainShellKey,
                           state: state,
                           navigatorKey: navigatorKey,
                           scaffoldMessengerKey: scaffoldMessengerKey,

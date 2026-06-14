@@ -3335,6 +3335,130 @@ class _ApiExplorerScreenState extends State<ApiExplorerScreen> {
   }
 }
 
+class UrlSchemeDocsScreen extends StatelessWidget {
+  const UrlSchemeDocsScreen({super.key});
+
+  static const entries = <({String title, String description, String url})>[
+    (
+      title: 'Chats',
+      description: 'Open the chat list tab.',
+      url: 'csacflutterleon://chats',
+    ),
+    (
+      title: 'Search',
+      description: 'Open cached message search.',
+      url: 'csacflutterleon://search',
+    ),
+    (
+      title: 'Space',
+      description: 'Open friends space feed.',
+      url: 'csacflutterleon://space',
+    ),
+    (
+      title: 'Notices',
+      description: 'Open notices and request center.',
+      url: 'csacflutterleon://notices',
+    ),
+    (
+      title: 'Me',
+      description: 'Open profile and settings tab.',
+      url: 'csacflutterleon://profile',
+    ),
+    (
+      title: 'Group chat',
+      description: 'Open a group chat by room ID.',
+      url: 'csacflutterleon://group/1',
+    ),
+    (
+      title: 'Private chat',
+      description: 'Open a private chat by UID.',
+      url: 'csacflutterleon://private/10001',
+    ),
+  ];
+
+  Future<void> copyUrl(BuildContext context, String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(context.strings.text('Copied.'))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final colors = CsacColors.of(context);
+    return CsacPageScaffold(
+      appBar: CsacNavigationBar(title: Text(strings.text('URL Scheme'))),
+      backgroundColor: colors.systemBackground,
+      body: SafeArea(
+        child: _AdaptivePageFrame(
+          maxWidth: 760,
+          child: CsacListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colors.cardBackground,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: colors.separator.withValues(alpha: 0.3),
+                    width: 0.5,
+                  ),
+                ),
+                child: Text(
+                  strings.text(
+                    'Use these links to jump directly into CsAC from shortcuts or other apps.',
+                  ),
+                  style: TextStyle(color: colors.secondaryLabel, fontSize: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _CupertinoGroupedCard(
+                margin: EdgeInsets.zero,
+                children: [
+                  for (final entry in entries)
+                    CupertinoListTile(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                      leading: Icon(
+                        CupertinoIcons.link,
+                        color: colors.secondaryLabel,
+                      ),
+                      title: Text(strings.text(entry.title)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(strings.text(entry.description)),
+                          const SizedBox(height: 2),
+                          Text(
+                            entry.url,
+                            style: TextStyle(
+                              color: colors.secondaryLabel,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size.square(34),
+                        onPressed: () => copyUrl(context, entry.url),
+                        child: const Icon(CupertinoIcons.doc_on_doc, size: 18),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ApiEndpointList extends StatelessWidget {
   const _ApiEndpointList({
     required this.search,
@@ -5376,6 +5500,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Developer options',
                 'CsAC server address',
                 'API explorer',
+                'URL Scheme',
+                'Deep links',
                 'API documentation',
                 'Run online',
                 'Endpoint',
@@ -6281,6 +6407,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   CsacPageRoute<void>(
                                     builder: (_) =>
                                         ApiExplorerScreen(state: widget.state),
+                                  ),
+                                );
+                              },
+                            ),
+                            const CsacDivider(height: 1),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.link),
+                              title: Text(strings.text('URL Scheme')),
+                              subtitle: Text(
+                                strings.text(
+                                  'Open CsAC tabs and chats from external links',
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  CsacPageRoute<void>(
+                                    builder: (_) => const UrlSchemeDocsScreen(),
                                   ),
                                 );
                               },

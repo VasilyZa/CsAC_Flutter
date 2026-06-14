@@ -1232,6 +1232,10 @@ class CsacAppState extends ChangeNotifier {
     return client.friendRequests();
   }
 
+  Future<List<Friend>> loadFriends() {
+    return client.friends();
+  }
+
   Future<void> handleFriendRequest(int requestId, String action) async {
     await client.handleFriendRequest(requestId, action);
     await refreshNotificationCounts();

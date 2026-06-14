@@ -970,23 +970,35 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
     final colors = CsacColors.of(context);
     return _DiscoveryPage(
       title: strings.text('Space'),
-      trailing: CupertinoButton(
-        padding: EdgeInsets.zero,
-        minimumSize: const Size.square(36),
-        onPressed: loading ? null : () => load(refresh: true),
-        child: loading
-            ? CupertinoActivityIndicator(radius: 9, color: colors.primaryColor)
-            : Icon(
-                CupertinoIcons.refresh,
-                size: 20,
-                color: colors.primaryColor,
-              ),
-      ),
-      bottomBar: _DiscoveryPrimaryBar(
-        label: strings.text('Post update'),
-        icon: CupertinoIcons.paperplane_fill,
-        loading: false,
-        onPressed: () => openComposer(),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(36),
+            onPressed: loading ? null : () => load(refresh: true),
+            child: loading
+                ? CupertinoActivityIndicator(
+                    radius: 9,
+                    color: colors.primaryColor,
+                  )
+                : Icon(
+                    CupertinoIcons.refresh,
+                    size: 20,
+                    color: colors.primaryColor,
+                  ),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(36),
+            onPressed: () => openComposer(),
+            child: Icon(
+              CupertinoIcons.square_pencil,
+              size: 22,
+              color: colors.primaryColor,
+            ),
+          ),
+        ],
       ),
       child: CsacCustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -1029,7 +1041,7 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
           if (!loading && hasMore)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                 child: CupertinoButton(
                   color: colors.cardBackground,
                   borderRadius: BorderRadius.circular(14),
@@ -1044,7 +1056,7 @@ class _SpaceTimelineScreenState extends State<SpaceTimelineScreen> {
               ),
             )
           else
-            const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+            const SliverPadding(padding: EdgeInsets.only(bottom: 96)),
         ],
       ),
     );
