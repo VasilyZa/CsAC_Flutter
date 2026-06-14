@@ -356,7 +356,9 @@ class CsacApiClient {
     final version = packageInfo.version.trim().isEmpty
         ? '0.0.0'
         : packageInfo.version.trim();
-    return '$csacClientName-$csacClientBranch-$version';
+    final buildNumber = packageInfo.buildNumber.trim();
+    final fullVersion = buildNumber.isEmpty ? version : '$version-$buildNumber';
+    return '$csacClientName-$csacClientBranch-$fullVersion';
   }
 
   Future<CsacUser> register({

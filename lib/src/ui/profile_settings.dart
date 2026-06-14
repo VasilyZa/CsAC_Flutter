@@ -1316,7 +1316,11 @@ class _AppInfoScreenState extends State<AppInfoScreen> {
           future: PackageInfo.fromPlatform(),
           builder: (context, snapshot) {
             final packageInfo = snapshot.data;
-            final version = packageInfo?.version ?? '-';
+            final version = packageInfo == null
+                ? '-'
+                : VersionUpdateChecker.displayVersion(
+                    '${packageInfo.version}+${packageInfo.buildNumber}',
+                  );
             final buildNumber = packageInfo?.buildNumber ?? '-';
             final debugMode = widget.state.debugMode;
             return CsacListView(

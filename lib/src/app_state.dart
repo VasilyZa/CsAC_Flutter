@@ -764,8 +764,10 @@ class CsacAppState extends ChangeNotifier {
     var rawVersion = '0.0.0';
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      if (packageInfo.version.trim().isNotEmpty) {
-        rawVersion = packageInfo.version.trim();
+      final version = packageInfo.version.trim();
+      final buildNumber = packageInfo.buildNumber.trim();
+      if (version.isNotEmpty) {
+        rawVersion = buildNumber.isEmpty ? version : '$version-$buildNumber';
       }
     } catch (_) {
       // Login should still work if package metadata is unavailable.
