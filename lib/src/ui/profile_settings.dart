@@ -4924,6 +4924,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     serverUrl.clear();
   }
 
+  Future<void> confirmSwitchToAcop() async {
+    final strings = context.strings;
+    final confirmed = await showCupertinoCsacDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(strings.text('Enter Open Platform?')),
+        content: Text(
+          strings.text(
+            'The current settings page will close first, then CsAC will switch to the developer platform. You can switch back from the ACOP account page.',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(strings.text('Cancel')),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(strings.text('Enter Open Platform')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    final state = widget.state;
+    if (!mounted) {
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+    }
+    await state.switchClientMode(AppClientMode.acop);
+  }
+
   Future<void> chooseTheme() async {
     final selected = await showCupertinoOptionSheet<ThemeMode>(
       context: context,
@@ -6525,6 +6564,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                 );
                               },
+                            ),
+                            const CsacDivider(height: 1),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.api_outlined),
+                              title: Text(strings.text('CsAC Open Platform')),
+                              subtitle: Text(
+                                strings.text(
+                                  'Switch to developer platform mode',
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: confirmSwitchToAcop,
                             ),
                           ],
                         ),

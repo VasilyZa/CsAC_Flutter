@@ -176,13 +176,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       return;
     }
     try {
-      await widget.state.sendFriendRequest(profile.uid, message);
+      final result = await widget.state.sendFriendRequest(profile.uid, message);
       if (!mounted) {
         return;
       }
-      CsacToastMessenger.of(context).showToast(
-        CsacToast(content: Text(strings.text('Friend request sent.'))),
-      );
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(strings.text(result))));
     } catch (err) {
       if (mounted) {
         CsacToastMessenger.of(context).showToast(
@@ -533,13 +533,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       return;
     }
     try {
-      await widget.state.inviteGroupMember(profile.id, targetUid);
+      final result = await widget.state.inviteGroupMember(
+        profile.id,
+        targetUid,
+      );
       if (!mounted) {
         return;
       }
-      CsacToastMessenger.of(context).showToast(
-        CsacToast(content: Text(context.strings.text('Invitation sent.'))),
-      );
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(context.strings.text(result))));
       await load();
     } catch (err) {
       if (mounted) {
@@ -982,7 +985,21 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                           'conversation-detail-${profile.id}',
                         ),
                       ),
-                      title: Text(entry.$2.name),
+                      title: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              entry.$2.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (entry.$2.isBot) ...[
+                            const SizedBox(width: 6),
+                            const _BotBadge(compact: true),
+                          ],
+                        ],
+                      ),
                       subtitle: Text(
                         entry.$2.subtitle.isEmpty
                             ? 'UID ${entry.$2.uid}'
@@ -1679,10 +1696,21 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     if (targetUid == null || !mounted) {
       return;
     }
-    await runAction(
-      () => widget.state.inviteGroupMember(group.id, targetUid),
-      'Invitation sent.',
-    );
+    setState(() => acting = true);
+    try {
+      final result = await widget.state.inviteGroupMember(group.id, targetUid);
+      if (!mounted) return;
+      showSnack(context.strings.text(result));
+      await load();
+    } catch (err) {
+      if (mounted) {
+        showSnack(
+          context.strings.format('Action failed: {error}', {'error': err}),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => acting = false);
+    }
   }
 
   Future<void> handleApplication(
@@ -2329,7 +2357,21 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                                     'group-management-${group.id}',
                                   ),
                                 ),
-                                title: Text(entry.$2.name),
+                                title: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        entry.$2.name,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (entry.$2.isBot) ...[
+                                      const SizedBox(width: 6),
+                                      const _BotBadge(compact: true),
+                                    ],
+                                  ],
+                                ),
                                 subtitle: Text(
                                   entry.$2.subtitle.isEmpty
                                       ? 'UID ${entry.$2.uid}'

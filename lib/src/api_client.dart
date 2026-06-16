@@ -831,6 +831,13 @@ class CsacApiClient {
       ..sort((a, b) => b.time.compareTo(a.time));
   }
 
+  Future<void> markFriendChangeRead({int? friendId, bool readAll = false}) {
+    return postForm('friend/mark_deleted_notice_read', <String, String>{
+      if (readAll) 'read_all': '1',
+      if (!readAll && friendId != null) 'friend_id': '$friendId',
+    });
+  }
+
   Future<List<FriendRequest>> friendRequests() async {
     final data = await get('friend/get_friend_requests');
     return _firstList(data, const [
@@ -848,11 +855,12 @@ class CsacApiClient {
     });
   }
 
-  Future<void> sendFriendRequest(int uid, String message) {
-    return postForm('friend/send_request', <String, String>{
+  Future<String> sendFriendRequest(int uid, String message) async {
+    final data = await postForm('friend/send_request', <String, String>{
       'to_uid': '$uid',
       if (message.trim().isNotEmpty) 'message': message.trim(),
     });
+    return _localizedActionMessage(data, 'Friend request sent.');
   }
 
   Future<void> updateFriendRemark(int friendId, String remark) {
@@ -1023,13 +1031,14 @@ class CsacApiClient {
     });
   }
 
-  Future<void> inviteGroupMember(int roomId, int targetUid) {
-    return postForm('group/invite_member', <String, String>{
+  Future<String> inviteGroupMember(int roomId, int targetUid) async {
+    final data = await postForm('group/invite_member', <String, String>{
       'room_id': '$roomId',
       'rid': '$roomId',
       'target_uid': '$targetUid',
       'uid': '$targetUid',
     });
+    return _localizedActionMessage(data, 'Invitation sent.');
   }
 
   Future<void> setGroupMemberTitle(
@@ -1825,6 +1834,17 @@ class CsacApiClient {
       return message;
     }
     return fallback;
+  }
+
+  String _localizedActionMessage(Map<String, dynamic> data, String fallback) {
+    return switch (_message(data, fallback).trim()) {
+      '好友请求已发送' || '好友申请已发送' => 'Friend request sent.',
+      'Bot已添加为好友' => 'Bot added as friend.',
+      '邀请已发送，等待对方确认' => 'Invitation sent.',
+      '已自动加入群组' => 'Joined group.',
+      'Bot已加入群组' => 'Bot joined group.',
+      final message => message,
+    };
   }
 
   bool _needsEmailVerification(Map<String, dynamic> data) {

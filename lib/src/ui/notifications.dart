@@ -827,6 +827,8 @@ class FriendDeletedNoticesPage extends StatefulWidget {
 class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
   List<FriendChangeNotice> notices = const <FriendChangeNotice>[];
   bool loading = true;
+  bool acting = false;
+  int? actingId;
   String? error;
 
   @override
@@ -860,15 +862,69 @@ class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
     }
   }
 
+  Future<void> markAllRead() async {
+    setState(() => acting = true);
+    try {
+      await widget.state.markFriendChangeRead(readAll: true);
+      if (!mounted) return;
+      setState(() {
+        notices = [for (final notice in notices) notice.copyWith(isRead: true)];
+      });
+      widget.state.updateNotificationCounts(friendChanges: 0);
+    } catch (err) {
+      if (mounted) setState(() => error = err.toString());
+    } finally {
+      if (mounted) setState(() => acting = false);
+    }
+  }
+
+  Future<void> markOneRead(FriendChangeNotice notice) async {
+    setState(() => actingId = notice.uid);
+    try {
+      await widget.state.markFriendChangeRead(friendId: notice.uid);
+      if (!mounted) return;
+      setState(() {
+        notices = [
+          for (final item in notices)
+            item.uid == notice.uid ? item.copyWith(isRead: true) : item,
+        ];
+      });
+      widget.state.updateNotificationCounts(
+        friendChanges: notices.where((notice) => !notice.isRead).length,
+      );
+    } catch (err) {
+      if (mounted) setState(() => error = err.toString());
+    } finally {
+      if (mounted) setState(() => actingId = null);
+    }
+  }
+
+  String noticeSummary(BuildContext context, FriendChangeNotice notice) {
+    final strings = context.strings;
+    if (notice.deletedByMe) {
+      return strings.text('You removed this friend.');
+    }
+    if (notice.deletedByFriend) {
+      return strings.text('This friend removed you.');
+    }
+    return strings.text('Friend relationship changed.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final colors = CsacColors.of(context);
+    final unreadCount = notices.where((notice) => !notice.isRead).length;
     return CsacCustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(onRefresh: load),
         SliverList.list(
           children: [
+            _NoticePageHeader(
+              title: strings.format('{count} unread', {'count': unreadCount}),
+              actionLabel: strings.text('Mark all read'),
+              actionIcon: CupertinoIcons.checkmark_seal,
+              onAction: acting || unreadCount <= 0 ? null : markAllRead,
+            ),
             if (loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -881,37 +937,20 @@ class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
               _NoticeListSection(
                 children: [
                   for (final notice in notices)
-                    CupertinoListTile(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      leading: _NoticeLeadingIcon(
-                        icon: CupertinoIcons.person_badge_minus,
-                        accent: colors.secondaryLabel,
-                      ),
-                      title: Text(
-                        notice.nickname,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.label,
-                          fontSize: 16,
-                          fontWeight: notice.isRead
-                              ? FontWeight.w500
-                              : FontWeight.w700,
-                        ),
-                      ),
-                      subtitle: Text(
-                        [
-                          if (notice.time.isNotEmpty) notice.time,
-                          if (notice.content.isNotEmpty) notice.content,
-                          if (notice.uid > 0) 'UID ${notice.uid}',
-                        ].join(' | '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.secondaryLabel),
-                      ),
+                    _FriendChangeTile(
+                      notice: notice,
+                      summary: noticeSummary(context, notice),
+                      acting: actingId == notice.uid,
+                      onMarkRead: notice.isRead
+                          ? null
+                          : () => markOneRead(notice),
+                      onOpenUser: notice.uid > 0
+                          ? () => openUserProfile(
+                              context,
+                              widget.state,
+                              notice.uid,
+                            )
+                          : null,
                     ),
                 ],
               ),
@@ -919,6 +958,86 @@ class _FriendDeletedNoticesPageState extends State<FriendDeletedNoticesPage> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _FriendChangeTile extends StatelessWidget {
+  const _FriendChangeTile({
+    required this.notice,
+    required this.summary,
+    required this.acting,
+    this.onMarkRead,
+    this.onOpenUser,
+  });
+
+  final FriendChangeNotice notice;
+  final String summary;
+  final bool acting;
+  final VoidCallback? onMarkRead;
+  final VoidCallback? onOpenUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final subtitle = [
+      if (notice.username.isNotEmpty) '@${notice.username}',
+      if (notice.uid > 0) 'UID ${notice.uid}',
+      summary,
+      if (notice.time.isNotEmpty) notice.time,
+    ].join(' | ');
+    final content = notice.content.trim();
+    return CupertinoListTile(
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+      leading: _Avatar(
+        url: notice.avatar,
+        fallback: CupertinoIcons.person_solid,
+        name: notice.displayName,
+        radius: 20,
+      ),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              notice.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.label,
+                fontSize: 16,
+                fontWeight: notice.isRead ? FontWeight.w500 : FontWeight.w700,
+              ),
+            ),
+          ),
+          if (notice.isBot) ...[
+            const SizedBox(width: 6),
+            const _BotBadge(compact: true),
+          ],
+        ],
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: colors.secondaryLabel),
+          ),
+          if (content.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              content,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: colors.label),
+            ),
+          ],
+        ],
+      ),
+      trailing: _NoticeMarkReadButton(onPressed: onMarkRead, acting: acting),
+      onTap: onOpenUser,
     );
   }
 }

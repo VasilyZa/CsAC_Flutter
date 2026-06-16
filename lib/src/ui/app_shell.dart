@@ -576,6 +576,7 @@ class _CsacMobileAppState extends State<CsacMobileApp>
                     isDesktopPlatform &&
                     !locked &&
                     !state.bootstrapping &&
+                    !state.isAcopMode &&
                     state.user != null,
                 child: CsacThemeBridge(
                   brightness: effectiveBrightness,
@@ -603,6 +604,16 @@ class _CsacMobileAppState extends State<CsacMobileApp>
                           key: const ValueKey<String>('bootstrap'),
                           status: state.restoreStatus,
                         )
+                      : state.isAcopMode
+                      ? state.hasAcopDeveloper
+                            ? AcopPlatformShell(
+                                key: const ValueKey<String>('acop-shell'),
+                                state: state,
+                              )
+                            : AcopLoginScreen(
+                                key: const ValueKey<String>('acop-login'),
+                                state: state,
+                              )
                       : state.user == null
                       ? LoginScreen(
                           key: const ValueKey<String>('login'),
@@ -1463,6 +1474,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: EdgeInsets.zero,
                     onPressed: widget.state.loading ? null : openAccountRestore,
                     child: Text(strings.text('Restore deleted account')),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: widget.state.loading
+                        ? null
+                        : () =>
+                              widget.state.switchClientMode(AppClientMode.acop),
+                    child: Text(strings.text('CsAC Open Platform')),
                   ),
                   const SizedBox(height: 12),
                   if (loadingAccounts)

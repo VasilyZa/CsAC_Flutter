@@ -45,6 +45,7 @@ class CsacUser {
     this.onlineStatus = '',
     this.platform = 'none',
     this.patAction = defaultPatAction,
+    this.isBot = false,
   });
 
   final int uid;
@@ -54,6 +55,7 @@ class CsacUser {
   final String onlineStatus;
   final String platform;
   final String patAction;
+  final bool isBot;
 
   String get platformLabel => formatClientPlatform(platform);
 
@@ -73,6 +75,7 @@ class CsacUser {
       patAction: firstString(json, const ['pat_action', 'patAction']).isEmpty
           ? defaultPatAction
           : firstString(json, const ['pat_action', 'patAction']),
+      isBot: isBotJson(json),
     );
   }
 }
@@ -318,6 +321,7 @@ class UserProfile {
     this.platform = 'none',
     this.isFriend = false,
     this.canAddFriend = false,
+    this.isBot = false,
   });
 
   final int uid;
@@ -329,6 +333,7 @@ class UserProfile {
   final String platform;
   final bool isFriend;
   final bool canAddFriend;
+  final bool isBot;
 
   String get platformLabel => formatClientPlatform(platform);
 
@@ -347,12 +352,15 @@ class UserProfile {
       if (username.isNotEmpty) '@$username',
       if (onlineStatus.isNotEmpty) onlineStatus,
       if (platformLabel != 'none') platformLabel,
+      if (isBot) 'Bot',
       if (isFriend) 'friend',
     ].join(' | ');
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final uid = firstInt(json, const ['uid', 'user_id', 'id']);
+    final isBot = isBotJson(json);
+    final isFriend = asBool(json['is_friend']);
     return UserProfile(
       uid: uid,
       nickname: firstString(json, const ['nickname', 'name']),
@@ -364,8 +372,9 @@ class UserProfile {
         'platform',
         'client_platform',
       ]).ifEmpty('none'),
-      isFriend: asBool(json['is_friend']),
-      canAddFriend: asBool(json['can_add_friend']),
+      isFriend: isFriend,
+      canAddFriend: asBool(json['can_add_friend']) || (isBot && !isFriend),
+      isBot: isBot,
     );
   }
 }
@@ -831,6 +840,7 @@ class ChatMessage {
     this.isEssence = false,
     this.isMentioned = false,
     this.replyTo = 0,
+    this.isBot = false,
   });
 
   final int id;
@@ -856,6 +866,7 @@ class ChatMessage {
   final bool isEssence;
   final bool isMentioned;
   final int replyTo;
+  final bool isBot;
 
   ChatMessage copyWith({
     int? id,
@@ -881,6 +892,7 @@ class ChatMessage {
     bool? isEssence,
     bool? isMentioned,
     int? replyTo,
+    bool? isBot,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -906,6 +918,7 @@ class ChatMessage {
       isEssence: isEssence ?? this.isEssence,
       isMentioned: isMentioned ?? this.isMentioned,
       replyTo: replyTo ?? this.replyTo,
+      isBot: isBot ?? this.isBot,
     );
   }
 
@@ -1045,6 +1058,7 @@ class ChatMessage {
       isEssence: asBool(json['is_essence']),
       isMentioned: asBool(json['is_mentioned']),
       replyTo: firstInt(json, const ['reply_to', 'reply_msg_id']),
+      isBot: isBotJson(json),
     );
   }
 }
@@ -1445,6 +1459,7 @@ class GroupMember {
     this.memberLevel = 0,
     this.isOwner = false,
     this.isAdmin = false,
+    this.isBot = false,
   });
 
   final int uid;
@@ -1459,6 +1474,7 @@ class GroupMember {
   final int memberLevel;
   final bool isOwner;
   final bool isAdmin;
+  final bool isBot;
 
   String get subtitle {
     return [
@@ -1466,6 +1482,7 @@ class GroupMember {
       if (memberLevel > 0) 'Lv.$memberLevel',
       if (memberTitle.isNotEmpty) memberTitle,
       if (roleLabel.isNotEmpty) roleLabel,
+      if (isBot) 'Bot',
       if (onlineStatus.isNotEmpty) onlineStatus,
     ].join(' | ');
   }
@@ -1482,6 +1499,8 @@ class GroupMember {
       if (memberLevel > 0) 'Lv.$memberLevel',
       if (memberLevel > 0) '$memberLevel',
       onlineStatus,
+      if (isBot) 'bot',
+      if (isBot) 'Bot',
       '$uid',
       'UID $uid',
     ].where((value) => value.trim().isNotEmpty).join(' | ').toLowerCase();
@@ -1550,6 +1569,7 @@ class GroupMember {
         'is_group_admin',
         'admin',
       ]),
+      isBot: isBotJson(json),
     );
   }
 }
@@ -1769,6 +1789,9 @@ class FriendChangeNotice {
     this.time = '',
     this.kind = '',
     this.isRead = false,
+    this.deletedByMe = false,
+    this.deletedByFriend = false,
+    this.isBot = false,
   });
 
   final int id;
@@ -1780,8 +1803,28 @@ class FriendChangeNotice {
   final String time;
   final String kind;
   final bool isRead;
+  final bool deletedByMe;
+  final bool deletedByFriend;
+  final bool isBot;
 
   String get displayName => nickname.trim().isEmpty ? 'UID $uid' : nickname;
+
+  FriendChangeNotice copyWith({bool? isRead}) {
+    return FriendChangeNotice(
+      id: id,
+      uid: uid,
+      nickname: nickname,
+      username: username,
+      avatar: avatar,
+      content: content,
+      time: time,
+      kind: kind,
+      isRead: isRead ?? this.isRead,
+      deletedByMe: deletedByMe,
+      deletedByFriend: deletedByFriend,
+      isBot: isBot,
+    );
+  }
 
   factory FriendChangeNotice.fromJson(Map<String, dynamic> json) {
     final uid = firstInt(json, const [
@@ -1817,6 +1860,9 @@ class FriendChangeNotice {
       ]),
       kind: firstString(json, const ['type', 'kind', 'action']),
       isRead: asBool(json['is_read']) || asBool(json['read']),
+      deletedByMe: asBool(json['deleted_by_me']),
+      deletedByFriend: asBool(json['deleted_by_friend']),
+      isBot: isBotJson(json),
     );
   }
 }
@@ -2063,6 +2109,21 @@ bool firstBool(Map<String, dynamic> json, List<String> keys) {
     }
   }
   return false;
+}
+
+bool isBotJson(Map<String, dynamic> json) {
+  return firstBool(json, const [
+        'is_bot',
+        'isBot',
+        'bot',
+        'is_robot',
+        'robot',
+      ]) ||
+      firstString(json, const [
+            'platform',
+            'client_platform',
+          ]).trim().toLowerCase() ==
+          'bot';
 }
 
 int firstInt(Map<String, dynamic> json, List<String> keys) {

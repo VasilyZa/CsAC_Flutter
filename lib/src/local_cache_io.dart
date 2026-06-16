@@ -70,7 +70,7 @@ class CsacLocalCache {
   Future<CsacUser?> loadUser() async {
     final db = await _database();
     final rows = db.select('''
-      SELECT uid, nickname, username, avatar, online_status, platform, pat_action
+      SELECT uid, nickname, username, avatar, online_status, platform, pat_action, is_bot
       FROM session_user
       ORDER BY saved_at DESC
       LIMIT 1
@@ -87,6 +87,7 @@ class CsacLocalCache {
       onlineStatus: row['online_status'] as String,
       platform: asString(row['platform']).ifEmpty('none'),
       patAction: row['pat_action'] as String,
+      isBot: asBool(row['is_bot']),
     );
   }
 
@@ -96,9 +97,9 @@ class CsacLocalCache {
     db.execute(
       '''
       INSERT INTO session_user (
-        uid, nickname, username, avatar, online_status, platform, pat_action, saved_at
+        uid, nickname, username, avatar, online_status, platform, pat_action, is_bot, saved_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         user.uid,
@@ -108,6 +109,7 @@ class CsacLocalCache {
         user.onlineStatus,
         user.platform,
         user.patAction,
+        user.isBot ? 1 : 0,
         DateTime.now().millisecondsSinceEpoch,
       ],
     );
@@ -252,7 +254,7 @@ class CsacLocalCache {
     final db = await _database();
     final rows = db.select(
       '''
-      SELECT id, sender_id, sender, body, sender_avatar, message_type,
+      SELECT id, sender_id, sender, body, sender_avatar, sender_is_bot, message_type,
         is_read, member_level, member_title, time, image_url, voice_url,
         voice_duration, file_url, file_name, emoji_address, emoji_abbr,
         can_recall, is_recalled, is_essence, is_mentioned, reply_to
@@ -274,7 +276,7 @@ class CsacLocalCache {
     final db = await _database();
     final rows = db.select(
       '''
-      SELECT id, sender_id, sender, body, sender_avatar, message_type,
+      SELECT id, sender_id, sender, body, sender_avatar, sender_is_bot, message_type,
         is_read, member_level, member_title, time, image_url, voice_url,
         voice_duration, file_url, file_name, emoji_address, emoji_abbr,
         can_recall, is_recalled, is_essence, is_mentioned, reply_to
@@ -297,7 +299,7 @@ class CsacLocalCache {
     final type = _conversationTypeName(conversation.type);
     final beforeRows = db.select(
       '''
-      SELECT id, sender_id, sender, body, sender_avatar, message_type,
+      SELECT id, sender_id, sender, body, sender_avatar, sender_is_bot, message_type,
         is_read, member_level, member_title, time, image_url, voice_url,
         voice_duration, file_url, file_name, emoji_address, emoji_abbr,
         can_recall, is_recalled, is_essence, is_mentioned, reply_to
@@ -310,7 +312,7 @@ class CsacLocalCache {
     );
     final afterRows = db.select(
       '''
-      SELECT id, sender_id, sender, body, sender_avatar, message_type,
+      SELECT id, sender_id, sender, body, sender_avatar, sender_is_bot, message_type,
         is_read, member_level, member_title, time, image_url, voice_url,
         voice_duration, file_url, file_name, emoji_address, emoji_abbr,
         can_recall, is_recalled, is_essence, is_mentioned, reply_to
@@ -429,6 +431,7 @@ class CsacLocalCache {
         m.sender,
         m.body,
         m.sender_avatar,
+        m.sender_is_bot,
         m.message_type,
         m.is_read,
         m.member_level,
@@ -595,18 +598,19 @@ class CsacLocalCache {
     final statement = db.prepare('''
       INSERT INTO messages (
         conversation_type, conversation_id, id, sender_id, sender, body, time,
-        sender_avatar, message_type, is_read, member_level, member_title,
+        sender_avatar, sender_is_bot, message_type, is_read, member_level, member_title,
         image_url, voice_url, voice_duration, file_url, file_name,
         emoji_address, emoji_abbr, can_recall, is_recalled, is_essence,
         is_mentioned, reply_to
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(conversation_type, conversation_id, id) DO UPDATE SET
         sender_id = excluded.sender_id,
         sender = excluded.sender,
         body = excluded.body,
         time = excluded.time,
         sender_avatar = excluded.sender_avatar,
+        sender_is_bot = excluded.sender_is_bot,
         message_type = excluded.message_type,
         is_read = excluded.is_read,
         member_level = excluded.member_level,
@@ -641,6 +645,7 @@ class CsacLocalCache {
           message.body,
           message.time,
           message.senderAvatar,
+          message.isBot ? 1 : 0,
           message.messageType,
           message.isRead ? 1 : 0,
           message.memberLevel,
@@ -833,6 +838,7 @@ class CsacLocalCache {
         online_status TEXT NOT NULL DEFAULT '',
         platform TEXT NOT NULL DEFAULT 'none',
         pat_action TEXT NOT NULL DEFAULT '$defaultPatAction',
+        is_bot INTEGER NOT NULL DEFAULT 0,
         saved_at INTEGER NOT NULL DEFAULT 0
       )
       ''');
@@ -847,6 +853,12 @@ class CsacLocalCache {
       'session_user',
       'pat_action',
       "TEXT NOT NULL DEFAULT '$defaultPatAction'",
+    );
+    _addColumnIfMissing(
+      db,
+      'session_user',
+      'is_bot',
+      'INTEGER NOT NULL DEFAULT 0',
     );
     db.execute('''
       CREATE TABLE IF NOT EXISTS conversations (
@@ -910,6 +922,7 @@ class CsacLocalCache {
         sender TEXT NOT NULL DEFAULT '',
         body TEXT NOT NULL DEFAULT '',
         sender_avatar TEXT NOT NULL DEFAULT '',
+        sender_is_bot INTEGER NOT NULL DEFAULT 0,
         message_type INTEGER NOT NULL DEFAULT 1,
         is_read INTEGER NOT NULL DEFAULT 0,
         member_level INTEGER NOT NULL DEFAULT 0,
@@ -935,6 +948,12 @@ class CsacLocalCache {
       'messages',
       'sender_avatar',
       "TEXT NOT NULL DEFAULT ''",
+    );
+    _addColumnIfMissing(
+      db,
+      'messages',
+      'sender_is_bot',
+      'INTEGER NOT NULL DEFAULT 0',
     );
     _addColumnIfMissing(
       db,
@@ -1074,6 +1093,7 @@ class CsacLocalCache {
       sender: asString(row['sender']),
       body: body,
       senderAvatar: asString(row['sender_avatar']),
+      isBot: asBool(row['sender_is_bot']),
       messageType: asInt(row['message_type']).ifZero(1),
       isRead: asBool(row['is_read']),
       memberLevel: asInt(row['member_level']),

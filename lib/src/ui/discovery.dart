@@ -73,14 +73,11 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
       error = null;
     });
     try {
-      await widget.state.sendFriendRequest(target, message.text);
+      final result = await widget.state.sendFriendRequest(target, message.text);
       if (!mounted) {
         return;
       }
-      await _showDiscoverySuccess(
-        context,
-        context.strings.text('Friend request sent.'),
-      );
+      await _showDiscoverySuccess(context, context.strings.text(result));
       if (!mounted) {
         return;
       }

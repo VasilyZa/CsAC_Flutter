@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'acop_client.dart';
 import 'models.dart';
 
 enum CsacLanguage { en, zh }
 
 enum ThemeMode { system, light, dark }
+
+enum AppClientMode { csac, acop }
 
 enum ConversationSortMode { latest, type }
 
@@ -61,6 +64,8 @@ class CsacPreferences {
     this.autoCheckVersionUpdates = true,
     this.localSystemNotificationsEnabled = true,
     this.enableExperimentalWebSocket = false,
+    this.clientMode = AppClientMode.csac,
+    this.acopServerUrl = AcopApiClient.defaultBaseUrl,
   });
 
   static const _themeKey = 'csac.theme_mode';
@@ -93,6 +98,8 @@ class CsacPreferences {
   static const _autoCheckVersionUpdatesKey = 'csac.updates.auto_check_version';
   static const _localSystemNotificationsKey = 'csac.notifications.local_system';
   static const _experimentalWebSocketKey = 'csac.realtime.experimental_ws';
+  static const _clientModeKey = 'csac.client_mode';
+  static const _acopServerUrlKey = 'csac.acop.server_url';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -122,6 +129,8 @@ class CsacPreferences {
   final bool autoCheckVersionUpdates;
   final bool localSystemNotificationsEnabled;
   final bool enableExperimentalWebSocket;
+  final AppClientMode clientMode;
+  final String acopServerUrl;
 
   bool get hasAppLockPin =>
       appLockPinSalt.trim().isNotEmpty && appLockPinHash.trim().isNotEmpty;
@@ -164,6 +173,8 @@ class CsacPreferences {
     bool? autoCheckVersionUpdates,
     bool? localSystemNotificationsEnabled,
     bool? enableExperimentalWebSocket,
+    AppClientMode? clientMode,
+    String? acopServerUrl,
   }) {
     return CsacPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -205,6 +216,8 @@ class CsacPreferences {
           this.localSystemNotificationsEnabled,
       enableExperimentalWebSocket:
           enableExperimentalWebSocket ?? this.enableExperimentalWebSocket,
+      clientMode: clientMode ?? this.clientMode,
+      acopServerUrl: acopServerUrl ?? this.acopServerUrl,
     );
   }
 
@@ -264,6 +277,10 @@ class CsacPreferences {
           prefs.getBool(_localSystemNotificationsKey) ?? true,
       enableExperimentalWebSocket:
           prefs.getBool(_experimentalWebSocketKey) ?? false,
+      clientMode: _clientModeFromName(prefs.getString(_clientModeKey)),
+      acopServerUrl: _acopServerUrlFromPrefs(
+        prefs.getString(_acopServerUrlKey),
+      ),
     );
   }
 
@@ -330,6 +347,13 @@ class CsacPreferences {
       localSystemNotificationsEnabled,
     );
     await prefs.setBool(_experimentalWebSocketKey, enableExperimentalWebSocket);
+    await prefs.setString(_clientModeKey, clientMode.name);
+    if (acopServerUrl.trim().isEmpty ||
+        acopServerUrl.trim() == AcopApiClient.defaultBaseUrl) {
+      await prefs.remove(_acopServerUrlKey);
+    } else {
+      await prefs.setString(_acopServerUrlKey, acopServerUrl.trim());
+    }
   }
 
   static ThemeMode _themeModeFromName(String? value) {
@@ -386,6 +410,27 @@ class CsacPreferences {
       }
     }
     return CsacLanguage.zh;
+  }
+
+  static AppClientMode _clientModeFromName(String? value) {
+    for (final mode in AppClientMode.values) {
+      if (mode.name == value) {
+        return mode;
+      }
+    }
+    return AppClientMode.csac;
+  }
+
+  static String _acopServerUrlFromPrefs(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return AcopApiClient.defaultBaseUrl;
+    }
+    try {
+      return AcopApiClient.normalizeServerUrl(value);
+    } on FormatException {
+      return AcopApiClient.defaultBaseUrl;
+    }
   }
 
   static CsacFontStyle _fontStyleFromName(String? value) {

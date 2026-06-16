@@ -227,10 +227,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (message == null || !mounted) {
       return;
     }
-    await runAction(
-      () => widget.state.sendFriendRequest(target.uid, message),
-      'Friend request sent.',
-    );
+    setState(() => acting = true);
+    try {
+      final result = await widget.state.sendFriendRequest(target.uid, message);
+      if (!mounted) return;
+      CsacToastMessenger.of(
+        context,
+      ).showToast(CsacToast(content: Text(context.strings.text(result))));
+      await load();
+    } catch (err) {
+      if (mounted) {
+        CsacToastMessenger.of(context).showToast(
+          CsacToast(
+            content: Text(
+              context.strings.format('Action failed: {error}', {'error': err}),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => acting = false);
+    }
   }
 
   Future<void> editRemark(UserProfile target) async {
@@ -1134,21 +1151,33 @@ class _UserProfileHeaderSpace extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        shadows: const [
-                          Shadow(
-                            blurRadius: 12,
-                            color: Colors.black45,
-                            offset: Offset(0, 1),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(
+                                      blurRadius: 12,
+                                      color: Colors.black45,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
                           ),
+                        ),
+                        if (profile.isBot) ...[
+                          const SizedBox(width: 8),
+                          const _BotBadge(compact: true),
                         ],
-                      ),
+                      ],
                     ),
                     IgnorePointer(
                       child: Opacity(

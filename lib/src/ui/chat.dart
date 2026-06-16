@@ -635,6 +635,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       avatar: avatarForMessage(message, false),
       memberTitle: message.memberTitle,
       memberLevel: message.memberLevel,
+      isBot: message.isBot,
     );
   }
 
@@ -3876,13 +3877,25 @@ class _MessageBubbleState extends State<_MessageBubble> {
                 const SizedBox(width: 6),
               ],
               Flexible(
-                child: Text(
-                  widget.message.sender,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.message.sender,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (widget.message.isBot ||
+                        widget.member?.isBot == true) ...[
+                      const SizedBox(width: 5),
+                      const _BotBadge(compact: true),
+                    ],
+                  ],
                 ),
               ),
               if (messageTime.isNotEmpty) ...[

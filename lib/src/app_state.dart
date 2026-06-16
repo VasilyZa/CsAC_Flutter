@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'acop_client.dart';
 import 'api_client.dart';
 import 'api_protocol.dart';
 import 'l10n.dart';
@@ -51,9 +52,13 @@ class AppLogFile {
 }
 
 class CsacAppState extends ChangeNotifier {
-  CsacAppState({CsacApiClient? client, CsacLocalCache? cache})
-    : client = client ?? CsacApiClient(),
-      cache = cache ?? CsacLocalCache() {
+  CsacAppState({
+    CsacApiClient? client,
+    AcopApiClient? acopClient,
+    CsacLocalCache? cache,
+  }) : client = client ?? CsacApiClient(),
+       acopClient = acopClient ?? AcopApiClient(),
+       cache = cache ?? CsacLocalCache() {
     this.client.onHttpProtocolChanged = _handleHttpProtocolChanged;
     _realtimeEventSub = realtime.events.listen(_handleRealtimeEvent);
     _realtimeStatusSub = realtime.statusChanges.listen((status) {
@@ -67,6 +72,7 @@ class CsacAppState extends ChangeNotifier {
   }
 
   final CsacApiClient client;
+  final AcopApiClient acopClient;
   final CsacLocalCache cache;
   final CsacRealtimeClient realtime = CsacRealtimeClient();
   StreamSubscription<CsacRealtimeEvent>? _realtimeEventSub;
@@ -96,6 +102,7 @@ class CsacAppState extends ChangeNotifier {
   }
 
   CsacUser? user;
+  AcopDeveloper? acopDeveloper;
   List<Conversation> conversations = const <Conversation>[];
   Set<int> hiddenGroupConversationIds = const <int>{};
   NotificationCounts notificationCounts = const NotificationCounts();
@@ -115,6 +122,13 @@ class CsacAppState extends ChangeNotifier {
   String? error;
 
   String get currentUserAvatar => user?.avatar.trim() ?? '';
+
+  bool get isAcopMode => preferences.clientMode == AppClientMode.acop;
+
+  bool get hasAcopDeveloper => acopDeveloper != null;
+
+  String get activeServerUrl =>
+      isAcopMode ? acopClient.baseUrl : client.baseUrl;
 
   @override
   void dispose() {
@@ -137,6 +151,14 @@ class CsacAppState extends ChangeNotifier {
       await cache.open();
       preferences = await CsacPreferences.load();
       _applyPreferredServer();
+      if (isAcopMode) {
+        restoreStatus = CsacStrings(
+          localeForLanguage(preferences.language),
+        ).text('Checking saved session...');
+        notifyListeners();
+        await _restoreAcopSession();
+        return;
+      }
       await client.loadSession();
       restoreStatus = CsacStrings(
         localeForLanguage(preferences.language),
@@ -218,6 +240,73 @@ class CsacAppState extends ChangeNotifier {
         platform: await currentClientPlatform(),
       ),
     );
+  }
+
+  Future<void> acopSendCode(String email, String purpose) {
+    return acopClient.sendCode(email: email, purpose: purpose);
+  }
+
+  Future<void> acopLogin(String email, String password) async {
+    await _acopLoginWith(
+      () => acopClient.login(email: email, password: password),
+    );
+  }
+
+  Future<void> acopLoginByCode(String email, String code) async {
+    await _acopLoginWith(
+      () => acopClient.loginByCode(email: email, code: code),
+    );
+  }
+
+  Future<void> acopRegister({
+    required String email,
+    required String password,
+    required String developerName,
+    required String code,
+    required String csacUsername,
+    required String csacPassword,
+  }) async {
+    await _acopLoginWith(
+      () => acopClient.register(
+        email: email,
+        password: password,
+        developerName: developerName,
+        code: code,
+        csacUsername: csacUsername,
+        csacPassword: csacPassword,
+      ),
+    );
+  }
+
+  Future<void> _acopLoginWith(
+    Future<AcopDeveloper> Function() loginCall,
+  ) async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      acopDeveloper = await loginCall();
+      error = null;
+    } catch (err) {
+      error = err.toString();
+      rethrow;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> acopLogout() async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      await acopClient.logout();
+    } finally {
+      acopDeveloper = null;
+      loading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> _loginWith({
@@ -546,6 +635,43 @@ class CsacAppState extends ChangeNotifier {
     }
   }
 
+  Future<void> switchClientMode(AppClientMode mode) async {
+    if (mode == preferences.clientMode) {
+      return;
+    }
+    preferences = preferences.copyWith(clientMode: mode);
+    await preferences.save();
+    if (mode == AppClientMode.acop) {
+      await stopRealtimeConnection();
+      acopDeveloper = null;
+      await _restoreAcopSession();
+    } else {
+      user = null;
+      sessionExpired = false;
+      needsEmailVerification = false;
+      offlineMode = false;
+      await initialize();
+      return;
+    }
+    notifyListeners();
+  }
+
+  Future<bool> updateAcopServerUrl(String value) async {
+    final normalized = AcopApiClient.normalizeServerUrl(value);
+    if (normalized == preferences.acopServerUrl.trim()) {
+      _applyPreferredServer();
+      return false;
+    }
+    preferences = preferences.copyWith(acopServerUrl: normalized);
+    await preferences.save();
+    _applyPreferredServer();
+    await acopClient.clearSession();
+    acopDeveloper = null;
+    error = null;
+    notifyListeners();
+    return true;
+  }
+
   bool verifyAppLockPin(String pin) {
     return preferences.verifyAppLockPin(pin);
   }
@@ -663,6 +789,7 @@ class CsacAppState extends ChangeNotifier {
       patAction: loaded.patAction.trim().isEmpty
           ? previous.patAction
           : loaded.patAction,
+      isBot: loaded.isBot || previous.isBot,
     );
   }
 
@@ -691,6 +818,30 @@ class CsacAppState extends ChangeNotifier {
 
   void _applyPreferredServer() {
     client.setBaseUrl(preferences.serverUrl);
+    acopClient.setBaseUrl(preferences.acopServerUrl);
+  }
+
+  Future<void> _restoreAcopSession() async {
+    await acopClient.loadSession();
+    try {
+      acopDeveloper = await acopClient.getDeveloperInfo();
+      sessionExpired = false;
+      offlineMode = false;
+      error = null;
+    } on AcopAuthException {
+      await acopClient.clearSession();
+      acopDeveloper = null;
+      sessionExpired = true;
+      error = null;
+    } on AcopApiException catch (err) {
+      acopDeveloper = null;
+      sessionExpired = false;
+      error = err.toString();
+    } catch (err) {
+      acopDeveloper = null;
+      sessionExpired = false;
+      error = err.toString();
+    }
   }
 
   Future<void> ensureRealtimeConnection({bool force = false}) async {
@@ -1271,6 +1422,21 @@ class CsacAppState extends ChangeNotifier {
     return client.friendChangeNotices();
   }
 
+  Future<void> markFriendChangeRead({
+    int? friendId,
+    bool readAll = false,
+  }) async {
+    await client.markFriendChangeRead(friendId: friendId, readAll: readAll);
+    if (readAll) {
+      updateNotificationCounts(friendChanges: 0);
+    } else if (friendId != null) {
+      updateNotificationCounts(
+        friendChanges: math.max(0, notificationCounts.friendChanges - 1),
+      );
+    }
+    await refreshNotificationCounts();
+  }
+
   Future<void> markNoticeRead({int? noticeId, bool readAll = false}) async {
     await client.markNoticeRead(noticeId: noticeId, readAll: readAll);
     if (readAll) {
@@ -1462,8 +1628,10 @@ class CsacAppState extends ChangeNotifier {
     return group;
   }
 
-  Future<void> sendFriendRequest(int uid, String message) {
-    return client.sendFriendRequest(uid, message);
+  Future<String> sendFriendRequest(int uid, String message) async {
+    final result = await client.sendFriendRequest(uid, message);
+    await syncConversations();
+    return result;
   }
 
   Future<void> updateFriendRemark(int friendId, String remark) async {
@@ -1600,9 +1768,10 @@ class CsacAppState extends ChangeNotifier {
     return client.setGroupAdmin(roomId, targetUid, set);
   }
 
-  Future<void> inviteGroupMember(int roomId, int targetUid) async {
-    await client.inviteGroupMember(roomId, targetUid);
+  Future<String> inviteGroupMember(int roomId, int targetUid) async {
+    final result = await client.inviteGroupMember(roomId, targetUid);
     await syncConversations();
+    return result;
   }
 
   Future<void> setGroupMemberTitle(
