@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:image_picker/image_picker.dart' as image_picker;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -75,6 +76,22 @@ Future<String> persistChatBackgroundFile(XFile picked) async {
   final bytes = await picked.readAsBytes();
   await target.writeAsBytes(bytes, flush: true);
   return target.path;
+}
+
+Future<XFile?> pickImageForMobileGallery({int imageQuality = 92}) {
+  return image_picker.ImagePicker().pickImage(
+    source: image_picker.ImageSource.gallery,
+    imageQuality: imageQuality,
+  );
+}
+
+Future<String> createMobileChatExportDirectory(String baseName) async {
+  final documents = await getApplicationDocumentsDirectory();
+  final directory = Directory(p.join(documents.path, 'exports', baseName));
+  if (!directory.existsSync()) {
+    directory.createSync(recursive: true);
+  }
+  return directory.path;
 }
 
 Future<String?> saveDownloadedBytes({

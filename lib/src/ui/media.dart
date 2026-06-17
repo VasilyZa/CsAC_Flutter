@@ -750,6 +750,14 @@ Future<void> downloadUrl(
     if (path == null) {
       return;
     }
+    if (isMobilePlatform) {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(path)],
+          fileNameOverrides: [p.basename(path)],
+        ),
+      );
+    }
     if (!context.mounted) {
       return;
     }

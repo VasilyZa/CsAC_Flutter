@@ -1303,21 +1303,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     setState(() => pickingVoice = true);
     try {
+      final acceptedTypeGroup = isApplePlatform
+          ? XTypeGroup(
+              label: context.strings.text('Audio files'),
+              extensions: voiceExtensions,
+              uniformTypeIdentifiers: const <String>[
+                'public.audio',
+                'public.mp3',
+                'public.mpeg-4-audio',
+                'com.microsoft.waveform-audio',
+              ],
+            )
+          : XTypeGroup(
+              label: context.strings.text('Audio files'),
+              extensions: voiceExtensions,
+              mimeTypes: const <String>[
+                'audio/*',
+                'audio/mpeg',
+                'audio/mp4',
+                'audio/aac',
+                'audio/wav',
+                'audio/ogg',
+                'audio/webm',
+                'audio/amr',
+                'audio/flac',
+              ],
+            );
       final picked = await openFile(
-        acceptedTypeGroups: <XTypeGroup>[
-          XTypeGroup(
-            label: context.strings.text('Audio files'),
-            extensions: const <String>[
-              'mp3',
-              'm4a',
-              'aac',
-              'wav',
-              'ogg',
-              'webm',
-              'amr',
-            ],
-          ),
-        ],
+        acceptedTypeGroups: <XTypeGroup>[acceptedTypeGroup],
       );
       if (!mounted || picked == null) {
         return;

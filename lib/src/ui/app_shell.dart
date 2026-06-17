@@ -1629,14 +1629,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> chooseAvatar() async {
-    final picked = await openFile(
-      acceptedTypeGroups: <XTypeGroup>[
-        XTypeGroup(
-          label: context.strings.text('Images'),
-          extensions: imageExtensions,
-        ),
-      ],
-    );
+    final strings = context.strings;
+    final picked = isMobilePlatform
+        ? await pickImageForMobileGallery()
+        : await openFile(
+            acceptedTypeGroups: <XTypeGroup>[
+              XTypeGroup(
+                label: strings.text('Images'),
+                extensions: imageExtensions,
+              ),
+            ],
+          );
     if (picked != null && mounted) {
       final bytes = await picked.readAsBytes();
       if (!mounted) {
