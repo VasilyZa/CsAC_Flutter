@@ -4,6 +4,18 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 
+const desktopWindowDefaultMinimumSize = Size(900, 620);
+const desktopWindowMobilePreviewWidth = 430.0;
+const desktopWindowMobilePreviewMinimumSize = Size(
+  desktopWindowMobilePreviewWidth,
+  620,
+);
+const desktopWindowMobilePreviewMaximumSize = Size(
+  desktopWindowMobilePreviewWidth,
+  100000,
+);
+const _desktopWindowUnrestrictedMaximumSize = Size(100000, 100000);
+
 class DesktopWindowFrameState {
   const DesktopWindowFrameState({
     this.isFocused = true,
@@ -21,15 +33,24 @@ class DesktopWindowFrameState {
 bool get supportsCustomDesktopWindowChrome =>
     Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
-Future<void> configureDesktopWindowChrome() async {
+Future<void> configureDesktopWindowChrome({
+  bool forceMobileWidth = false,
+}) async {
   if (!supportsCustomDesktopWindowChrome) {
     return;
   }
   await windowManager.ensureInitialized();
   await windowManager.setAsFrameless();
+  final minimumSize = forceMobileWidth
+      ? desktopWindowMobilePreviewMinimumSize
+      : desktopWindowDefaultMinimumSize;
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
-      minimumSize: Size(900, 620),
+    WindowOptions(
+      size: forceMobileWidth ? desktopWindowMobilePreviewMinimumSize : null,
+      minimumSize: minimumSize,
+      maximumSize: forceMobileWidth
+          ? desktopWindowMobilePreviewMaximumSize
+          : null,
       backgroundColor: Color(0x00000000),
       title: 'CsAC',
     ),
@@ -38,6 +59,47 @@ Future<void> configureDesktopWindowChrome() async {
       await windowManager.focus();
     },
   );
+}
+
+Future<void> applyDesktopWindowMobileWidth(bool enabled) async {
+  if (!supportsCustomDesktopWindowChrome) {
+    return;
+  }
+  await windowManager.ensureInitialized();
+  if (await windowManager.isFullScreen()) {
+    await windowManager.setFullScreen(false);
+  }
+  if (await windowManager.isMaximized()) {
+    await windowManager.unmaximize();
+  }
+  if (enabled) {
+    final current = await windowManager.getSize();
+    final nextHeight = current.height
+        .clamp(desktopWindowMobilePreviewMinimumSize.height, double.infinity)
+        .toDouble();
+    await windowManager.setMinimumSize(desktopWindowMobilePreviewMinimumSize);
+    await windowManager.setMaximumSize(desktopWindowMobilePreviewMaximumSize);
+    await windowManager.setSize(
+      Size(desktopWindowMobilePreviewWidth, nextHeight),
+    );
+    return;
+  }
+  await windowManager.setMaximumSize(_desktopWindowUnrestrictedMaximumSize);
+  await windowManager.setMinimumSize(desktopWindowDefaultMinimumSize);
+  final current = await windowManager.getSize();
+  if (current.width < desktopWindowDefaultMinimumSize.width ||
+      current.height < desktopWindowDefaultMinimumSize.height) {
+    await windowManager.setSize(
+      Size(
+        current.width < desktopWindowDefaultMinimumSize.width
+            ? desktopWindowDefaultMinimumSize.width
+            : current.width,
+        current.height < desktopWindowDefaultMinimumSize.height
+            ? desktopWindowDefaultMinimumSize.height
+            : current.height,
+      ),
+    );
+  }
 }
 
 Widget buildDesktopWindowMoveArea({required Widget child}) {

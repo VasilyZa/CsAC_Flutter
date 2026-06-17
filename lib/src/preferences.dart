@@ -66,6 +66,8 @@ class CsacPreferences {
     this.enableExperimentalWebSocket = false,
     this.clientMode = AppClientMode.csac,
     this.acopServerUrl = AcopApiClient.defaultBaseUrl,
+    this.showAcopBlockGeneratedCode = true,
+    this.forceDesktopMobileWidth = false,
   });
 
   static const _themeKey = 'csac.theme_mode';
@@ -100,6 +102,9 @@ class CsacPreferences {
   static const _experimentalWebSocketKey = 'csac.realtime.experimental_ws';
   static const _clientModeKey = 'csac.client_mode';
   static const _acopServerUrlKey = 'csac.acop.server_url';
+  static const _showAcopBlockGeneratedCodeKey =
+      'csac.acop.block_editor.show_generated_code';
+  static const _forceDesktopMobileWidthKey = 'csac.desktop.force_mobile_width';
 
   final ThemeMode themeMode;
   final int themeColorValue;
@@ -131,6 +136,8 @@ class CsacPreferences {
   final bool enableExperimentalWebSocket;
   final AppClientMode clientMode;
   final String acopServerUrl;
+  final bool showAcopBlockGeneratedCode;
+  final bool forceDesktopMobileWidth;
 
   bool get hasAppLockPin =>
       appLockPinSalt.trim().isNotEmpty && appLockPinHash.trim().isNotEmpty;
@@ -175,6 +182,8 @@ class CsacPreferences {
     bool? enableExperimentalWebSocket,
     AppClientMode? clientMode,
     String? acopServerUrl,
+    bool? showAcopBlockGeneratedCode,
+    bool? forceDesktopMobileWidth,
   }) {
     return CsacPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -218,6 +227,10 @@ class CsacPreferences {
           enableExperimentalWebSocket ?? this.enableExperimentalWebSocket,
       clientMode: clientMode ?? this.clientMode,
       acopServerUrl: acopServerUrl ?? this.acopServerUrl,
+      showAcopBlockGeneratedCode:
+          showAcopBlockGeneratedCode ?? this.showAcopBlockGeneratedCode,
+      forceDesktopMobileWidth:
+          forceDesktopMobileWidth ?? this.forceDesktopMobileWidth,
     );
   }
 
@@ -281,6 +294,10 @@ class CsacPreferences {
       acopServerUrl: _acopServerUrlFromPrefs(
         prefs.getString(_acopServerUrlKey),
       ),
+      showAcopBlockGeneratedCode:
+          prefs.getBool(_showAcopBlockGeneratedCodeKey) ?? true,
+      forceDesktopMobileWidth:
+          prefs.getBool(_forceDesktopMobileWidthKey) ?? false,
     );
   }
 
@@ -354,6 +371,11 @@ class CsacPreferences {
     } else {
       await prefs.setString(_acopServerUrlKey, acopServerUrl.trim());
     }
+    await prefs.setBool(
+      _showAcopBlockGeneratedCodeKey,
+      showAcopBlockGeneratedCode,
+    );
+    await prefs.setBool(_forceDesktopMobileWidthKey, forceDesktopMobileWidth);
   }
 
   static ThemeMode _themeModeFromName(String? value) {
@@ -1107,6 +1129,22 @@ class ChatHintStore {
   const ChatHintStore._();
 
   static const _seenKey = 'csac.chat_hint.seen';
+
+  static Future<bool> isSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_seenKey) ?? false;
+  }
+
+  static Future<void> markSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_seenKey, true);
+  }
+}
+
+class AcopQuickEditNoticeStore {
+  const AcopQuickEditNoticeStore._();
+
+  static const _seenKey = 'csac.acop.quick_edit_notice.seen';
 
   static Future<bool> isSeen() async {
     final prefs = await SharedPreferences.getInstance();

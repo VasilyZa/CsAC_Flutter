@@ -1097,6 +1097,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             state: widget.state,
             navigatorKey: navigatorKey,
             scaffoldMessengerKey: scaffoldMessengerKey,
+            onRefresh: refresh,
+            onScanQr: isMobilePlatform ? scanQrCode : null,
           );
         }
         break;

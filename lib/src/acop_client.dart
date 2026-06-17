@@ -67,6 +67,7 @@ class AcopBot {
     this.lastOnline = 0,
     this.createdAt = 0,
     this.nickname = '',
+    this.permissionRequests = const <AcopPermissionRequest>[],
   });
 
   final int botId;
@@ -85,10 +86,12 @@ class AcopBot {
   final int lastOnline;
   final int createdAt;
   final String nickname;
+  final List<AcopPermissionRequest> permissionRequests;
 
   bool get isOnline => online == 1;
 
   factory AcopBot.fromJson(Map<String, dynamic> json) {
+    final avatar = _firstString(json, const ['bot_avatar', 'avatar']);
     return AcopBot(
       botId: _asInt(json['bot_id']),
       uid: _asInt(json['uid']),
@@ -101,11 +104,14 @@ class AcopBot {
       canHttp: _asInt(json['can_http']),
       devName: _asString(json['dev_name']),
       email: _asString(json['email']),
-      botAvatar: _asString(json['bot_avatar']),
+      botAvatar: avatar,
       botToken: _asString(json['bot_token']),
       lastOnline: _asInt(json['last_online']),
       createdAt: _asInt(json['created_at']),
       nickname: _asString(json['nickname']),
+      permissionRequests: _objectList(
+        json['permission_requests'],
+      ).map(AcopPermissionRequest.fromJson).toList(),
     );
   }
 }
@@ -117,6 +123,9 @@ class AcopScript {
     required this.scriptName,
     required this.scriptContent,
     required this.enabled,
+    this.version = 0,
+    this.createdAt = 0,
+    this.updatedAt = 0,
   });
 
   final int scriptId;
@@ -124,6 +133,9 @@ class AcopScript {
   final String scriptName;
   final String scriptContent;
   final int enabled;
+  final int version;
+  final int createdAt;
+  final int updatedAt;
 
   bool get isEnabled => enabled == 1;
 
@@ -134,18 +146,27 @@ class AcopScript {
       scriptName: _asString(json['script_name']),
       scriptContent: _asString(json['script_content']),
       enabled: _asInt(json['enabled'], fallback: 1),
+      version: _asInt(json['version']),
+      createdAt: _asInt(json['created_at']),
+      updatedAt: _asInt(json['updated_at']),
     );
   }
 }
 
 class AcopLogEntry {
   const AcopLogEntry({
+    required this.id,
+    required this.botId,
+    required this.scriptId,
     required this.level,
     required this.message,
     required this.createdAt,
     required this.raw,
   });
 
+  final int id;
+  final int botId;
+  final int scriptId;
   final String level;
   final String message;
   final String createdAt;
@@ -153,6 +174,9 @@ class AcopLogEntry {
 
   factory AcopLogEntry.fromJson(Map<String, dynamic> json) {
     return AcopLogEntry(
+      id: _asInt(json['id']),
+      botId: _asInt(json['bot_id']),
+      scriptId: _asInt(json['script_id']),
       level: _asString(json['level'], fallback: 'log'),
       message: _firstString(json, const ['message', 'msg', 'content', 'log']),
       createdAt: _firstString(json, const ['created_at', 'time', 'created']),
@@ -169,6 +193,8 @@ class AcopPermissionRequest {
     required this.reason,
     required this.status,
     required this.adminReply,
+    this.createdAt = '',
+    this.handledAt = '',
   });
 
   final int requestId;
@@ -177,6 +203,8 @@ class AcopPermissionRequest {
   final String reason;
   final int status;
   final String adminReply;
+  final String createdAt;
+  final String handledAt;
 
   factory AcopPermissionRequest.fromJson(Map<String, dynamic> json) {
     return AcopPermissionRequest(
@@ -186,6 +214,8 @@ class AcopPermissionRequest {
       reason: _asString(json['reason']),
       status: _asInt(json['status']),
       adminReply: _asString(json['admin_reply']),
+      createdAt: _firstString(json, const ['created_at', 'created']),
+      handledAt: _firstString(json, const ['handled_at', 'handled']),
     );
   }
 }
@@ -201,6 +231,7 @@ class AcopApiClient {
   final http.Client _http;
   String _baseUrl;
   final Map<String, String> _cookies = <String, String>{};
+  String _debugSessionCookie = '';
 
   String get baseUrl => _baseUrl;
 
@@ -262,6 +293,10 @@ class AcopApiClient {
     _cookies.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
+  }
+
+  void setDebugSessionCookie(String cookie) {
+    _debugSessionCookie = cookie.trim();
   }
 
   Future<void> sendCode({
@@ -615,6 +650,9 @@ class AcopApiClient {
           .map((entry) => '${entry.key}=${entry.value}')
           .join('; ');
     }
+    if (_debugSessionCookie.isNotEmpty) {
+      request.headers['X-CsAC-Debug-Cookie'] = _debugSessionCookie;
+    }
   }
 
   void _storeCookies(http.Response response) {
@@ -688,6 +726,18 @@ Map<String, dynamic> _dataMap(Map<String, dynamic> json) {
 
 List<Map<String, dynamic>> _dataList(Map<String, dynamic> json) {
   final data = json['data'];
+  if (data is List) {
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+        )
+        .toList();
+  }
+  return const <Map<String, dynamic>>[];
+}
+
+List<Map<String, dynamic>> _objectList(Object? data) {
   if (data is List) {
     return data
         .whereType<Map>()

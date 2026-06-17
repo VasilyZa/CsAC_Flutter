@@ -67,6 +67,7 @@ import 'src/update_checker.dart';
 
 part 'src/ui/app_shell.dart';
 part 'src/ui/acop_platform.dart';
+part 'src/ui/acop_block_editor.dart';
 part 'src/ui/home.dart';
 part 'src/ui/discovery.dart';
 part 'src/ui/notifications.dart';
@@ -86,7 +87,10 @@ part 'src/ui/helpers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureInsecureHttpsOverrides();
-  await configureDesktopWindowChrome();
+  final initialPreferences = await CsacPreferences.load();
+  await configureDesktopWindowChrome(
+    forceMobileWidth: initialPreferences.forceDesktopMobileWidth,
+  );
   await configureWindowsTray();
   runApp(const CsacMobileApp());
 }

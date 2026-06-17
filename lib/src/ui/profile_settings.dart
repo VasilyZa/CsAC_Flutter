@@ -5643,6 +5643,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Route',
                 'Server',
                 'Default server',
+                'Force desktop window to mobile width',
+                'Mobile-style width',
+                'Window size',
               ]);
     final showLogout = category != null
         ? category == _SettingsCategory.account
@@ -6527,6 +6530,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
+                            if (!isMobilePlatform) ...[
+                              CsacSwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(
+                                  CupertinoIcons.device_phone_portrait,
+                                ),
+                                title: Text(
+                                  strings.text(
+                                    'Force desktop window to mobile width',
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  strings.text(
+                                    'Lock the desktop window to a mobile-style width.',
+                                  ),
+                                ),
+                                value: widget
+                                    .state
+                                    .preferences
+                                    .forceDesktopMobileWidth,
+                                onChanged:
+                                    widget.state.updateForceDesktopMobileWidth,
+                              ),
+                              const CsacDivider(height: 1),
+                              const SizedBox(height: 12),
+                            ],
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.api_outlined),

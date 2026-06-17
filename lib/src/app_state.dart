@@ -12,6 +12,7 @@ import 'l10n.dart';
 import 'local_cache.dart';
 import 'models.dart';
 import 'platform/app_storage.dart';
+import 'platform/desktop_window_chrome.dart';
 import 'preferences.dart';
 import 'realtime_client.dart';
 
@@ -635,6 +636,19 @@ class CsacAppState extends ChangeNotifier {
     }
   }
 
+  Future<void> updateShowAcopBlockGeneratedCode(bool enabled) async {
+    preferences = preferences.copyWith(showAcopBlockGeneratedCode: enabled);
+    await preferences.save();
+    notifyListeners();
+  }
+
+  Future<void> updateForceDesktopMobileWidth(bool enabled) async {
+    preferences = preferences.copyWith(forceDesktopMobileWidth: enabled);
+    await preferences.save();
+    await applyDesktopWindowMobileWidth(enabled);
+    notifyListeners();
+  }
+
   Future<void> switchClientMode(AppClientMode mode) async {
     if (mode == preferences.clientMode) {
       return;
@@ -644,6 +658,7 @@ class CsacAppState extends ChangeNotifier {
     if (mode == AppClientMode.acop) {
       await stopRealtimeConnection();
       acopDeveloper = null;
+      await refreshDebugMode();
       await _restoreAcopSession();
     } else {
       user = null;
@@ -822,6 +837,7 @@ class CsacAppState extends ChangeNotifier {
   }
 
   Future<void> _restoreAcopSession() async {
+    _syncAcopDebugSession();
     await acopClient.loadSession();
     try {
       acopDeveloper = await acopClient.getDeveloperInfo();
@@ -2017,12 +2033,14 @@ class CsacAppState extends ChangeNotifier {
     } catch (_) {
       debugMode = false;
     }
+    _syncAcopDebugSession();
     notifyListeners();
   }
 
   Future<void> activateDebugMode(String key) async {
     final status = await client.activateSessionExtension(key);
     debugMode = status.active;
+    _syncAcopDebugSession();
     notifyListeners();
   }
 
@@ -2031,8 +2049,15 @@ class CsacAppState extends ChangeNotifier {
       await client.resetSessionExtension();
     } finally {
       debugMode = false;
+      _syncAcopDebugSession();
       notifyListeners();
     }
+  }
+
+  void _syncAcopDebugSession() {
+    acopClient.setDebugSessionCookie(
+      debugMode ? client.sessionCookieHeader : '',
+    );
   }
 
   Future<void> banUser(int uid) async {

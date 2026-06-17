@@ -1,30 +1,48 @@
 part of '../../main.dart';
 
+typedef CommandPaletteOpener =
+    Future<void> Function({
+      Future<void> Function()? onRefresh,
+      Future<void> Function()? onScanQr,
+    });
+
+bool _commandPaletteOpening = false;
+
 Future<void> openCommandPaletteOverlay({
   required BuildContext context,
   required CsacAppState state,
   required GlobalKey<NavigatorState> navigatorKey,
   required GlobalKey<CsacToastMessengerState> scaffoldMessengerKey,
+  Future<void> Function()? onRefresh,
+  Future<void> Function()? onScanQr,
 }) async {
+  if (_commandPaletteOpening) return;
   final navigator = navigatorKey.currentState;
   final overlayContext = navigator?.overlay?.context;
   if (navigator == null || overlayContext == null) {
     return;
   }
-  await showGeneralDialog<void>(
-    context: overlayContext,
-    barrierDismissible: true,
-    barrierLabel: context.strings.text('Dismiss'),
-    barrierColor: Colors.transparent,
-    transitionDuration: Duration.zero,
-    pageBuilder: (dialogContext, _, _) {
-      return _CommandPaletteOverlay(
-        state: state,
-        navigatorKey: navigatorKey,
-        scaffoldMessengerKey: scaffoldMessengerKey,
-      );
-    },
-  );
+  _commandPaletteOpening = true;
+  try {
+    await showGeneralDialog<void>(
+      context: overlayContext,
+      barrierDismissible: true,
+      barrierLabel: context.strings.text('Dismiss'),
+      barrierColor: Colors.transparent,
+      transitionDuration: Duration.zero,
+      pageBuilder: (dialogContext, _, _) {
+        return _CommandPaletteOverlay(
+          state: state,
+          navigatorKey: navigatorKey,
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          onRefresh: onRefresh,
+          onScanQr: onScanQr,
+        );
+      },
+    );
+  } finally {
+    _commandPaletteOpening = false;
+  }
 }
 
 class _DesktopCommandPaletteHost extends StatefulWidget {
@@ -97,11 +115,15 @@ class _CommandPaletteOverlay extends StatefulWidget {
     required this.state,
     required this.navigatorKey,
     required this.scaffoldMessengerKey,
+    this.onRefresh,
+    this.onScanQr,
   });
 
   final CsacAppState state;
   final GlobalKey<NavigatorState> navigatorKey;
   final GlobalKey<CsacToastMessengerState> scaffoldMessengerKey;
+  final Future<void> Function()? onRefresh;
+  final Future<void> Function()? onScanQr;
 
   @override
   State<_CommandPaletteOverlay> createState() => _CommandPaletteOverlayState();
@@ -158,6 +180,15 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
         run: (context) =>
             openRoute(SettingsScreen(state: widget.state), context),
       ),
+      if (widget.onScanQr != null)
+        _CommandPaletteAction(
+          id: 'scan_qr',
+          icon: CupertinoIcons.qrcode_viewfinder,
+          title: strings.text('Scan QR code'),
+          subtitle: strings.text('Open a CsAC QR code'),
+          keywords: const ['qr', 'scan', 'scheme', '扫码', '二维码'],
+          run: scanQr,
+        ),
       _CommandPaletteAction(
         id: 'search_messages',
         icon: Icons.manage_search,
@@ -224,8 +255,10 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
         title: strings.text('Add friend'),
         subtitle: strings.text('User UID'),
         keywords: const ['friend', 'add', 'uid', '好友', '添加'],
-        run: (context) =>
-            openRoute(AddFriendScreen(state: widget.state), context),
+        run: (context) async {
+          await openRoute(AddFriendScreen(state: widget.state), context);
+          await refreshLocalHome();
+        },
       ),
       _CommandPaletteAction(
         id: 'join_group',
@@ -233,8 +266,10 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
         title: strings.text('Join group'),
         subtitle: strings.text('Room ID'),
         keywords: const ['group', 'join', 'room', '群', '加入'],
-        run: (context) =>
-            openRoute(JoinGroupScreen(state: widget.state), context),
+        run: (context) async {
+          await openRoute(JoinGroupScreen(state: widget.state), context);
+          await refreshLocalHome();
+        },
       ),
       _CommandPaletteAction(
         id: 'create_group',
@@ -242,8 +277,10 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
         title: strings.text('Create group'),
         subtitle: strings.text('Group chat'),
         keywords: const ['group', 'create', 'room', '群', '创建'],
-        run: (context) =>
-            openRoute(CreateGroupScreen(state: widget.state), context),
+        run: (context) async {
+          await openRoute(CreateGroupScreen(state: widget.state), context);
+          await refreshLocalHome();
+        },
       ),
       _CommandPaletteAction(
         id: 'api_explorer',
@@ -489,6 +526,11 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
     await context.navigator!.push(CsacPageRoute<void>(builder: (_) => screen));
   }
 
+  Future<void> refreshLocalHome() async {
+    final refresh = widget.onRefresh;
+    if (refresh != null) await refresh();
+  }
+
   Future<void> clearLocalCache(_CommandPaletteActionContext context) async {
     final navigator = context.navigator;
     if (navigator == null) {
@@ -519,6 +561,7 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
       return;
     }
     await widget.state.clearLocalCache();
+    await refreshLocalHome();
     context.messenger?.showToast(
       CsacToast(content: Text(context.strings.text('Local cache cleared.'))),
     );
@@ -537,10 +580,20 @@ class _CommandPaletteOverlayState extends State<_CommandPaletteOverlay> {
   Future<void> refreshConversations(
     _CommandPaletteActionContext context,
   ) async {
-    await widget.state.refreshHome();
+    final refresh = widget.onRefresh;
+    if (refresh == null) {
+      await widget.state.refreshHome();
+    } else {
+      await refresh();
+    }
     context.messenger?.showToast(
       CsacToast(content: Text(context.strings.text('Refreshed.'))),
     );
+  }
+
+  Future<void> scanQr(_CommandPaletteActionContext context) async {
+    final scanQr = widget.onScanQr;
+    if (scanQr != null) await scanQr();
   }
 
   Future<void> openConversationDetails(

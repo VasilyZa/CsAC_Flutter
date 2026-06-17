@@ -1,5 +1,12 @@
 import 'package:flutter/widgets.dart';
 
+const desktopWindowDefaultMinimumSize = Size(900, 620);
+const desktopWindowMobilePreviewWidth = 430.0;
+const desktopWindowMobilePreviewMinimumSize = Size(
+  desktopWindowMobilePreviewWidth,
+  620,
+);
+
 class DesktopWindowFrameState {
   const DesktopWindowFrameState({
     this.isFocused = true,
@@ -16,7 +23,11 @@ class DesktopWindowFrameState {
 
 bool get supportsCustomDesktopWindowChrome => false;
 
-Future<void> configureDesktopWindowChrome() async {}
+Future<void> configureDesktopWindowChrome({
+  bool forceMobileWidth = false,
+}) async {}
+
+Future<void> applyDesktopWindowMobileWidth(bool enabled) async {}
 
 Widget buildDesktopWindowMoveArea({required Widget child}) => child;
 
