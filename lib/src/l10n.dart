@@ -1173,6 +1173,9 @@ const _zh = <String, String>{
   'Force desktop window to mobile width': '将桌面窗口固定为手机宽度',
   'Lock the desktop window to a mobile-style width.': '将桌面窗口锁定为接近手机的宽度。',
   'Block palette': '积木库',
+  'Blocks': '积木',
+  'Workspace': '工作区',
+  'Generated code': '生成代码',
   'Blocks are based on the ACOP JavaScript guide and generate sandbox-safe bot code.':
       '积木基于 ACOP JavaScript 指南，可生成适用于沙箱的 Bot 代码。',
   'Events': '事件',

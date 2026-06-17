@@ -99,6 +99,7 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
   int blockSerial = 0;
   bool codeCopied = false;
   bool allowPop = false;
+  int compactSection = 1;
   _AcopBlockCategory selectedCategory = _AcopBlockCategory.event;
   late final String initialGeneratedCode;
 
@@ -247,8 +248,6 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 980;
     final palette = _AcopBlockPalette(
       selectedCategory: selectedCategory,
       onCategoryChanged: (value) => setState(() => selectedCategory = value),
@@ -270,6 +269,14 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
       onImport: importCurrentCode,
       onApply: applyCode,
     );
+    final compactPanels = <Widget>[
+      palette,
+      workspacePanel,
+      if (widget.showGeneratedCode) codePanel,
+    ];
+    if (compactSection >= compactPanels.length) {
+      compactSection = compactPanels.length - 1;
+    }
     return PopScope(
       canPop: allowPop || !hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) {
@@ -302,8 +309,11 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
           ],
         ),
         body: SafeArea(
-          child: isWide
-              ? Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 980;
+              if (isWide) {
+                return Row(
                   children: [
                     SizedBox(width: 330, child: palette),
                     Container(width: 0.5, color: colors.separator),
@@ -313,25 +323,47 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
                       Expanded(flex: 2, child: codePanel),
                     ],
                   ],
-                )
-              : CsacListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                child: Column(
                   children: [
-                    palette,
-                    const SizedBox(height: 12),
                     SizedBox(
-                      height: math.max(
-                        360,
-                        MediaQuery.sizeOf(context).height * 0.48,
+                      width: double.infinity,
+                      child: CupertinoSlidingSegmentedControl<int>(
+                        groupValue: compactSection,
+                        children: {
+                          0: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(strings.text('Blocks')),
+                          ),
+                          1: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(strings.text('Workspace')),
+                          ),
+                          if (widget.showGeneratedCode)
+                            2: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Text(strings.text('Generated code')),
+                            ),
+                        },
+                        onValueChanged: (value) {
+                          if (value != null) {
+                            setState(() => compactSection = value);
+                          }
+                        },
                       ),
-                      child: workspacePanel,
                     ),
-                    if (widget.showGeneratedCode) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(height: 420, child: codePanel),
-                    ],
+                    const SizedBox(height: 12),
+                    Expanded(child: compactPanels[compactSection]),
                   ],
                 ),
+              );
+            },
+          ),
         ),
       ),
     );
