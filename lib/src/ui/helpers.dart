@@ -248,26 +248,30 @@ class CsacColors {
 
   bool get isDark => brightness == Brightness.dark;
   Color get systemBackground =>
-      isDark ? CupertinoColors.black : const Color(0xFFF2F2F7);
+      isDark ? const Color(0xFF050507) : const Color(0xFFF5F5F7);
   Color get cardBackground =>
-      isDark ? const Color(0xFF1C1C1E) : CupertinoColors.white;
+      isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   Color get elevatedBackground =>
-      isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF9F9FB);
+      isDark ? const Color(0xFF2A2A2E) : const Color(0xFFFBFBFD);
   Color get tertiaryBackground =>
-      isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF4);
+      isDark ? const Color(0xFF343438) : const Color(0xFFEFF0F4);
   Color get label => isDark ? CupertinoColors.white : CupertinoColors.black;
   Color get secondaryLabel =>
       isDark ? const Color(0x99EBEBF5) : const Color(0x993C3C43);
   Color get tertiaryLabel =>
       isDark ? const Color(0x4DEBEBF5) : const Color(0x4C3C3C43);
   Color get separator =>
-      isDark ? const Color(0x5C545458) : const Color(0x4A3C3C43);
-  Color get fill => isDark ? const Color(0x5C787880) : const Color(0x33787880);
+      isDark ? const Color(0x5C54545A) : const Color(0x383C3C43);
+  Color get fill => isDark ? const Color(0x52787880) : const Color(0x24787880);
   Color get tertiaryFill =>
-      isDark ? const Color(0x3D787880) : const Color(0x1F787880);
+      isDark ? const Color(0x33787880) : const Color(0x18787880);
   Color get destructive => CupertinoColors.systemRed;
   Color get navBarBackground =>
-      isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF9F9F9);
+      isDark ? const Color(0xD91C1C1E) : const Color(0xDCFDFDFE);
+  Color get hairline =>
+      isDark ? const Color(0x24FFFFFF) : const Color(0x14000000);
+  Color get softShadow =>
+      isDark ? const Color(0x52000000) : const Color(0x14000000);
 }
 
 class Colors {
@@ -506,11 +510,15 @@ class _AppIconImage extends StatelessWidget {
 }
 
 const double _csacPageHorizontalPadding = 16;
-const double _csacGroupedCornerRadius = 18;
-const double _csacControlCornerRadius = 16;
+const double _csacGroupedCornerRadius = 22;
+const double _csacControlCornerRadius = 14;
 const double _csacListMinHeight = 52;
-const Duration _csacPressFeedbackDuration = Duration(milliseconds: 120);
-const Duration _csacListHighlightDuration = Duration(milliseconds: 110);
+const Duration _csacMotionQuick = Duration(milliseconds: 120);
+const Duration _csacMotionRegular = Duration(milliseconds: 190);
+const Duration _csacMotionEmphasized = Duration(milliseconds: 260);
+const Curve _csacNativeCurve = Curves.easeOutCubic;
+const Duration _csacPressFeedbackDuration = _csacMotionQuick;
+const Duration _csacListHighlightDuration = _csacMotionQuick;
 
 class _AdaptivePageFrame extends StatelessWidget {
   const _AdaptivePageFrame({required this.child, this.maxWidth = 720});
@@ -613,6 +621,7 @@ class _CupertinoListPressableState extends State<_CupertinoListPressable> {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final reduceMotion = _MotionPreference.reduceOf(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: widget.onTap,
@@ -623,20 +632,25 @@ class _CupertinoListPressableState extends State<_CupertinoListPressable> {
       onTapDown: (_) => setPressed(true),
       onTapUp: (_) => setPressed(false),
       onTapCancel: () => setPressed(false),
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: enabled && pressed ? 1 : 0,
-                duration: _csacListHighlightDuration,
-                curve: Curves.easeOutCubic,
-                child: ColoredBox(color: colors.fill),
+      child: AnimatedScale(
+        scale: !reduceMotion && enabled && pressed ? 0.992 : 1,
+        duration: _csacPressFeedbackDuration,
+        curve: _csacNativeCurve,
+        child: Stack(
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: enabled && pressed ? 1 : 0,
+                  duration: _csacListHighlightDuration,
+                  curve: _csacNativeCurve,
+                  child: ColoredBox(color: colors.fill),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -694,8 +708,12 @@ class _CupertinoSearchField extends StatelessWidget {
       style: TextStyle(color: colors.label, fontSize: 16),
       cursorColor: colors.primaryColor,
       decoration: BoxDecoration(
-        color: colors.tertiaryFill,
+        color: Color.alphaBlend(
+          colors.primaryColor.withValues(alpha: colors.isDark ? 0.045 : 0.025),
+          colors.elevatedBackground,
+        ),
         borderRadius: BorderRadius.circular(_csacControlCornerRadius),
+        border: Border.all(color: colors.hairline, width: 0.7),
       ),
     );
   }
@@ -725,6 +743,22 @@ class _CupertinoGroupedCard extends StatelessWidget {
         margin: EdgeInsets.zero,
         header: header == null ? null : Text(header!.toUpperCase()),
         backgroundColor: Colors.transparent,
+        decoration: BoxDecoration(
+          color: CsacColors.of(context).cardBackground.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
+          border: Border.all(
+            color: CsacColors.of(context).hairline,
+            width: 0.7,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: CsacColors.of(context).softShadow.withValues(alpha: 0.55),
+              blurRadius: 10,
+              spreadRadius: -10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
         children: children,
       ),
     );
@@ -800,6 +834,11 @@ class _ChatListSection extends StatelessWidget {
       margin: margin ?? const EdgeInsets.fromLTRB(12, 2, 12, 12),
       header: header == null ? null : Text(header!.toUpperCase()),
       backgroundColor: const Color(0x00000000),
+      decoration: BoxDecoration(
+        color: CsacColors.of(context).cardBackground.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(_csacGroupedCornerRadius),
+        border: Border.all(color: CsacColors.of(context).hairline, width: 0.7),
+      ),
       children: children,
     );
   }
@@ -846,7 +885,7 @@ class _ChatListTile extends StatelessWidget {
       padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
       leadingSize: 50,
       leadingToTitle: 12,
-      backgroundColor: tileColor,
+      backgroundColor: Colors.transparent,
       leading: leading,
       title: DefaultTextStyle.merge(
         style: TextStyle(
@@ -880,11 +919,44 @@ class _ChatListTile extends StatelessWidget {
                   color: colors.tertiaryLabel,
                 )),
     );
+    final content = AnimatedContainer(
+      duration: _csacMotionRegular,
+      curve: _csacNativeCurve,
+      decoration: BoxDecoration(
+        color: tileColor,
+        borderRadius: selected ? BorderRadius.circular(16) : BorderRadius.zero,
+        border: selected
+            ? Border.all(
+                color: primary.withValues(alpha: colors.isDark ? 0.20 : 0.12),
+                width: 0.7,
+              )
+            : null,
+      ),
+      child: Stack(
+        children: [
+          PositionedDirectional(
+            start: 0,
+            top: 10,
+            bottom: 10,
+            child: AnimatedContainer(
+              duration: _csacMotionRegular,
+              curve: _csacNativeCurve,
+              width: selected ? 3 : 0,
+              decoration: BoxDecoration(
+                color: primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          tile,
+        ],
+      ),
+    );
     return _CupertinoListPressable(
       onTap: onTap,
       onLongPress: onLongPress,
       onSecondaryTap: onSecondaryTap,
-      child: tile,
+      child: content,
     );
   }
 }
@@ -1040,10 +1112,44 @@ class _EmptyPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Text(message, style: Theme.of(context).textTheme.bodyLarge),
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: colors.isDark ? 0.14 : 0.09),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colors.hairline, width: 0.7),
+                ),
+                child: Icon(
+                  CupertinoIcons.tray,
+                  color: primary.withValues(alpha: 0.78),
+                  size: 27,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.secondaryLabel,
+                  fontSize: 16,
+                  height: 1.34,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

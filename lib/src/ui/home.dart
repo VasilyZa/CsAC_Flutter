@@ -396,9 +396,10 @@ class _MainShellState extends State<MainShell> {
         tabBar: CupertinoTabBar(
           currentIndex: index,
           onTap: selectTab,
-          backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
+          backgroundColor: colors.navBarBackground.withValues(alpha: 0.94),
           activeColor: CupertinoTheme.of(context).primaryColor,
           inactiveColor: colors.secondaryLabel,
+          border: Border(top: BorderSide(color: colors.hairline, width: 0.5)),
           items: [
             BottomNavigationBarItem(
               icon: _TabBadgeIcon(
@@ -509,26 +510,35 @@ class _CupertinoSideRail extends StatelessWidget {
     ];
     return ClipRect(
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          width: 72,
-          color: colors.cardBackground.withValues(alpha: 0.86),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 20, bottom: 16),
-                child: const _AppIconImage(size: 34, borderRadius: 9),
-              ),
-              for (final item in items.indexed)
-                _SideRailItem(
-                  selected: index == item.$1,
-                  icon: item.$2.$1,
-                  activeIcon: item.$2.$2,
-                  label: item.$2.$3,
-                  badge: item.$2.$4,
-                  onTap: () => onChanged(item.$1),
+        filter: ui.ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.cardBackground.withValues(
+              alpha: colors.isDark ? 0.72 : 0.78,
+            ),
+            border: Border(
+              right: BorderSide(color: colors.hairline, width: 0.7),
+            ),
+          ),
+          child: SizedBox(
+            width: 72,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 16),
+                  child: const _AppIconImage(size: 34, borderRadius: 9),
                 ),
-            ],
+                for (final item in items.indexed)
+                  _SideRailItem(
+                    selected: index == item.$1,
+                    icon: item.$2.$1,
+                    activeIcon: item.$2.$2,
+                    label: item.$2.$3,
+                    badge: item.$2.$4,
+                    onTap: () => onChanged(item.$1),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -562,28 +572,48 @@ class _SideRailItem extends StatelessWidget {
       child: SizedBox(
         width: 72,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _BadgeIcon(
-                icon: selected ? activeIcon : icon,
-                count: badge,
-                color: selected ? primary : colors.secondaryLabel,
-                size: 22,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected
+                  ? primary.withValues(alpha: colors.isDark ? 0.22 : 0.13)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              border: selected
+                  ? Border.all(
+                      color: primary.withValues(
+                        alpha: colors.isDark ? 0.24 : 0.18,
+                      ),
+                      width: 0.7,
+                    )
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _BadgeIcon(
+                  icon: selected ? activeIcon : icon,
+                  count: badge,
                   color: selected ? primary : colors.secondaryLabel,
-                  fontSize: 10,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  size: 22,
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? primary : colors.secondaryLabel,
+                    fontSize: 10,
+                    letterSpacing: -0.08,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -715,23 +745,71 @@ class _WideEmptyChatPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = CsacColors.of(context);
+    final primary = CupertinoTheme.of(context).primaryColor;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              CupertinoIcons.bubble_left_bubble_right,
-              size: 56,
-              color: colors.tertiaryLabel,
+        padding: const EdgeInsets.all(40),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.cardBackground.withValues(
+                  alpha: colors.isDark ? 0.58 : 0.72,
+                ),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: colors.hairline, width: 0.7),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(34, 32, 34, 30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 74,
+                      height: 74,
+                      decoration: BoxDecoration(
+                        color: primary.withValues(
+                          alpha: colors.isDark ? 0.16 : 0.10,
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colors.hairline, width: 0.7),
+                      ),
+                      child: Icon(
+                        CupertinoIcons.bubble_left_bubble_right_fill,
+                        size: 34,
+                        color: primary.withValues(alpha: 0.82),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      context.strings.text('Select a conversation'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.label,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.24,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      context.strings.text(
+                        'Pick a chat from the list to keep the conversation here.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.secondaryLabel,
+                        fontSize: 14,
+                        height: 1.32,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              context.strings.text('Select a conversation'),
-              style: TextStyle(color: colors.secondaryLabel, fontSize: 17),
-            ),
-          ],
+          ),
         ),
       ),
     );

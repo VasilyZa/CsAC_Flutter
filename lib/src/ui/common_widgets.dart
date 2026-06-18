@@ -151,6 +151,7 @@ class InputDecoration {
     this.alignLabelWithHint,
     this.filled,
     this.fillColor,
+    this.boxShadow,
     this.enabled = true,
   });
 
@@ -167,6 +168,7 @@ class InputDecoration {
   final bool? alignLabelWithHint;
   final bool? filled;
   final Color? fillColor;
+  final List<BoxShadow>? boxShadow;
   final bool enabled;
 }
 
@@ -573,6 +575,10 @@ class CsacCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
+    final radius = shape is RoundedRectangleBorder
+        ? (shape! as RoundedRectangleBorder).borderRadius
+        : BorderRadius.circular(_csacGroupedCornerRadius);
     final borderRadius = shape is RoundedRectangleBorder
         ? (shape! as RoundedRectangleBorder).borderRadius
         : BorderRadius.circular(_csacGroupedCornerRadius);
@@ -580,20 +586,38 @@ class CsacCard extends StatelessWidget {
       padding: margin ?? EdgeInsets.zero,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color:
-              color ??
-              CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-                context,
-              ),
-          borderRadius: borderRadius,
-          border: Border.all(
-            color: CupertinoColors.separator.resolveFrom(context),
-            width: 0.5,
-          ),
+          color: color ?? colors.cardBackground.withValues(alpha: 0.96),
+          borderRadius: radius,
+          border: Border.all(color: colors.hairline, width: 0.7),
+          boxShadow: elevation == 0
+              ? null
+              : [
+                  BoxShadow(
+                    color: shadowColor ?? colors.softShadow,
+                    blurRadius: elevation == null ? 10 : 6 + elevation! * 2,
+                    spreadRadius: -9,
+                    offset: Offset(0, elevation == null ? 5 : 2 + elevation!),
+                  ),
+                ],
         ),
         child: ClipRRect(
           borderRadius: borderRadius.resolve(Directionality.of(context)),
-          child: child ?? const SizedBox.shrink(),
+          clipBehavior: clipBehavior ?? Clip.antiAlias,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  CupertinoColors.white.withValues(
+                    alpha: colors.isDark ? 0.045 : 0.40,
+                  ),
+                  CupertinoColors.white.withValues(alpha: 0),
+                ],
+              ),
+            ),
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
     );
@@ -1227,20 +1251,39 @@ class FilledButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = CsacColors.of(context);
     final bg =
         style?.backgroundColor?.resolve({}) ??
         CupertinoTheme.of(context).primaryColor;
     final fg = style?.foregroundColor?.resolve({}) ?? CupertinoColors.white;
-    return CupertinoButton.filled(
-      onPressed: onPressed,
-      color: bg,
-      foregroundColor: fg,
-      borderRadius: BorderRadius.circular(13),
-      padding:
-          padding ??
-          style?.padding?.resolve({}) ??
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: child,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: onPressed == null
+            ? null
+            : [
+                BoxShadow(
+                  color: bg.withValues(alpha: colors.isDark ? 0.24 : 0.18),
+                  blurRadius: 16,
+                  spreadRadius: -10,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+      ),
+      child: CupertinoButton.filled(
+        onPressed: onPressed,
+        color: bg,
+        foregroundColor: fg,
+        borderRadius: BorderRadius.circular(999),
+        padding:
+            padding ??
+            style?.padding?.resolve({}) ??
+            const EdgeInsets.symmetric(horizontal: 17, vertical: 11),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(fontWeight: FontWeight.w600),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -1267,11 +1310,32 @@ class OutlinedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton.tinted(
-      onPressed: onPressed,
-      borderRadius: BorderRadius.circular(13),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: child,
+    final colors = CsacColors.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.primaryColor.withValues(
+          alpha: colors.isDark ? 0.16 : 0.09,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colors.primaryColor.withValues(
+            alpha: colors.isDark ? 0.20 : 0.14,
+          ),
+          width: 0.7,
+        ),
+      ),
+      child: CupertinoButton(
+        onPressed: onPressed,
+        borderRadius: BorderRadius.circular(999),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            color: colors.primaryColor,
+            fontWeight: FontWeight.w600,
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -1310,16 +1374,18 @@ class TextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foreground =
+        style?.foregroundColor?.resolve({}) ??
+        CupertinoTheme.of(context).primaryColor;
     return CupertinoButton(
       onPressed: onPressed,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      minimumSize: Size.zero,
+      padding:
+          style?.padding?.resolve({}) ??
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      minimumSize: style?.minimumSize?.resolve({}) ?? const Size(44, 36),
+      borderRadius: BorderRadius.circular(999),
       child: DefaultTextStyle.merge(
-        style: TextStyle(
-          color:
-              style?.foregroundColor?.resolve({}) ??
-              CupertinoTheme.of(context).primaryColor,
-        ),
+        style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
         child: child,
       ),
     );
@@ -1388,18 +1454,31 @@ class CsacIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
+    final colors = CsacColors.of(context);
+    final resolvedColor = color ?? CupertinoTheme.of(context).primaryColor;
+    final button = CupertinoButton(
       onPressed: onPressed,
-      padding: padding ?? const EdgeInsets.all(8),
-      minimumSize: Size.zero,
-      child: IconTheme(
-        data: IconThemeData(
-          color: color ?? CupertinoTheme.of(context).primaryColor,
-          size: iconSize ?? 22,
+      padding: padding ?? const EdgeInsets.all(10),
+      minimumSize: minimumSize ?? const Size(44, 44),
+      borderRadius: BorderRadius.circular(999),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: resolvedColor.withValues(alpha: colors.isDark ? 0.08 : 0.045),
+          shape: BoxShape.circle,
         ),
-        child: icon,
+        child: SizedBox.square(
+          dimension: 32,
+          child: Center(
+            child: IconTheme(
+              data: IconThemeData(color: resolvedColor, size: iconSize ?? 21),
+              child: icon,
+            ),
+          ),
+        ),
       ),
     );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -2058,7 +2137,10 @@ class CsacTextField extends StatelessWidget {
     final showBorder = !noBorder && borderSide != BorderSide.none;
     final fillColor = decoration.filled == true
         ? decoration.fillColor ?? colors.cardBackground
-        : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context);
+        : Color.alphaBlend(
+            colors.primaryColor.withValues(alpha: colors.isDark ? 0.05 : 0.025),
+            colors.elevatedBackground,
+          );
     final contentPadding =
         decoration.contentPadding ??
         EdgeInsets.symmetric(horizontal: 12, vertical: noBorder ? 9 : 12);
@@ -2069,6 +2151,7 @@ class CsacTextField extends StatelessWidget {
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       style: style,
+      cursorColor: colors.primaryColor,
       textAlign: textAlign,
       readOnly: readOnly,
       autofocus: autofocus,
@@ -2107,11 +2190,14 @@ class CsacTextField extends StatelessWidget {
         border: showBorder
             ? Border.all(
                 color: usesDefaultBorderSide
-                    ? colors.separator.withValues(alpha: 0.55)
+                    ? colors.separator.withValues(
+                        alpha: colors.isDark ? 0.52 : 0.34,
+                      )
                     : borderSide?.color ?? colors.separator,
-                width: usesDefaultBorderSide ? 0.5 : borderSide?.width ?? 0.5,
+                width: usesDefaultBorderSide ? 0.7 : borderSide?.width ?? 0.7,
               )
             : null,
+        boxShadow: decoration.boxShadow,
       ),
     );
     if (label == null && helper == null) {
@@ -2128,7 +2214,8 @@ class CsacTextField extends StatelessWidget {
               label,
               style: TextStyle(
                 color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                fontSize: 13,
+                fontSize: 12,
+                letterSpacing: -0.08,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2268,6 +2355,7 @@ class CsacNavigationBar extends StatelessWidget implements PreferredSizeWidget {
   final bool? centerTitle;
 
   CupertinoNavigationBar toNavigationBar(BuildContext context) {
+    final colors = CsacColors.of(context);
     return CupertinoNavigationBar(
       leading: leading,
       automaticallyImplyLeading: automaticallyImplyLeading,
@@ -2277,13 +2365,8 @@ class CsacNavigationBar extends StatelessWidget implements PreferredSizeWidget {
           ? null
           : Row(mainAxisSize: MainAxisSize.min, children: actions!),
       backgroundColor:
-          backgroundColor ?? CupertinoTheme.of(context).barBackgroundColor,
-      border: Border(
-        bottom: BorderSide(
-          color: CupertinoColors.separator.resolveFrom(context),
-          width: 0,
-        ),
-      ),
+          backgroundColor ?? colors.navBarBackground.withValues(alpha: 0.92),
+      border: Border(bottom: BorderSide(color: colors.hairline, width: 0.5)),
       bottom: bottom,
     );
   }
@@ -2985,21 +3068,15 @@ class _MotionListItem extends StatelessWidget {
     if (_MotionPreference.reduceOf(context)) {
       return child;
     }
-    final delay = Duration(milliseconds: math.min(index * 26, 220).toInt());
+    final delay = Duration(milliseconds: math.min(index * 18, 150).toInt());
     return child
         .animate(delay: delay)
-        .fadeIn(duration: 180.ms, curve: Curves.easeOutCubic)
+        .fadeIn(duration: _csacMotionRegular, curve: _csacNativeCurve)
         .slideY(
-          begin: 0.055,
+          begin: 0.018,
           end: 0,
-          duration: 260.ms,
-          curve: Curves.easeOutCubic,
-        )
-        .scale(
-          begin: const Offset(0.985, 0.985),
-          end: const Offset(1, 1),
-          duration: 300.ms,
-          curve: Curves.easeOutBack,
+          duration: _csacMotionEmphasized,
+          curve: _csacNativeCurve,
         );
   }
 }
@@ -3016,12 +3093,12 @@ class _MotionPane extends StatelessWidget {
     }
     return child
         .animate()
-        .fadeIn(duration: 180.ms, curve: Curves.easeOutCubic)
+        .fadeIn(duration: _csacMotionRegular, curve: _csacNativeCurve)
         .slideY(
-          begin: 0.035,
+          begin: 0.018,
           end: 0,
-          duration: 260.ms,
-          curve: Curves.easeOutCubic,
+          duration: _csacMotionEmphasized,
+          curve: _csacNativeCurve,
         );
   }
 }

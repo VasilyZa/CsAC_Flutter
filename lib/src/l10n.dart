@@ -220,6 +220,8 @@ const _zh = <String, String>{
   'Current server: {server}': '当前服务器：{server}',
   'New messages: {count}': '新消息：{count} 条',
   'Select a conversation': '选择一个会话',
+  'Pick a chat from the list to keep the conversation here.':
+      '从列表中选择聊天，会话内容会显示在这里。',
   'Chats': '聊天',
   'Pinned': '置顶',
   'Search': '搜索',

@@ -3448,6 +3448,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                           ),
                                           filled: true,
                                           fillColor: colors.cardBackground,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: colors.softShadow
+                                                  .withValues(
+                                                    alpha: colors.isDark
+                                                        ? 0.42
+                                                        : 0.70,
+                                                  ),
+                                              blurRadius: 18,
+                                              spreadRadius: -12,
+                                              offset: const Offset(0, 8),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),

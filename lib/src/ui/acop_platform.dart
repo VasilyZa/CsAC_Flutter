@@ -1080,9 +1080,12 @@ class _AcopPlatformShellState extends State<AcopPlatformShell> {
           : CupertinoTabBar(
               currentIndex: _acopSectionIndex(section),
               onTap: (value) => selectSection(_acopSectionForIndex(value)),
-              backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
+              backgroundColor: colors.navBarBackground.withValues(alpha: 0.94),
               activeColor: CupertinoTheme.of(context).primaryColor,
               inactiveColor: colors.secondaryLabel,
+              border: Border(
+                top: BorderSide(color: colors.hairline, width: 0.5),
+              ),
               items: [
                 BottomNavigationBarItem(
                   icon: const Icon(CupertinoIcons.cube_box),
@@ -1133,35 +1136,44 @@ class _AcopSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = CsacColors.of(context);
-    return Container(
-      width: 196,
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        border: Border(right: BorderSide(color: colors.separator)),
-      ),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            _AcopSidebarItem(
-              selected: section == _AcopSection.bots,
-              icon: CupertinoIcons.cube_box,
-              label: strings.text('Bots'),
-              onTap: () => onChanged(_AcopSection.bots),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          width: 196,
+          decoration: BoxDecoration(
+            color: colors.cardBackground.withValues(
+              alpha: colors.isDark ? 0.72 : 0.80,
             ),
-            _AcopSidebarItem(
-              selected: section == _AcopSection.admin,
-              icon: CupertinoIcons.shield,
-              label: strings.text('Admin'),
-              onTap: () => onChanged(_AcopSection.admin),
+            border: Border(
+              right: BorderSide(color: colors.hairline, width: 0.7),
             ),
-            _AcopSidebarItem(
-              selected: section == _AcopSection.account,
-              icon: CupertinoIcons.person_crop_circle,
-              label: strings.text('Account'),
-              onTap: () => onChanged(_AcopSection.account),
+          ),
+          child: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+              children: [
+                _AcopSidebarItem(
+                  selected: section == _AcopSection.bots,
+                  icon: CupertinoIcons.cube_box,
+                  label: strings.text('Bots'),
+                  onTap: () => onChanged(_AcopSection.bots),
+                ),
+                _AcopSidebarItem(
+                  selected: section == _AcopSection.admin,
+                  icon: CupertinoIcons.shield,
+                  label: strings.text('Admin'),
+                  onTap: () => onChanged(_AcopSection.admin),
+                ),
+                _AcopSidebarItem(
+                  selected: section == _AcopSection.account,
+                  icon: CupertinoIcons.person_crop_circle,
+                  label: strings.text('Account'),
+                  onTap: () => onChanged(_AcopSection.account),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1187,9 +1199,11 @@ class _AcopSidebarItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: CupertinoButton(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        color: selected ? colors.primaryColor.withValues(alpha: 0.14) : null,
-        borderRadius: BorderRadius.circular(14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        color: selected
+            ? colors.primaryColor.withValues(alpha: colors.isDark ? 0.20 : 0.12)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         onPressed: onTap,
         child: Row(
           children: [

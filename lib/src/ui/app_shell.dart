@@ -788,15 +788,13 @@ class _CupertinoDesktopTitleBar extends StatelessWidget {
     final bar = DecoratedBox(
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          primary.withValues(alpha: isFocused ? 0.04 : 0.0),
-          colors.systemBackground,
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: colors.separator.withValues(alpha: 0.28),
-            width: 0.5,
+          CupertinoColors.white.withValues(alpha: colors.isDark ? 0.03 : 0.38),
+          Color.alphaBlend(
+            primary.withValues(alpha: isFocused ? 0.035 : 0.0),
+            colors.systemBackground,
           ),
         ),
+        border: Border(bottom: BorderSide(color: colors.hairline, width: 0.5)),
       ),
       child: SizedBox(
         height: 46,
@@ -829,10 +827,11 @@ class _CupertinoDesktopTitleBar extends StatelessWidget {
               Expanded(
                 child: buildDesktopWindowMoveArea(
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
                         CupertinoIcons.chat_bubble_2_fill,
-                        size: 16,
+                        size: 15,
                         color: isFocused ? primary : colors.secondaryLabel,
                       ),
                       const SizedBox(width: 8),
@@ -846,7 +845,8 @@ class _CupertinoDesktopTitleBar extends StatelessWidget {
                                 ? colors.label
                                 : colors.secondaryLabel,
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.08,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -854,6 +854,7 @@ class _CupertinoDesktopTitleBar extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 82),
             ],
           ),
         ),
@@ -908,10 +909,16 @@ class _CupertinoWindowControlButtonState
                 decoration: BoxDecoration(
                   color: widget.color.withValues(alpha: hovering ? 1 : 0.86),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: CupertinoColors.black.withValues(alpha: 0.08),
-                    width: 0.5,
-                  ),
+                  border: Border.all(color: Colors.black12, width: 0.5),
+                  boxShadow: hovering
+                      ? [
+                          BoxShadow(
+                            color: widget.color.withValues(alpha: 0.22),
+                            blurRadius: 8,
+                            spreadRadius: -3,
+                          ),
+                        ]
+                      : null,
                 ),
                 child: AnimatedOpacity(
                   opacity: hovering ? 1 : 0,
@@ -948,26 +955,28 @@ CupertinoThemeData buildCsacCupertinoTheme(
     fontFamilyFallback: fontFamilyFallback,
     color: CupertinoColors.label,
     fontSize: 17,
-    letterSpacing: -0.22,
+    height: 1.22,
+    letterSpacing: -0.24,
   );
   return CupertinoThemeData(
     brightness: brightness,
     primaryColor: seedColor,
     primaryContrastingColor: CupertinoColors.white,
     scaffoldBackgroundColor: isDark
-        ? CupertinoColors.black
-        : const Color(0xFFF2F2F7),
+        ? const Color(0xFF050507)
+        : const Color(0xFFF5F5F7),
     barBackgroundColor: isDark
-        ? const Color(0xCC1C1C1E)
-        : const Color(0xCCF9F9F9),
+        ? const Color(0xD91C1C1E)
+        : const Color(0xDCFDFDFE),
     textTheme: CupertinoTextThemeData(
       primaryColor: seedColor,
       textStyle: baseText,
       actionTextStyle: baseText.copyWith(color: seedColor),
       navActionTextStyle: baseText.copyWith(color: seedColor, fontSize: 17),
       navTitleTextStyle: baseText.copyWith(
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         fontSize: 17,
+        letterSpacing: -0.32,
       ),
       navLargeTitleTextStyle: baseText.copyWith(
         fontWeight: FontWeight.w800,
