@@ -197,6 +197,18 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
     });
   }
 
+  void reorderBlock(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= workspace.length) return;
+    var target = newIndex;
+    if (target > oldIndex) target -= 1;
+    if (target < 0 || target >= workspace.length) return;
+    setState(() {
+      final block = workspace.removeAt(oldIndex);
+      workspace.insert(target, block);
+      codeCopied = false;
+    });
+  }
+
   void updateField(_AcopWorkspaceBlock block, String key, String value) {
     setState(() {
       block.values[key] = value;
@@ -255,10 +267,13 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
     );
     final workspacePanel = _AcopWorkspacePanel(
       workspace: workspace,
+      enableDrag: false,
+      onAddTemplate: addBlock,
       onUpdateField: updateField,
       onDuplicate: duplicateBlock,
       onRemove: removeBlock,
       onMove: moveBlock,
+      onReorder: reorderBlock,
       onToggleCollapsed: toggleBlockCollapsed,
     );
     final codePanel = _AcopGeneratedCodePanel(
@@ -317,7 +332,20 @@ class _AcopBlockEditorScreenState extends State<_AcopBlockEditorScreen> {
                   children: [
                     SizedBox(width: 330, child: palette),
                     Container(width: 0.5, color: colors.separator),
-                    Expanded(flex: 3, child: workspacePanel),
+                    Expanded(
+                      flex: 3,
+                      child: _AcopWorkspacePanel(
+                        workspace: workspace,
+                        enableDrag: true,
+                        onAddTemplate: addBlock,
+                        onUpdateField: updateField,
+                        onDuplicate: duplicateBlock,
+                        onRemove: removeBlock,
+                        onMove: moveBlock,
+                        onReorder: reorderBlock,
+                        onToggleCollapsed: toggleBlockCollapsed,
+                      ),
+                    ),
                     if (widget.showGeneratedCode) ...[
                       Container(width: 0.5, color: colors.separator),
                       Expanded(flex: 2, child: codePanel),
@@ -420,10 +448,19 @@ class _AcopBlockPalette extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        for (final template in templates) ...[
-          _AcopPaletteBlock(template: template, onTap: () => onAdd(template)),
-          const SizedBox(height: 8),
-        ],
+        for (var index = 0; index < templates.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+              top: index == 0 ? 0 : -8,
+              bottom: index == templates.length - 1 ? 8 : 0,
+            ),
+            child: _AcopPaletteBlock(
+              template: templates[index],
+              isFirst: index == 0,
+              isLast: index == templates.length - 1,
+              onTap: () => onAdd(templates[index]),
+            ),
+          ),
       ],
     );
   }
@@ -462,9 +499,16 @@ class _AcopCategoryChip extends StatelessWidget {
 }
 
 class _AcopPaletteBlock extends StatelessWidget {
-  const _AcopPaletteBlock({required this.template, required this.onTap});
+  const _AcopPaletteBlock({
+    required this.template,
+    required this.isFirst,
+    required this.isLast,
+    required this.onTap,
+  });
 
   final _AcopBlockTemplate template;
+  final bool isFirst;
+  final bool isLast;
   final VoidCallback onTap;
 
   @override
@@ -472,47 +516,132 @@ class _AcopPaletteBlock extends StatelessWidget {
     final fg = template.color.computeLuminance() > 0.45
         ? CupertinoColors.black
         : CupertinoColors.white;
-    return CupertinoButton(
+    final block = CupertinoButton(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       onPressed: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: template.color,
-          borderRadius: BorderRadius.circular(14),
+      child: _ScratchPaintedBlockShell(
+        color: template.color,
+        compact: true,
+        topConnector: !isFirst,
+        bottomConnector: !isLast,
+        topRounded: isFirst,
+        bottomRounded: isLast,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 16),
+          child: Row(
+            children: [
+              Icon(template.icon, color: fg),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.strings.text(template.titleKey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: fg, fontWeight: FontWeight.w800),
+                    ),
+                    if (template.descriptionKey.isNotEmpty)
+                      Text(
+                        context.strings.text(template.descriptionKey),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.72),
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(CupertinoIcons.plus_circle, color: fg),
+            ],
+          ),
         ),
+      ),
+    );
+    return LongPressDraggable<_AcopBlockTemplate>(
+      data: template,
+      feedback: MateriallessDragFeedback(
+        width: 300,
+        child: _AcopPaletteBlockPreview(template: template),
+      ),
+      childWhenDragging: Opacity(opacity: 0.45, child: block),
+      child: block,
+    );
+  }
+}
+
+class _AcopPaletteBlockPreview extends StatelessWidget {
+  const _AcopPaletteBlockPreview({required this.template});
+
+  final _AcopBlockTemplate template;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = template.color.computeLuminance() > 0.45
+        ? CupertinoColors.black
+        : CupertinoColors.white;
+    return _ScratchPaintedBlockShell(
+      color: template.color,
+      compact: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 10, 16),
         child: Row(
           children: [
             Icon(template.icon, color: fg),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.strings.text(template.titleKey),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: fg, fontWeight: FontWeight.w800),
-                  ),
-                  if (template.descriptionKey.isNotEmpty)
-                    Text(
-                      context.strings.text(template.descriptionKey),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: fg.withValues(alpha: 0.72),
-                        fontSize: 12,
-                      ),
-                    ),
-                ],
+              child: Text(
+                context.strings.text(template.titleKey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(CupertinoIcons.plus_circle, color: fg),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ScratchPaintedBlockShell extends StatelessWidget {
+  const _ScratchPaintedBlockShell({
+    required this.color,
+    required this.child,
+    this.compact = false,
+    this.topConnector = true,
+    this.bottomConnector = true,
+    this.topRounded = true,
+    this.bottomRounded = true,
+  });
+
+  final Color color;
+  final Widget child;
+  final bool compact;
+  final bool topConnector;
+  final bool bottomConnector;
+  final bool topRounded;
+  final bool bottomRounded;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 8 : 10),
+      child: CustomPaint(
+        painter: _AcopScratchBlockPainter(
+          color: color,
+          compact: compact,
+          topConnector: topConnector,
+          bottomConnector: bottomConnector,
+          topRounded: topRounded,
+          bottomRounded: bottomRounded,
+        ),
+        child: child,
       ),
     );
   }
@@ -521,54 +650,140 @@ class _AcopPaletteBlock extends StatelessWidget {
 class _AcopWorkspacePanel extends StatelessWidget {
   const _AcopWorkspacePanel({
     required this.workspace,
+    required this.enableDrag,
+    required this.onAddTemplate,
     required this.onUpdateField,
     required this.onDuplicate,
     required this.onRemove,
     required this.onMove,
+    required this.onReorder,
     required this.onToggleCollapsed,
   });
 
   final List<_AcopWorkspaceBlock> workspace;
+  final bool enableDrag;
+  final void Function(_AcopBlockTemplate template) onAddTemplate;
   final void Function(_AcopWorkspaceBlock block, String key, String value)
   onUpdateField;
   final void Function(_AcopWorkspaceBlock block) onDuplicate;
   final void Function(_AcopWorkspaceBlock block) onRemove;
   final void Function(int index, int delta) onMove;
+  final void Function(int oldIndex, int newIndex) onReorder;
   final void Function(_AcopWorkspaceBlock block) onToggleCollapsed;
 
   @override
   Widget build(BuildContext context) {
+    Widget dropTarget({required Widget child}) {
+      return DragTarget<_AcopBlockTemplate>(
+        onWillAcceptWithDetails: (_) => true,
+        onAcceptWithDetails: (details) => onAddTemplate(details.data),
+        builder: (context, candidates, rejected) {
+          final highlighted = candidates.isNotEmpty;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            decoration: BoxDecoration(
+              color: highlighted
+                  ? CsacColors.of(context).primaryColor.withValues(alpha: 0.08)
+                  : null,
+              border: highlighted
+                  ? Border.all(color: CsacColors.of(context).primaryColor)
+                  : null,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: child,
+          );
+        },
+      );
+    }
+
     if (workspace.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Text(
-            context.strings.text('Add blocks from the palette to start.'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: CsacColors.of(context).secondaryLabel),
+      return dropTarget(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Text(
+              context.strings.text('Add blocks from the palette to start.'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: CsacColors.of(context).secondaryLabel),
+            ),
           ),
         ),
       );
     }
-    return CsacListView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-      children: [
-        for (final entry in workspace.indexed) ...[
-          _AcopWorkspaceBlockCard(
-            index: entry.$1,
-            block: entry.$2,
-            isFirst: entry.$1 == 0,
-            isLast: entry.$1 == workspace.length - 1,
+    Widget buildBlock(int index) {
+      final block = workspace[index];
+      final card = Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 260, maxWidth: 500),
+          child: _AcopWorkspaceBlockCard(
+            index: index,
+            block: block,
+            isFirst: index == 0,
+            isLast: index == workspace.length - 1,
+            draggable: enableDrag,
             onUpdateField: onUpdateField,
-            onDuplicate: () => onDuplicate(entry.$2),
-            onRemove: () => onRemove(entry.$2),
-            onMoveUp: () => onMove(entry.$1, -1),
-            onMoveDown: () => onMove(entry.$1, 1),
-            onToggleCollapsed: () => onToggleCollapsed(entry.$2),
+            onDuplicate: () => onDuplicate(block),
+            onRemove: () => onRemove(block),
+            onMoveUp: () => onMove(index, -1),
+            onMoveDown: () => onMove(index, 1),
+            onToggleCollapsed: () => onToggleCollapsed(block),
           ),
-          const SizedBox(height: 10),
-        ],
-      ],
+        ),
+      );
+      return Padding(
+        key: ValueKey(block.id),
+        padding: EdgeInsets.only(
+          left: 14,
+          right: 14,
+          top: index == 0 ? 12 : -12,
+          bottom: index == workspace.length - 1 ? 24 : 0,
+        ),
+        child: card,
+      );
+    }
+
+    if (enableDrag) {
+      return dropTarget(
+        child: ListView.builder(
+          padding: EdgeInsets.zero,
+          itemCount: workspace.length,
+          itemBuilder: (context, index) {
+            final block = buildBlock(index);
+            return DragTarget<int>(
+              onWillAcceptWithDetails: (details) => details.data != index,
+              onAcceptWithDetails: (details) => onReorder(details.data, index),
+              builder: (context, candidate, rejected) {
+                final highlighted = candidate.isNotEmpty;
+                return LongPressDraggable<int>(
+                  data: index,
+                  feedback: MateriallessDragFeedback(child: block),
+                  childWhenDragging: Opacity(opacity: 0.35, child: block),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: highlighted
+                          ? Border.all(
+                              color: CsacColors.of(context).primaryColor,
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: block,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      );
+    }
+
+    return dropTarget(
+      child: CsacListView.builder(
+        padding: EdgeInsets.zero,
+        itemCount: workspace.length,
+        itemBuilder: (context, index) => buildBlock(index),
+      ),
     );
   }
 }
@@ -579,6 +794,7 @@ class _AcopWorkspaceBlockCard extends StatelessWidget {
     required this.block,
     required this.isFirst,
     required this.isLast,
+    required this.draggable,
     required this.onUpdateField,
     required this.onDuplicate,
     required this.onRemove,
@@ -591,6 +807,7 @@ class _AcopWorkspaceBlockCard extends StatelessWidget {
   final _AcopWorkspaceBlock block;
   final bool isFirst;
   final bool isLast;
+  final bool draggable;
   final void Function(_AcopWorkspaceBlock block, String key, String value)
   onUpdateField;
   final VoidCallback onDuplicate;
@@ -601,103 +818,264 @@ class _AcopWorkspaceBlockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = CsacColors.of(context);
     final accent = block.template.color;
-    return CsacCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    final fg = accent.computeLuminance() > 0.45
+        ? CupertinoColors.black
+        : CupertinoColors.white;
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: colors.isDark ? 0.20 : 0.12),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(18),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _AcopScratchBlockPainter(
+                color: accent,
+                topConnector: !isFirst,
+                bottomConnector: !isLast,
+                topRounded: isFirst,
+                bottomRounded: isLast,
               ),
             ),
-            child: Row(
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 7, 8, 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 4,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Icon(block.template.icon, color: accent),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    context.strings.text(block.template.titleKey),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.label,
-                      fontWeight: FontWeight.w800,
+                Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: fg.withValues(alpha: 0.78),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    Icon(block.template.icon, color: fg, size: 20),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        context.strings.text(block.template.titleKey),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _AcopTinyIconButton(
+                      icon: block.collapsed
+                          ? CupertinoIcons.chevron_down
+                          : CupertinoIcons.chevron_up,
+                      color: fg,
+                      onPressed: onToggleCollapsed,
+                    ),
+                    if (draggable)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: ReorderableDragStartListener(
+                          index: index,
+                          child: Icon(
+                            CupertinoIcons.line_horizontal_3,
+                            size: 18,
+                            color: fg.withValues(alpha: 0.86),
+                          ),
+                        ),
+                      ),
+                    _AcopTinyIconButton(
+                      icon: CupertinoIcons.arrow_up,
+                      color: fg,
+                      onPressed: isFirst ? null : onMoveUp,
+                    ),
+                    _AcopTinyIconButton(
+                      icon: CupertinoIcons.arrow_down,
+                      color: fg,
+                      onPressed: isLast ? null : onMoveDown,
+                    ),
+                    _AcopTinyIconButton(
+                      icon: CupertinoIcons.doc_on_doc,
+                      color: fg,
+                      onPressed: onDuplicate,
+                    ),
+                    _AcopTinyIconButton(
+                      icon: CupertinoIcons.delete,
+                      destructive: true,
+                      color: fg,
+                      onPressed: onRemove,
+                    ),
+                  ],
+                ),
+                if (!block.collapsed && block.template.fields.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Column(
+                    children: [
+                      for (final field in block.template.fields) ...[
+                        _AcopBlockFieldEditor(
+                          field: field,
+                          value: block.values[field.key] ?? field.defaultValue,
+                          onChanged: (value) =>
+                              onUpdateField(block, field.key, value),
+                        ),
+                        if (field != block.template.fields.last)
+                          const SizedBox(height: 9),
+                      ],
+                    ],
                   ),
-                ),
-                _AcopTinyIconButton(
-                  icon: block.collapsed
-                      ? CupertinoIcons.chevron_down
-                      : CupertinoIcons.chevron_up,
-                  onPressed: onToggleCollapsed,
-                ),
-                _AcopTinyIconButton(
-                  icon: CupertinoIcons.arrow_up,
-                  onPressed: isFirst ? null : onMoveUp,
-                ),
-                _AcopTinyIconButton(
-                  icon: CupertinoIcons.arrow_down,
-                  onPressed: isLast ? null : onMoveDown,
-                ),
-                _AcopTinyIconButton(
-                  icon: CupertinoIcons.doc_on_doc,
-                  onPressed: onDuplicate,
-                ),
-                _AcopTinyIconButton(
-                  icon: CupertinoIcons.delete,
-                  destructive: true,
-                  onPressed: onRemove,
-                ),
+                ],
               ],
             ),
           ),
-          if (!block.collapsed)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  for (final field in block.template.fields) ...[
-                    _AcopBlockFieldEditor(
-                      field: field,
-                      value: block.values[field.key] ?? field.defaultValue,
-                      onChanged: (value) =>
-                          onUpdateField(block, field.key, value),
-                    ),
-                    if (field != block.template.fields.last)
-                      const SizedBox(height: 10),
-                  ],
-                ],
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
+class MateriallessDragFeedback extends StatelessWidget {
+  const MateriallessDragFeedback({
+    super.key,
+    required this.child,
+    this.width = 520,
+  });
+
+  final Widget child;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Opacity(
+        opacity: 0.92,
+        child: Transform.scale(
+          scale: 1.03,
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: width, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _AcopScratchBlockPainter extends CustomPainter {
+  const _AcopScratchBlockPainter({
+    required this.color,
+    this.compact = false,
+    this.topConnector = true,
+    this.bottomConnector = true,
+    this.topRounded = true,
+    this.bottomRounded = true,
+  });
+
+  final Color color;
+  final bool compact;
+  final bool topConnector;
+  final bool bottomConnector;
+  final bool topRounded;
+  final bool bottomRounded;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final strokePaint = Paint()
+      ..color = CupertinoColors.black.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final shadowPaint = Paint()
+      ..color = CupertinoColors.black.withValues(alpha: 0.14)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final path = _scratchBlockPath(size);
+    canvas.drawPath(path.shift(const Offset(0, 4)), shadowPaint);
+    canvas.drawPath(path, paint);
+    canvas.drawPath(path, strokePaint);
+  }
+
+  Path _scratchBlockPath(Size size) {
+    final topH = compact ? 10.0 : 12.0;
+    final tabW = compact ? 42.0 : 58.0;
+    final tabH = compact ? 10.0 : 12.0;
+    final radius = compact ? 13.0 : 16.0;
+    final topRadius = topRounded ? radius : 0.0;
+    final bottomRadius = bottomRounded ? radius : 0.0;
+    final notchX = compact ? 30.0 : 40.0;
+    final w = size.width;
+    final h = size.height;
+    final bodyBottom = bottomConnector ? h - tabH : h;
+    final path = Path()..moveTo(topRadius, 0);
+    if (topConnector) {
+      path
+        ..lineTo(notchX, 0)
+        ..cubicTo(notchX + 7, 0, notchX + 7, topH, notchX + 16, topH)
+        ..lineTo(notchX + tabW - 16, topH)
+        ..cubicTo(
+          notchX + tabW - 7,
+          topH,
+          notchX + tabW - 7,
+          0,
+          notchX + tabW,
+          0,
+        );
+    }
+    path
+      ..lineTo(w - topRadius, 0)
+      ..quadraticBezierTo(w, 0, w, topRadius)
+      ..lineTo(w, bodyBottom)
+      ..quadraticBezierTo(w, bodyBottom, w - bottomRadius, bodyBottom);
+    if (bottomConnector) {
+      path
+        ..lineTo(notchX + tabW, bodyBottom)
+        ..cubicTo(
+          notchX + tabW - 7,
+          bodyBottom,
+          notchX + tabW - 7,
+          bodyBottom + tabH,
+          notchX + tabW - 16,
+          bodyBottom + tabH,
+        )
+        ..lineTo(notchX + 16, bodyBottom + tabH)
+        ..cubicTo(
+          notchX + 7,
+          bodyBottom + tabH,
+          notchX + 7,
+          bodyBottom,
+          notchX,
+          bodyBottom,
+        );
+    }
+    path
+      ..lineTo(bottomRadius, bodyBottom)
+      ..quadraticBezierTo(0, bodyBottom, 0, bodyBottom - bottomRadius)
+      ..lineTo(0, topRadius)
+      ..quadraticBezierTo(0, 0, topRadius, 0)
+      ..close();
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(covariant _AcopScratchBlockPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.compact != compact ||
+      oldDelegate.topConnector != topConnector ||
+      oldDelegate.bottomConnector != bottomConnector ||
+      oldDelegate.topRounded != topRounded ||
+      oldDelegate.bottomRounded != bottomRounded;
+}
+
 class _AcopTinyIconButton extends StatelessWidget {
   const _AcopTinyIconButton({
     required this.icon,
     required this.onPressed,
+    this.color,
     this.destructive = false,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
+  final Color? color;
   final bool destructive;
 
   @override
@@ -714,7 +1092,7 @@ class _AcopTinyIconButton extends StatelessWidget {
             ? colors.tertiaryLabel
             : destructive
             ? colors.destructive
-            : colors.secondaryLabel,
+            : color ?? colors.secondaryLabel,
       ),
     );
   }
@@ -794,8 +1172,8 @@ class _AcopBlockFieldEditorState extends State<_AcopBlockFieldEditor> {
           Text(
             strings.text(field.labelKey),
             style: TextStyle(
-              color: CsacColors.of(context).secondaryLabel,
-              fontSize: 13,
+              color: CupertinoColors.white.withValues(alpha: 0.82),
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -816,32 +1194,69 @@ class _AcopBlockFieldEditorState extends State<_AcopBlockFieldEditor> {
         ],
       );
     }
-    return CsacTextField(
-      controller: controller,
-      keyboardType: field.kind == _AcopBlockFieldKind.number
-          ? TextInputType.number
-          : field.kind == _AcopBlockFieldKind.multiline
-          ? TextInputType.multiline
-          : TextInputType.text,
-      maxLines: field.kind == _AcopBlockFieldKind.multiline ? 6 : 1,
-      minLines: field.kind == _AcopBlockFieldKind.multiline ? 3 : null,
-      style: field.kind == _AcopBlockFieldKind.multiline
-          ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
-          : null,
-      onChanged: widget.onChanged,
-      decoration: InputDecoration(
-        labelText: strings.text(field.labelKey),
-        border: const OutlineInputBorder(),
-        suffixIcon: CupertinoButton(
-          minimumSize: Size.zero,
-          padding: EdgeInsets.zero,
-          onPressed: insertVariable,
-          child: const Icon(
-            CupertinoIcons.chevron_left_slash_chevron_right,
-            size: 18,
+    final multiline = field.kind == _AcopBlockFieldKind.multiline;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          strings.text(field.labelKey),
+          style: TextStyle(
+            color: CupertinoColors.white.withValues(alpha: 0.82),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+        CsacTextField(
+          controller: controller,
+          keyboardType: field.kind == _AcopBlockFieldKind.number
+              ? TextInputType.number
+              : multiline
+              ? TextInputType.multiline
+              : TextInputType.text,
+          maxLines: multiline ? 4 : 1,
+          minLines: multiline ? 2 : null,
+          style: TextStyle(
+            fontFamily: multiline ? 'monospace' : null,
+            fontSize: multiline ? 12 : 14,
+          ),
+          onChanged: widget.onChanged,
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: CupertinoColors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 9,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999),
+              borderSide: BorderSide(
+                color: CupertinoColors.black.withValues(alpha: 0.18),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999),
+              borderSide: BorderSide(
+                color: CupertinoColors.black.withValues(alpha: 0.18),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999),
+              borderSide: const BorderSide(color: CupertinoColors.activeBlue),
+            ),
+            suffixIcon: CupertinoButton(
+              minimumSize: Size.zero,
+              padding: EdgeInsets.zero,
+              onPressed: insertVariable,
+              child: const Icon(
+                CupertinoIcons.chevron_left_slash_chevron_right,
+                size: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1094,6 +1509,30 @@ List<_AcopImportedBlock> _importAcopBlocks(String code) {
     ];
   }
   final blocks = <_AcopImportedBlock>[];
+  final simpleReplyPattern = RegExp(
+    r'''await\s+ctx\.reply\((['"])(.*?)\1\)''',
+    dotAll: true,
+  );
+  final expressionReplyPattern = RegExp(
+    r'''await\s+ctx\.reply\(([^'"\)][\s\S]*?)\)''',
+    dotAll: true,
+  );
+  final httpGetPattern = RegExp(
+    r'''(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+csac\.http\.get\((['"])(.*?)\2\)''',
+    dotAll: true,
+  );
+  final storageGetPattern = RegExp(
+    r'''(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+csac\.storage\.get\((['"])(.*?)\2\s*,\s*([^\)]*)\)''',
+    dotAll: true,
+  );
+  final storageSetPattern = RegExp(
+    r'''await\s+csac\.storage\.set\((['"])(.*?)\1\s*,\s*([^\)]*)\)''',
+    dotAll: true,
+  );
+  final noticePattern = RegExp(
+    r'''await\s+ctx\.notice\((['"])(.*?)\1\s*,\s*(['"])(.*?)\3\)''',
+    dotAll: true,
+  );
   final commandPattern = RegExp(
     r'''bot\.command\((['"])(.*?)\1(?:,\s*\{\s*scope:\s*(['"])(.*?)\3\s*\})?,\s*async\s*\(ctx\)\s*=>\s*\{\s*await\s+ctx\.reply\((['"])(.*?)\5\)\s*\}\)''',
     dotAll: true,
@@ -1130,6 +1569,78 @@ List<_AcopImportedBlock> _importAcopBlocks(String code) {
         'reply': match.group(4) ?? '',
       }),
     );
+  }
+  final privateTrimPattern = RegExp(
+    r'''bot\.on\('private\.message',\s*async\s*\(ctx\)\s*=>\s*\{[\s\S]*?ctx\.text\.trim\(\)\s*===\s*(['"])(.*?)\1[\s\S]*?await\s+ctx\.reply\((['"])(.*?)\3\)''',
+    dotAll: true,
+  );
+  for (final match in privateTrimPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('private.message.reply', {
+        'keyword': match.group(2) ?? '',
+        'reply': match.group(4) ?? '',
+      }),
+    );
+  }
+  final groupTrimPattern = RegExp(
+    r'''bot\.on\('group\.message',\s*async\s*\(ctx\)\s*=>\s*\{[\s\S]*?ctx\.text\.trim\(\)\s*===\s*(['"])(.*?)\1[\s\S]*?await\s+ctx\.reply\((.*?)\)''',
+    dotAll: true,
+  );
+  for (final match in groupTrimPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('group.keyword.reply', {
+        'keyword': match.group(2) ?? '',
+        'replyExpression': (match.group(3) ?? '').trim(),
+      }),
+    );
+  }
+  for (final match in httpGetPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('http.get', {
+        'variable': match.group(1) ?? 'res',
+        'url': match.group(3) ?? '',
+      }),
+    );
+  }
+  for (final match in storageGetPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('storage.get', {
+        'variable': match.group(1) ?? 'value',
+        'key': match.group(3) ?? '',
+        'fallback': (match.group(4) ?? '0').trim(),
+      }),
+    );
+  }
+  for (final match in storageSetPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('storage.set', {
+        'key': match.group(2) ?? '',
+        'value': (match.group(3) ?? '1').trim(),
+      }),
+    );
+  }
+  for (final match in noticePattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('notice', {
+        'title': match.group(2) ?? '',
+        'content': match.group(4) ?? '',
+      }),
+    );
+  }
+  for (final match in simpleReplyPattern.allMatches(source)) {
+    blocks.add(
+      _AcopImportedBlock('reply.text', {'text': match.group(2) ?? ''}),
+    );
+  }
+  for (final match in expressionReplyPattern.allMatches(source)) {
+    final expression = (match.group(1) ?? '').trim();
+    if (expression.isNotEmpty &&
+        !expression.startsWith("'") &&
+        !expression.startsWith('"')) {
+      blocks.add(
+        _AcopImportedBlock('reply.expression', {'expression': expression}),
+      );
+    }
   }
   if (source.contains('ctx.requireGroupAdmin()')) {
     blocks.add(const _AcopImportedBlock('require.group.admin', {}));

@@ -1287,7 +1287,7 @@ class _AcopBotsPage extends StatelessWidget {
   }
 }
 
-class _AcopAdminPage extends StatelessWidget {
+class _AcopAdminPage extends StatefulWidget {
   const _AcopAdminPage({
     required this.apiClient,
     required this.bots,
@@ -1308,40 +1308,90 @@ class _AcopAdminPage extends StatelessWidget {
   onHandleRequest;
 
   @override
+  State<_AcopAdminPage> createState() => _AcopAdminPageState();
+}
+
+class _AcopAdminPageState extends State<_AcopAdminPage> {
+  bool pendingOnly = false;
+
+  @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final visibleBots = pendingOnly
+        ? widget.bots
+              .where(
+                (bot) => bot.permissionRequests.any(
+                  (request) => request.status == 0,
+                ),
+              )
+              .toList()
+        : widget.bots;
     return _AcopRefreshList(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       children: [
         _AcopHeaderRow(
           title: strings.text('Admin tools'),
           subtitle: strings.text(
             'View all bots and handle permission requests.',
           ),
-          action: CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            color: CsacColors.of(context).fill,
-            onPressed: onHandlePermission,
-            child: Text(strings.text('Handle permission')),
+          action: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                color: pendingOnly
+                    ? CsacColors.of(context).primaryColor
+                    : CsacColors.of(context).fill,
+                onPressed: () => setState(() => pendingOnly = !pendingOnly),
+                child: Text(
+                  strings.text('Pending only'),
+                  style: TextStyle(
+                    color: pendingOnly ? CupertinoColors.white : null,
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                color: CsacColors.of(context).fill,
+                onPressed: widget.onHandlePermission,
+                child: Text(strings.text('Handle permission')),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
-        if (loading)
+        if (widget.loading)
           const Center(child: CupertinoActivityIndicator())
-        else if (error != null)
-          _AcopErrorPanel(message: error!, onRetry: onRefresh)
-        else if (bots.isEmpty)
-          _AcopEmptyPanel(message: strings.text('No admin bot data.'))
+        else if (widget.error != null)
+          _AcopErrorPanel(message: widget.error!, onRetry: widget.onRefresh)
+        else if (visibleBots.isEmpty)
+          _AcopEmptyPanel(
+            message: strings.text(
+              pendingOnly
+                  ? 'No pending permission requests.'
+                  : 'No admin bot data.',
+            ),
+          )
         else
           CsacCard(
             child: Column(
               children: [
-                for (var i = 0; i < bots.length; i++) ...[
+                for (var i = 0; i < visibleBots.length; i++) ...[
                   if (i > 0) const CsacDivider(height: 1),
                   _AcopAdminBotTile(
-                    bot: bots[i],
-                    avatarUrl: apiClient.resolveAssetUrl(bots[i].botAvatar),
-                    onHandleRequest: onHandleRequest,
+                    bot: visibleBots[i],
+                    avatarUrl: widget.apiClient.resolveAssetUrl(
+                      visibleBots[i].botAvatar,
+                    ),
+                    onHandleRequest: widget.onHandleRequest,
                   ),
                 ],
               ],
@@ -1628,8 +1678,6 @@ class _AcopAdminBotTile extends StatelessWidget {
                         'UID ${bot.uid}',
                         if (bot.devName.isNotEmpty) bot.devName,
                         if (bot.email.isNotEmpty) bot.email,
-                        'notify:${bot.canNotify == 1 ? 'on' : 'off'}',
-                        'http:${bot.canHttp == 1 ? 'on' : 'off'}',
                       ].join(' | '),
                       style: TextStyle(
                         color: CsacColors.of(context).secondaryLabel,
@@ -1638,6 +1686,23 @@ class _AcopAdminBotTile extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _AcopPill(
+                    label: strings.text(
+                      bot.canNotify == 1 ? 'Notify enabled' : 'Notify off',
+                    ),
+                  ),
+                  _AcopPill(
+                    label: strings.text(
+                      bot.canHttp == 1 ? 'HTTP enabled' : 'HTTP off',
+                    ),
+                  ),
+                ],
               ),
               if (pending.isNotEmpty)
                 _AcopPill(
